@@ -56,20 +56,37 @@
 import {reactive, ref} from 'vue'
 import {useRouter} from 'vue-router'
 import {login} from '@/api/auth'
+import {ElMessage} from "element-plus";
 
 const router = useRouter()
 const loading = ref(false)
 const form = reactive({phone: '13800000000', password: '123456'})
 
 const handleLogin = async () => {
-  if (!form.phone || !form.password) return alert('还没填全呢 ~')
+  if (!form.phone || !form.password) return ElMessage.warning('还没填全呢 ~')
   loading.value = true
   try {
     const res = await login(form.phone, form.password)
-    localStorage.setItem('ACCESS_TOKEN', res.data)
-    router.push('/map')
+
+    // 1. 存入 Token (用于发请求时带在请求头里)
+    // 假设后端原来直接返回字符串，现在如果后端改成了返回对象，这里可能是 res.data.token
+    localStorage.setItem('ACCESS_TOKEN', res.data.token || res.data)
+
+    // 🚨 2. 核心补救：存入用户角色 (用于前端路由鉴权和菜单渲染)
+    // 假设后端现在会返回用户信息了，比如 res.data.role
+    // 【临时应急方案】：如果你今天不想改后端代码，可以先强制写死为 '3' 跑通页面！
+    const userRole = res.data.role || '3'
+    localStorage.setItem('userRole', userRole.toString())
+
+    // 3. 也可以顺便把用户名存下来，给侧边栏显示用
+    const username = res.data.username || '王牌调度员'
+    localStorage.setItem('username', username)
+
+    ElMessage.success('登录成功')
+    await router.push('/map')
   } catch (e) {
     console.error('登录失败', e)
+    // ElMessage.error('账号或密码错误')
   } finally {
     loading.value = false
   }

@@ -6,34 +6,64 @@
     </div>
 
     <nav class="menu-list">
-      <div class="menu-item active">
-        <span class="m-icon">🗺️</span> 实时调度大屏
-      </div>
-      <div class="menu-item">
-        <span class="m-icon">📦</span> 订单流水管理
-      </div>
-      <div class="menu-item">
-        <span class="m-icon">🏥</span> 物资据点监控
-      </div>
-      <div class="menu-item">
-        <span class="m-icon">🧑‍🤝‍🧑</span> 志愿者总览
-      </div>
-      <div class="menu-item">
-        <span class="m-icon">⚙️</span> 系统算法配置
+      <div
+          v-for="item in visibleMenus"
+          :key="item.name"
+          class="menu-item"
+          :class="{ active: item.active }"
+      >
+        <span class="m-icon">{{ item.icon }}</span> {{ item.name }}
       </div>
     </nav>
 
     <div class="user-profile">
       <div class="avatar">👨‍✈️</div>
       <div class="u-info">
-        <div class="u-name">王牌调度员</div>
-        <div class="u-role">高级志愿者 · 在线</div>
+        <div class="u-name">{{ currentUser.username }}</div>
+        <div class="u-role">{{ roleName }} · 在线</div>
       </div>
     </div>
   </aside>
 </template>
 
+<script setup>
+import {ref, computed} from 'vue'
+
+// 🚨 模拟当前登录用户 (真实场景应从 Vuex/Pinia 或 localStorage 中读取)
+// 1:受赠方, 2:供应商家, 3:志愿者, 4:管理员
+const currentUser = ref({
+  username: '王牌调度员',
+  role: 3 // 当前是志愿者
+})
+
+// 角色名称映射字典
+const roleMap = {
+  1: '受赠用户',
+  2: '合作商家',
+  3: '高级志愿者',
+  4: '系统管理员'
+}
+
+const roleName = computed(() => roleMap[currentUser.value.role] || '未知角色')
+
+// 🚨 核心：定义完整的系统菜单，并为每个菜单打上权限标签 (roles)
+const allMenus = [
+  {name: '实时调度大屏', icon: '🗺️', active: true, roles: [3, 4]}, // 志愿者和管理员可见
+  {name: '我的配送任务', icon: '🚴', active: false, roles: [3]},    // 仅志愿者可见
+  {name: '全盘订单流转', icon: '📦', active: false, roles: [4]},    // 仅管理员可见
+  {name: '物资据点监控', icon: '🏥', active: false, roles: [4]},    // 仅管理员可见
+  {name: '志愿者信誉库', icon: '🧑‍🤝‍🧑', active: false, roles: [4]},    // 仅管理员可见
+  {name: '系统算法配置', icon: '⚙️', active: false, roles: [4]}     // 仅管理员可见
+]
+
+// 🚨 根据当前用户的 role，过滤出他有权限看到的菜单
+const visibleMenus = computed(() => {
+  return allMenus.filter(menu => menu.roles.includes(currentUser.value.role))
+})
+</script>
+
 <style scoped>
+/* 样式保持完全不变，复用你之前的完美 CSS 即可 */
 .side-menu {
   width: 260px;
   height: 100vh;
