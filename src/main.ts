@@ -1,5 +1,6 @@
 import { createApp } from 'vue'
 import App from './App.vue'
+import router from './router' // 🚨 1. 引入我们配好的路由实例
 
 // 导入状态管理和 UI 框架
 import { createPinia } from 'pinia'
@@ -22,6 +23,7 @@ window._AMapSecurityConfig = {
 const app = createApp(App)
 
 // 挂载插件
+app.use(router) // 🚨 2. 必须挂载路由，页面才能正常跳转！
 app.use(createPinia())
 app.use(ElementPlus)
 

@@ -1,43 +1,44 @@
 <template>
-  <el-container class="layout-container">
-    <el-header class="app-header">
-      <div class="logo">社区“食物银行”及应急物资调度系统</div>
-      <div class="user-info">admin (软件工程-大四)</div>
-    </el-header>
-
-    <el-main class="app-main">
-      <LbsMap />
-    </el-main>
-  </el-container>
+  <main class="app-root">
+    <router-view v-slot="{ Component }">
+      <transition name="page" mode="out-in">
+        <component :is="Component" />
+      </transition>
+    </router-view>
+  </main>
 </template>
 
-<script setup lang="ts">
-import LbsMap from './components/LbsMap.vue'
-</script>
-
 <style>
-/* 全局重置，让地图铺满全屏 */
-body, html, #app {
-  margin: 0;
-  padding: 0;
-  height: 100%;
+:root {
+  /* 🚨 核心：清新多巴胺配色 */
+  --c-primary:       #f97316;
+  --c-primary-dark:  #ea580c;
+  --c-primary-light: #fb923c;
+  --c-bg-page:       #f8fafc;
+
+  /* 🚨 强化文字对比度 */
+  --c-text:          #1e293b;
+  --c-text-sub:      #64748b;
+
+  /* 🚨 增加投影深度，让卡片在白底上更有层次感 */
+  --shadow-fresh:    0 10px 30px -5px rgba(0, 0, 0, 0.08), 0 8px 15px -6px rgba(0, 0, 0, 0.05);
+  --border-light:    1px solid rgba(249, 115, 22, 0.12);
+
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-.layout-container {
-  height: 100vh;
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #app {
+  width: 100%; height: 100%; overflow: hidden;
+  background: var(--c-bg-page);
 }
 
-.app-header {
-  background-color: #409EFF;
-  color: white;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-weight: bold;
-}
+.app-root { width: 100%; height: 100%; }
 
-.app-main {
-  padding: 0 !important; /* 地图需要零边距 */
-  overflow: hidden;
-}
+/* 页面平滑切换动画 */
+.page-enter-active, .page-leave-active { transition: opacity 0.3s ease, transform 0.3s ease; }
+.page-enter-from { opacity: 0; transform: scale(1.01); }
+.page-leave-to { opacity: 0; transform: scale(0.99); }
 </style>
