@@ -11,6 +11,7 @@
         <div id="amap-container"></div>
 
         <DispatchControl
+            v-if="pendingOrder"
             :loading="loading"
             :result="result"
             :isMissionActive="isMissionActive"
@@ -20,6 +21,12 @@
             @grab="handleGrab"
             @finish="handleFinishMission"
         />
+
+        <div v-else class="empty-task-panel">
+          <div class="radar-spinner"></div>
+          <h3>暂无紧急调度需求</h3>
+          <p>城市运转良好，调度大脑正在实时监听中...</p>
+        </div>
 
         <div class="map-legend">
           <div class="legend-item"><span class="dot sos"></span>求助点</div>
@@ -31,16 +38,19 @@
 </template>
 
 <script setup>
-import { ref, shallowRef, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, shallowRef, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import AMapLoader from '@amap/amap-jsapi-loader'
-import {smartMatch, grabTask} from '@/api/dispatch'
-import {ElMessage} from 'element-plus'
+import { smartMatch, grabTask } from '@/api/dispatch'
+import request from '@/utils/request' // 🚨 引入你的 request 工具
+import { ElMessage } from 'element-plus'
 
-// 引入拆分出来的组件
 import SideMenu from './components/SideMenu.vue'
 import DispatchControl from './components/DispatchControl.vue'
 
-// 🚨 使用 Vite 环境变量读取密钥
+const router = useRouter()
+
+// 使用 Vite 环境变量读取密钥
 window._AMapSecurityConfig = {
   securityJsCode: import.meta.env.VITE_AMAP_SECURITY_CODE,
 }
@@ -53,69 +63,103 @@ const isError = ref(false)
 const isMissionActive = ref(false)
 const activeOrder = ref({})
 
-const userLocation = [118.092000, 24.485000]
+// 默认坐标（如果没有获取到订单坐标，作为兜底）
+const defaultLocation = [118.092000, 24.485000]
 
-onMounted(() => initMap())
+// 🚨 核心：不再写死假数据，而是初始化为空，等待后端填充
+const pendingOrder = ref(null)
+
+onMounted(() => {
+  initMap()
+  fetchMapOrders() // 🚨 页面加载时立刻向后端拉取待匹配订单
+})
+
 onUnmounted(() => {
   if (map.value) map.value.destroy()
 })
 
+// ==========================================
+// 🚨 1. 新增：向后端拉取真实大屏订单数据
+// ==========================================
+const fetchMapOrders = async () => {
+  try {
+    // 调用后端只查询 status=0 (待匹配) 的接口
+    const res = await request.get('/dispatch/order/pending-list')
+
+    if (res.data && res.data.length > 0) {
+      // 获取到真实订单，赋值给 pendingOrder
+      pendingOrder.value = res.data[0]
+
+      // 可选：将地图中心点和求助点移动到该订单的真实坐标 (如果数据库里存了 targetLon/Lat)
+      const lng = pendingOrder.value.targetLon || defaultLocation[0]
+      const lat = pendingOrder.value.targetLat || defaultLocation[1]
+      drawSosMarker([lng, lat])
+
+    } else {
+      // 如果没有查到订单（或者被别人抢光了），清空数据
+      pendingOrder.value = null
+      if (map.value) map.value.clearMap() // 清理地图上的旧标
+    }
+  } catch (error) {
+    console.error('获取大屏订单失败', error)
+  }
+}
+
 const initMap = () => {
   AMapLoader.load({
-    key: import.meta.env.VITE_AMAP_KEY, // 🚨 使用环境变量
+    key: import.meta.env.VITE_AMAP_KEY,
     version: '2.0',
     plugins: ['AMap.MoveAnimation']
   }).then((amap) => {
     AMap = amap
     map.value = new AMap.Map('amap-container', {
-      viewMode: '3D', pitch: 40, zoom: 15, center: userLocation,
+      viewMode: '3D', pitch: 40, zoom: 15, center: defaultLocation,
       mapStyle: 'amap://styles/fresh'
-    })
-    new AMap.Marker({
-      map: map.value, position: userLocation,
-      content: '<div class="custom-marker sos-marker">🆘 求助点</div>',
-      offset: new AMap.Pixel(-40, -15)
     })
   }).catch(e => console.error(e))
 }
 
-// ==========================================
-// 1. 新增：前端全局维持的“待处理订单”状态
-// ==========================================
-// 真实场景下，这个数据应该是用户从“任务大厅”点击某个任务后传过来的
-const pendingOrder = ref({
-  id: 2, // 🚨 对应你数据库里那个待匹配的真实订单 ID
-  orderSn: 'ORD-2026-REFRESH',
-  goodsName: '应急矿泉水',
-  goodsId: 1, // 传给匹配引擎计算用的物资ID
-  urgencyLevel: 10
-})
+// 绘制求助点 (红色 SOS)
+const drawSosMarker = (position) => {
+  if (!AMap || !map.value) return
+  map.value.clearMap() // 画新标前清空旧标
+  map.value.setCenter(position)
+  new AMap.Marker({
+    map: map.value, position: position,
+    content: '<div class="custom-marker sos-marker">🆘 求助点</div>',
+    offset: new AMap.Pixel(-40, -15)
+  })
+}
 
 // ==========================================
-// 2. 修改：智能调度方法 (读取 pendingOrder)
+// 2. 调度匹配 (读取真实的 pendingOrder)
 // ==========================================
 const handleSmartDispatch = async () => {
+  if (!pendingOrder.value) return ElMessage.warning("当前无调度任务")
   loading.value = true
   result.value = null
+
+  // 提取真实的坐标和请求参数
+  const reqLng = pendingOrder.value.targetLon || defaultLocation[0]
+  const reqLat = pendingOrder.value.targetLat || defaultLocation[1]
+
   try {
-    // 🚨 使用 pendingOrder 里的真实物资 ID 和紧急度去请求“计算器”
     const res = await smartMatch({
-      longitude: userLocation[0],
-      latitude: userLocation[1],
+      longitude: reqLng,
+      latitude: reqLat,
       goodsId: pendingOrder.value.goodsId,
       urgency: pendingOrder.value.urgencyLevel
     })
 
     if (res.data?.length) {
       result.value = res.data[0]
-      // 🚨 手动把 pendingOrder 里的订单信息“缝合”到结果里，供子组件显示
-      result.value.orderSn = pendingOrder.value.orderSn
-      result.value.goodsName = pendingOrder.value.goodsName
+      // 将订单号合并给结果，方便展示
+      result.value.orderSn = pendingOrder.value.orderSn || '未知单号'
       result.value.urgencyLevel = pendingOrder.value.urgencyLevel
 
-      drawRoute(result.value)
+      drawRoute(result.value, [reqLng, reqLat])
     } else {
-      ElMessage.info("暂无可调度的需求")
+      ElMessage.info("附近暂无可用物资据点")
     }
   } catch (e) {
     console.error(e)
@@ -124,7 +168,8 @@ const handleSmartDispatch = async () => {
   }
 }
 
-const drawRoute = (data) => {
+// 绘制据点与连线
+const drawRoute = (data, userPos) => {
   if (!AMap || !map.value) return
   const lng = data?.station?.longitude || data?.longitude || 118.0894250
   const lat = data?.station?.latitude || data?.latitude || 24.4798330
@@ -136,7 +181,7 @@ const drawRoute = (data) => {
     offset: new AMap.Pixel(-40, -15)
   })
   const curve = new AMap.BezierCurve({
-    path: [stationLoc, [(userLocation[0] + stationLoc[0]) / 2, (userLocation[1] + stationLoc[1]) / 2 + 0.003], userLocation],
+    path: [stationLoc, [(userPos[0] + stationLoc[0]) / 2, (userPos[1] + stationLoc[1]) / 2 + 0.003], userPos],
     strokeColor: "#f97316", strokeWeight: 6, strokeOpacity: 0.8, isOutline: true, outlineColor: '#fff'
   })
   map.value.add(curve)
@@ -144,47 +189,69 @@ const drawRoute = (data) => {
 }
 
 // ==========================================
-// 3. 修改：抢单方法 (彻底抛弃从 result 里找 ID)
+// 🚨 抢单逻辑闭环 (包含强制刷新机制)
 // ==========================================
-// 这里的 orderId 参数可以留着（兼容之前子组件的 emit），但我们直接用 pendingOrder.value.id
-const handleGrab = async (passedOrderId) => {
-  // 🚨 核心逻辑：直接使用前端自己存的真实订单 ID
-  const targetOrderId = pendingOrder.value.id
+const handleGrab = async () => {
+  if (!pendingOrder.value || !pendingOrder.value.orderId) {
+    return ElMessage.error("未找到有效订单ID")
+  }
 
-  if (!targetOrderId) return ElMessage.error("未找到有效订单ID")
+  const targetOrderId = pendingOrder.value.orderId
 
   try {
-    // 向后端发送真正的抢单请求
+    // 1. 发起真实抢单请求
     await grabTask(targetOrderId)
+
+    // 2. 抢单成功后的处理
+    ElMessage.success({ message: '抢单成功！请前往“我的配送任务”查看路线并执行', offset: 80 })
+    // 跳转到执行看板
+    router.push('/my-tasks')
+
   } catch (apiError) {
-    // 如果抛出异常（比如手慢了），触发 UI 震动并终止
+    // 3. 如果抢单失败（比如后端乐观锁拦截了，说明被别人抢了）
+    ElMessage.warning(apiError.response?.data?.msg || apiError.message || '晚了一小步，该任务已有志愿者领取了')
     isError.value = true
     setTimeout(() => { isError.value = false }, 500)
-    return
+
+  } finally {
+    // 🚨 4. 核心防线：强制刷新大屏！
+    // 只要执行到这里，说明抢单动作结束了。此时重新去查状态为 0 的列表。
+    // 如果刚才被别人抢了（状态变1），这里就查不到了，红点自然就从地图上消失了。
+    fetchMapOrders()
+
+    // 清空当前的匹配结果面板
+    result.value = null
   }
-
-  // 走到这里说明后端返回 200，接单成功！
-  ElMessage.success({ message: '响应成功！爱心接力中', offset: 80 })
-
-  // 使用 pendingOrder 和匹配计算的结果，组装执行看板所需的数据
-  activeOrder.value = {
-    orderSn: pendingOrder.value.orderSn,
-    stationName: result.value?.station?.stationName || result.value?.stationName || '核心调度据点',
-    address: result.value?.station?.address || result.value?.address || '据点详细地址',
-    eta: new Date(Date.now() + 8 * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  }
-
-  // 切换为任务进行中状态
-  isMissionActive.value = true
 }
 
 const handleFinishMission = () => {
-  ElMessage.success('任务圆满完成！')
+  // 逻辑已移交至 MyTasks.vue，这里可以留空或重置地图
   isMissionActive.value = false
   result.value = null
-  map.value.clearMap() // 清空飞行路线，重置地图状态
-  initMap() // 重新放置起点
+  fetchMapOrders()
 }
+
+// 保存定时器实例
+let pollingTimer = null
+
+onMounted(() => {
+  initMap()
+  fetchMapOrders()
+
+  // 🚨 开启“真·雷达扫描”：每隔 5 秒钟，偷偷向后端看一眼有没有新订单
+  pollingTimer = setInterval(() => {
+    // 只有在没有任务的时候才去轮询，防止打断正在执行的任务
+    if (!pendingOrder.value && !isMissionActive.value) {
+      fetchMapOrders()
+    }
+  }, 5000)
+})
+
+// 离开页面时记得销毁定时器
+onUnmounted(() => {
+  if (map.value) map.value.destroy()
+  if (pollingTimer) clearInterval(pollingTimer)
+})
 </script>
 
 <style scoped>
@@ -235,15 +302,9 @@ const handleFinishMission = () => {
 }
 
 @keyframes pulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
-  }
-  70% {
-    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
-  }
+  0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+  70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
 }
 
 /* 地图区域撑满 */
@@ -255,6 +316,46 @@ const handleFinishMission = () => {
 #amap-container {
   width: 100%;
   height: 100%;
+}
+
+/* 🚨 空状态面板样式 */
+.empty-task-panel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  padding: 40px;
+  border-radius: 20px;
+  text-align: center;
+  box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+  z-index: 100;
+  pointer-events: none; /* 让鼠标事件穿透到地图 */
+}
+
+.empty-task-panel h3 {
+  color: #1e293b;
+  margin: 15px 0 5px 0;
+}
+
+.empty-task-panel p {
+  color: #64748b;
+  font-size: 14px;
+}
+
+.radar-spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid #f1f5f9;
+  border-top-color: #f97316;
+  border-radius: 50%;
+  margin: 0 auto;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .map-legend {
@@ -284,13 +385,8 @@ const handleFinishMission = () => {
   border-radius: 50%;
 }
 
-.sos {
-  background: #ef4444;
-}
-
-.station {
-  background: #f97316;
-}
+.sos { background: #ef4444; }
+.station { background: #f97316; }
 </style>
 
 <style>
@@ -303,12 +399,6 @@ const handleFinishMission = () => {
   color: #fff;
   box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
 }
-
-.sos-marker {
-  background: #ef4444;
-}
-
-.station-marker {
-  background: #f97316;
-}
+.sos-marker { background: #ef4444; }
+.station-marker { background: #f97316; }
 </style>

@@ -1,8 +1,8 @@
 <template>
   <aside class="side-menu">
-    <div class="logo-zone">
-      <span class="logo-emoji">🏪</span>
-      <h1 class="logo-text">食物银行<br/><span class="sub">智慧调度大脑</span></h1>
+    <div class="logo-zone" @click="goToHome">
+      <img src="/apple-touch-icon.png" class="logo-img" alt="logo">
+      <h1 class="logo-text">暖心食光<br/><span class="sub">智慧互助调度中心</span></h1>
     </div>
 
     <nav class="menu-list">
@@ -10,7 +10,8 @@
           v-for="item in visibleMenus"
           :key="item.name"
           class="menu-item"
-          :class="{ active: item.active }"
+          :class="{ active: route.path === item.path }"
+          @click="router.push(item.path)"
       >
         <span class="m-icon">{{ item.icon }}</span> {{ item.name }}
       </div>
@@ -27,13 +28,22 @@
 </template>
 
 <script setup>
-import {ref, computed} from 'vue'
+import { ref, computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router' // 🚨 引入路由钩子
 
-// 🚨 模拟当前登录用户 (真实场景应从 Vuex/Pinia 或 localStorage 中读取)
-// 1:受赠方, 2:供应商家, 3:志愿者, 4:管理员
+const router = useRouter()
+const route = useRoute() // 用于获取当前所在路径
+
+// 🚨 定义点击 Logo 返回首页的方法
+const goToHome = () => {
+  router.push('/map')
+}
+
+// 当前登录用户数据 (角色 ID 参考：3-志愿者, 4-管理员)
 const currentUser = ref({
-  username: '王牌调度员',
-  role: 3 // 当前是志愿者
+  // 建议在 Login 成功后从 localStorage 读取真实数据
+  username: localStorage.getItem('username') || '王牌调度员',
+  role: parseInt(localStorage.getItem('userRole') || '3')
 })
 
 // 角色名称映射字典
@@ -46,24 +56,23 @@ const roleMap = {
 
 const roleName = computed(() => roleMap[currentUser.value.role] || '未知角色')
 
-// 🚨 核心：定义完整的系统菜单，并为每个菜单打上权限标签 (roles)
+// 🚨 定义完整的系统菜单与权限控制，加入 path 属性
 const allMenus = [
-  {name: '实时调度大屏', icon: '🗺️', active: true, roles: [3, 4]}, // 志愿者和管理员可见
-  {name: '我的配送任务', icon: '🚴', active: false, roles: [3]},    // 仅志愿者可见
-  {name: '全盘订单流转', icon: '📦', active: false, roles: [4]},    // 仅管理员可见
-  {name: '物资据点监控', icon: '🏥', active: false, roles: [4]},    // 仅管理员可见
-  {name: '志愿者信誉库', icon: '🧑‍🤝‍🧑', active: false, roles: [4]},    // 仅管理员可见
-  {name: '系统算法配置', icon: '⚙️', active: false, roles: [4]}     // 仅管理员可见
+  { name: '实时调度大屏', icon: '🗺️', path: '/map', roles: [3, 4] },
+  { name: '我的配送任务', icon: '🚴', path: '/my-tasks', roles: [3] },
+  { name: '全盘订单流转', icon: '📦', path: '/flow', roles: [4] },      // 预留管理员路由
+  { name: '物资据点监控', icon: '🏥', path: '/monitor', roles: [4] },   // 预留管理员路由
+  { name: '志愿者信誉库', icon: '🧑‍🤝‍🧑', path: '/credit', roles: [4] }, // 预留管理员路由
+  { name: '系统算法配置', icon: '⚙️', path: '/config', roles: [4] }     // 预留管理员路由
 ]
 
-// 🚨 根据当前用户的 role，过滤出他有权限看到的菜单
+// 根据当前用户角色动态过滤菜单
 const visibleMenus = computed(() => {
   return allMenus.filter(menu => menu.roles.includes(currentUser.value.role))
 })
 </script>
 
 <style scoped>
-/* 样式保持完全不变，复用你之前的完美 CSS 即可 */
 .side-menu {
   width: 260px;
   height: 100vh;
@@ -75,19 +84,33 @@ const visibleMenus = computed(() => {
   box-shadow: 4px 0 20px rgba(0, 0, 0, 0.02);
 }
 
+/* 🚨 修改 Logo 区域交互，增加小手和点击反馈 */
 .logo-zone {
   padding: 30px 20px;
   display: flex;
   align-items: center;
   gap: 15px;
+  cursor: pointer;
+  transition: opacity 0.3s ease;
 }
 
-.logo-emoji {
-  font-size: 2.5rem;
-  background: #fff7ed;
-  padding: 10px;
-  border-radius: 20px;
-  box-shadow: 0 8px 15px rgba(249, 115, 22, 0.1);
+.logo-zone:hover {
+  opacity: 0.85;
+}
+
+/* 活泼俏皮的 Logo 图片样式 */
+.logo-img {
+  width: 52px;
+  height: 52px;
+  background: #fff;
+  padding: 4px;
+  border-radius: 16px;
+  box-shadow: 0 8px 18px rgba(249, 115, 22, 0.18);
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.logo-img:hover {
+  transform: scale(1.1) rotate(5deg);
 }
 
 .logo-text {

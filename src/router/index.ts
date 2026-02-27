@@ -30,6 +30,12 @@ const routes: Array<RouteRecordRaw> = [
         // 🚨 这表示只有 4(管理员) 才能进
         meta: { requiresAuth: true, roles: [4] }
     },
+    {
+        path: '/my-tasks',
+        name: 'MyTasks',
+        component: () => import('@/views/dispatch/MyTasks.vue'),
+        meta: { requiresAuth: true, roles: [3] } // 仅志愿者可见
+    },
     // 404 兜底路由
     {
         path: '/:pathMatch(.*)*',
