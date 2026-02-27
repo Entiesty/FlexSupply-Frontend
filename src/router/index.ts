@@ -14,7 +14,9 @@ const routes: Array<RouteRecordRaw> = [
     {
         path: '/map',
         name: 'Map',
-        component: () => import('@/views/LbsMap.vue')
+        // 🚨 核心修改：指向我们刚重构的全新调度大屏目录
+        // 这样当你从登录页跳转到 /map 时，加载的就是带有左侧菜单的新页面了
+        component: () => import('@/views/dispatch/index.vue')
     }
 ]
 
