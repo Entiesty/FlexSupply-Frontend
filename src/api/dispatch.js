@@ -1,27 +1,37 @@
 import request from '@/utils/request'
 
 /**
- * 发起智能派单计算
+ * 模拟智能派单计算 (返回匹配的物资点列表)
+ * @param {object} data 包含经纬度、物资类型、紧急度的对象
  */
 export function smartMatch(data) {
     return request({
-        url: '/dispatch/smart-match',
+        url: '/dispatch/smart-match', //
         method: 'post',
-        data: data
+        data: data // 对应 @RequestBody
     })
 }
 
 /**
- * 志愿者发起抢单
+ * 志愿者抢单
+ * @param {number} orderId 订单ID
  */
-export function grabTask(orderId) {
+export function grabOrder(orderId) {
     return request({
-        url: '/dispatch/grab',
+        url: '/dispatch/grab', //
         method: 'post',
-        // ⚠️ 关键点：如果是 @RequestParam，这里必须用 params！
-        // 如果是用 params，Axios 会自动把参数拼在 URL 后面：/dispatch/grab?orderId=xxx
-        params: {
-            orderId: orderId
-        }
+        params: { orderId } // 对应 @RequestParam
+    })
+}
+
+/**
+ * 志愿者确认取货
+ * @param {number} taskId 任务ID
+ */
+export function pickUpGoods(taskId) {
+    return request({
+        url: '/dispatch/pickup', //
+        method: 'post',
+        params: { taskId } // 对应 @RequestParam
     })
 }

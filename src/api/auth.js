@@ -1,13 +1,21 @@
 import request from '@/utils/request'
 
-/**
- * 系统统一登录
- * 注意：后端接口用的是 @RequestParam 接收参数，所以我们这里放在 params 中传过去
- */
 export function login(phone, password) {
-    return request({
-        url: '/auth/login',
-        method: 'post',
-        params: { phone, password }
-    })
+    return request({url: '/auth/login', method: 'post', params: {phone, password}})
+}
+
+export function register(data) {
+    return request({url: '/auth/register', method: 'post', data: data})
+}
+
+export function sendSmsCode(phone) {
+    return request({url: '/auth/send-code', method: 'get', params: {phone}})
+}
+
+export function resetPassword(phone, smsCode, newPassword) {
+    return request({url: '/auth/reset-password', method: 'post', params: {phone, smsCode, newPassword}})
+}
+
+export function logout(userId) {
+    return request({url: '/auth/logout', method: 'post', params: {userId}})
 }
