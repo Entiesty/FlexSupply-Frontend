@@ -8,8 +8,8 @@ export function register(data) {
     return request({url: '/auth/register', method: 'post', data: data})
 }
 
-export function sendSmsCode(phone) {
-    return request({url: '/auth/send-code', method: 'get', params: {phone}})
+export function sendSmsCode(phone, type = 'register') {
+    return request({url: '/auth/send-code', method: 'get', params: { phone, type }}) // 把场景类型传给后端)
 }
 
 export function resetPassword(phone, smsCode, newPassword) {

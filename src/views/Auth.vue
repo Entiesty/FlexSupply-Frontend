@@ -189,7 +189,12 @@ const toggleMode = async (mode) => {
 const handleSendCode = async () => {
   if (!phoneRegex.test(form.phone)) return ElMessage.warning('请输入正确的 11 位手机号码')
   try {
-    const res = await sendSmsCode(form.phone)
+    // 🚀 核心修改：动态判断当前是注册还是忘记密码场景
+    const sendType = isForgot.value ? 'forgot' : 'register';
+
+    // 把 sendType 传给 API
+    const res = await sendSmsCode(form.phone, sendType);
+
     countdown.value = 60
     const timer = setInterval(() => {
       countdown.value--
@@ -201,7 +206,10 @@ const handleSendCode = async () => {
       message: `【暖心食光】验证码为 <b>${res.data}</b>，5分钟内有效。打死不要告诉别人！`,
       dangerouslyUseHTMLString: true, type: 'info', duration: 15000, position: 'top-right',
     })
-  } catch (e) { console.error('发送失败', e) }
+  } catch (e) {
+    console.error('发送失败', e)
+    // 🚨 这里不用处理弹窗，因为后端的 BusinessException 会被全局拦截器统一报错弹出
+  }
 }
 
 // 统一提交

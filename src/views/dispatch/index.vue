@@ -10,6 +10,8 @@
       <div class="map-wrapper">
         <div id="amap-container"></div>
 
+        <DashboardPanel />
+
         <DispatchControl
             v-if="pendingOrder"
             :loading="loading"
@@ -41,12 +43,13 @@
 import { ref, shallowRef, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import AMapLoader from '@amap/amap-jsapi-loader'
-import { smartMatch, grabTask } from '@/api/dispatch'
+import { smartMatch, grabTask, getPendingOrders } from '@/api/dispatch'
 import request from '@/utils/request'
 import { ElMessage } from 'element-plus'
 
 import SideMenu from './components/SideMenu.vue'
 import DispatchControl from './components/DispatchControl.vue'
+import DashboardPanel from './components/DashboardPanel.vue'
 
 const router = useRouter()
 
@@ -95,7 +98,7 @@ onUnmounted(() => {
 // ==========================================
 const fetchMapOrders = async () => {
   try {
-    const res = await request.get('/dispatch/order/pending-list')
+    const res = await getPendingOrders()
 
     if (res.data && res.data.length > 0) {
       pendingOrder.value = res.data[0]
