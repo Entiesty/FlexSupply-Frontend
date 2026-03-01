@@ -50,6 +50,12 @@ const routes: Array<RouteRecordRaw> = [
         meta: { requiresAuth: true, roles: [3] }
     },
     {
+        path: '/volunteer/profile',
+        name: 'ProfileSetting',
+        component: () => import('@/views/volunteer/ProfileSetting.vue'),
+        meta: { requiresAuth: true, roles: [2, 3, 4] } // 允许商家、志愿者、管理员访问个人中心
+    },
+    {
         path: '/:pathMatch(.*)*',
         name: 'NotFound',
         component: () => import('@/views/auth/Auth.vue')

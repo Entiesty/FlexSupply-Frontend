@@ -1,6 +1,4 @@
 <template>
-  <div class="app-layout">
-    <SideMenu/>
 
     <main class="main-content">
       <div class="top-status">
@@ -36,7 +34,6 @@
         </div>
       </div>
     </main>
-  </div>
 </template>
 
 <script setup>

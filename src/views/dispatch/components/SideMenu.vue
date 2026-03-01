@@ -23,30 +23,37 @@
         <div class="u-name">{{ currentUser.username }}</div>
         <div class="u-role">{{ roleName }} · 在线</div>
       </div>
+      <button class="logout-btn" @click="handleLogout" title="退出登录">
+        <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+          <polyline points="16 17 21 12 16 7"></polyline>
+          <line x1="21" y1="12" x2="9" y2="12"></line>
+        </svg>
+      </button>
     </div>
   </aside>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue'
-import { useRouter, useRoute } from 'vue-router' // 🚨 引入路由钩子
+import { useRouter, useRoute } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { logout } from '@/api/auth' // 🚨 引入你 auth.js 里的登出接口
 
 const router = useRouter()
-const route = useRoute() // 用于获取当前所在路径
+const route = useRoute()
 
-// 🚨 定义点击 Logo 返回首页的方法
 const goToHome = () => {
   router.push('/map')
 }
 
-// 当前登录用户数据 (角色 ID 参考：3-志愿者, 4-管理员)
+// 建议真实场景下把 userId 也存入 localStorage，这里假设你登录时存了
 const currentUser = ref({
-  // 建议在 Login 成功后从 localStorage 读取真实数据
+  userId: localStorage.getItem('userId') || '',
   username: localStorage.getItem('username') || '王牌调度员',
   role: parseInt(localStorage.getItem('userRole') || '3')
 })
 
-// 角色名称映射字典
 const roleMap = {
   1: '受赠用户',
   2: '合作商家',
@@ -56,23 +63,50 @@ const roleMap = {
 
 const roleName = computed(() => roleMap[currentUser.value.role] || '未知角色')
 
-// 🚨 定义完整的系统菜单与权限控制，加入 path 属性
 const allMenus = [
   { name: '实时调度大屏', icon: '🗺️', path: '/map', roles: [3, 4] },
   { name: '我的配送任务', icon: '🚴', path: '/my-tasks', roles: [3] },
-  // 🚀 新增：志愿者专属的荣誉档案！
   { name: '我的荣誉档案', icon: '🏆', path: '/volunteer/credit', roles: [3] },
   { name: '全盘订单流转', icon: '📦', path: '/flow', roles: [4] },
-  { name: '系统算法配置', icon: '⚙️', path: '/config', roles: [4] }
+  { name: '系统算法配置', icon: '⚙️', path: '/config', roles: [4] },
+  { name: '账号设置中心', icon: '⚙️', path: '/volunteer/profile', roles: [2, 3, 4] }
 ]
 
-// 根据当前用户角色动态过滤菜单
 const visibleMenus = computed(() => {
   return allMenus.filter(menu => menu.roles.includes(currentUser.value.role))
 })
+
+// 🚨 完整的安全退出闭环逻辑
+const handleLogout = () => {
+  ElMessageBox.confirm('确定要退出当前账号吗？', '提示', {
+    confirmButtonText: '确定退出',
+    cancelButtonText: '暂不退出',
+    type: 'warning'
+  }).then(async () => {
+    try {
+      // 1. 尝试调用后端清空 Token 白名单/会话
+      if (currentUser.value.userId) {
+        await logout(currentUser.value.userId)
+      }
+    } catch (e) {
+      console.warn('后端登出接口异常，但前端将强制清除本地会话', e)
+    } finally {
+      // 2. 必须清理前端所有会话凭证
+      localStorage.removeItem('ACCESS_TOKEN')
+      localStorage.removeItem('userRole')
+      localStorage.removeItem('username')
+      localStorage.removeItem('userId')
+
+      ElMessage.success('已安全退出')
+      // 3. 拦截回登录页
+      router.replace('/auth')
+    }
+  }).catch(() => {})
+}
 </script>
 
 <style scoped>
+/* 原有的样式完全保留 */
 .side-menu {
   width: 260px;
   height: 100vh;
@@ -84,7 +118,6 @@ const visibleMenus = computed(() => {
   box-shadow: 4px 0 20px rgba(0, 0, 0, 0.02);
 }
 
-/* 🚨 修改 Logo 区域交互，增加小手和点击反馈 */
 .logo-zone {
   padding: 30px 20px;
   display: flex;
@@ -98,7 +131,6 @@ const visibleMenus = computed(() => {
   opacity: 0.85;
 }
 
-/* 活泼俏皮的 Logo 图片样式 */
 .logo-img {
   width: 52px;
   height: 52px;
@@ -173,6 +205,7 @@ const visibleMenus = computed(() => {
   align-items: center;
   gap: 12px;
   border: 1px solid #f1f5f9;
+  position: relative; /* 🚨 让内部元素可以使用绝对定位 */
 }
 
 .avatar {
@@ -185,12 +218,21 @@ const visibleMenus = computed(() => {
   justify-content: center;
   border-radius: 12px;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+  flex-shrink: 0;
+}
+
+.u-info {
+  flex: 1;
+  overflow: hidden;
 }
 
 .u-info .u-name {
   font-weight: 800;
   color: #1e293b;
   font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .u-info .u-role {
@@ -198,5 +240,24 @@ const visibleMenus = computed(() => {
   color: #10b981;
   font-weight: bold;
   margin-top: 2px;
+}
+
+/* 🚨 退出登录按钮样式 */
+.logout-btn {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.logout-btn:hover {
+  background: #fee2e2;
+  color: #ef4444;
 }
 </style>

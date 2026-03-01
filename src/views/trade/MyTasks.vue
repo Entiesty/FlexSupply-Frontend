@@ -1,7 +1,4 @@
 <template>
-  <div class="app-layout">
-    <SideMenu/>
-
     <main class="main-content">
       <div class="top-status">
         <span class="pulse-dot"></span> 骑手调度终端在线 · 保持通讯畅通
@@ -89,7 +86,6 @@
         </transition>
       </div>
     </main>
-  </div>
 </template>
 
 <script setup>
