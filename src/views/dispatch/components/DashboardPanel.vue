@@ -40,7 +40,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import * as echarts from 'echarts'
-import { getBaseMetrics, getCategoryStock, getVolunteerRank } from '@/api/dashboard'
+import { getBaseMetrics, getCategoryStock, getVolunteerRank } from '@/api/dispatch'
 
 const metrics = ref({})
 const rankList = ref([])

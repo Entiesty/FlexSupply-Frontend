@@ -60,10 +60,10 @@ const roleName = computed(() => roleMap[currentUser.value.role] || '未知角色
 const allMenus = [
   { name: '实时调度大屏', icon: '🗺️', path: '/map', roles: [3, 4] },
   { name: '我的配送任务', icon: '🚴', path: '/my-tasks', roles: [3] },
-  { name: '全盘订单流转', icon: '📦', path: '/flow', roles: [4] },      // 预留管理员路由
-  { name: '物资据点监控', icon: '🏥', path: '/monitor', roles: [4] },   // 预留管理员路由
-  { name: '志愿者信誉库', icon: '🧑‍🤝‍🧑', path: '/credit', roles: [4] }, // 预留管理员路由
-  { name: '系统算法配置', icon: '⚙️', path: '/config', roles: [4] }     // 预留管理员路由
+  // 🚀 新增：志愿者专属的荣誉档案！
+  { name: '我的荣誉档案', icon: '🏆', path: '/volunteer/credit', roles: [3] },
+  { name: '全盘订单流转', icon: '📦', path: '/flow', roles: [4] },
+  { name: '系统算法配置', icon: '⚙️', path: '/config', roles: [4] }
 ]
 
 // 根据当前用户角色动态过滤菜单

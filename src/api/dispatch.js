@@ -1,44 +1,21 @@
 import request from '@/utils/request'
 
-/**
- * 🚀 新增：获取大屏待抢订单列表
- */
-export function getPendingOrders() {
-    return request({
-        url: '/trade/order/pending-list', // 🚨 对应后端的 @GetMapping("/pending-list")
-        method: 'get'
-    })
-}
-
-/**
- * 模拟智能派单计算
- */
+// 1. 核心算法：智能派单计算
 export function smartMatch(data) {
-    return request({
-        url: '/dispatch/smart-match',
-        method: 'post',
-        data: data
-    })
+    return request({ url: '/dispatch/smart-match', method: 'post', data })
 }
 
-/**
- * 志愿者抢单
- */
-export function grabTask(orderId) {
-    return request({
-        url: '/trade/order/grab', // 🚨 顺手修正：改为后端的真实抢单路径
-        method: 'post',
-        params: { orderId }
-    })
+// 2. 大屏面板：获取今日核心指标
+export function getBaseMetrics() {
+    return request({ url: '/dispatch/dashboard/base-metrics', method: 'get' })
 }
 
-/**
- * 志愿者确认取货
- */
-export function pickUpGoods(taskId) {
-    return request({
-        url: '/trade/order/pickup', // 🚨 顺手修正
-        method: 'post',
-        params: { taskId }
-    })
+// 3. 大屏面板：获取物资分类占比
+export function getCategoryStock() {
+    return request({ url: '/dispatch/dashboard/category-stock', method: 'get' })
+}
+
+// 4. 大屏面板：获取志愿者信誉分排行榜
+export function getVolunteerRank() {
+    return request({ url: '/dispatch/dashboard/volunteer-rank', method: 'get' })
 }

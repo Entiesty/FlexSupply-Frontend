@@ -8,34 +8,51 @@ const routes: Array<RouteRecordRaw> = [
         redirect: '/auth'
     },
     {
-        path: '/auth', // 🚨 统一为 /auth
+        path: '/auth',
         name: 'Auth',
-        component: () => import('@/views/Auth.vue'),
+        component: () => import('@/views/auth/Auth.vue'),
         meta: { requiresAuth: false }
     },
     {
         path: '/map',
         name: 'Map',
         component: () => import('@/views/dispatch/index.vue'),
-        // 🚨 允许 1,2,3,4 均可进入大屏
         meta: { requiresAuth: true, roles: [1, 2, 3, 4] }
-    },
-    {
-        path: '/admin-settings',
-        name: 'AdminSettings',
-        component: () => import('@/views/Admin.vue'),
-        meta: { requiresAuth: true, roles: [4] }
     },
     {
         path: '/my-tasks',
         name: 'MyTasks',
-        component: () => import('@/views/dispatch/MyTasks.vue'),
+        component: () => import('@/views/trade/MyTasks.vue'),
+        meta: { requiresAuth: true, roles: [3] }
+    },
+    {
+        path: '/sos',
+        name: 'ElderlySOS',
+        component: () => import('@/views/sos/ElderlySOS.vue'),
+        meta: { requiresAuth: true, roles: [1, 4] }
+    },
+    {
+        path: '/merchant/donate',
+        name: 'MerchantDonate',
+        component: () => import('@/views/resource/MerchantDonate.vue'),
+        meta: { requiresAuth: true, roles: [2] }
+    },
+    {
+        path: '/admin/review',
+        name: 'AdminReview',
+        component: () => import('@/views/admin/AdminReview.vue'),
+        meta: { requiresAuth: true, roles: [4] }
+    },
+    {
+        path: '/volunteer/credit',
+        name: 'CreditCenter',
+        component: () => import('@/views/volunteer/CreditCenter.vue'),
         meta: { requiresAuth: true, roles: [3] }
     },
     {
         path: '/:pathMatch(.*)*',
         name: 'NotFound',
-        component: () => import('@/views/Auth.vue')
+        component: () => import('@/views/auth/Auth.vue')
     }
 ]
 

@@ -105,7 +105,7 @@
 <script setup>
 import { reactive, ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { login, register, sendSmsCode, resetPassword } from '@/api/auth'
+import { login, register, sendSmsCode, resetPassword } from '@/api/auth.js'
 import { ElMessage, ElNotification } from "element-plus"
 
 const router = useRouter()
@@ -246,7 +246,21 @@ const handleSubmit = async () => {
       localStorage.setItem('userRole', res.data.role.toString())
       localStorage.setItem('username', res.data.username)
       ElMessage.success('登录成功，欢迎回来')
-      await router.push('/map')
+
+      // 🚀 核心修改点：根据角色进行智能路由跳转
+      // 🚀 终极智能路由分发引擎
+      if (res.data.role === 1) {
+        await router.push('/sos')             // 受赠方 -> 老人求助端
+      } else if (res.data.role === 2) {
+        await router.push('/merchant/donate') // 商家 -> 物资捐赠端
+      } else if (res.data.role === 3) {
+        await router.push('/my-tasks')        // 志愿者 -> 骑手工作台
+      } else if (res.data.role === 4) {
+        // 管理员可以选择去大屏，或者去审核列表。这里默认送去审核大厅
+        await router.push('/admin/review')    // 管理员 -> 后台审核端
+      } else {
+        await router.push('/map')             // 默认保底兜底去大屏
+      }
     }
   } catch (e) {
     console.error('操作失败', e)

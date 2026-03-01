@@ -10,7 +10,7 @@
       <div class="map-wrapper">
         <div id="amap-container"></div>
 
-        <DashboardPanel />
+        <DashboardPanel/>
 
         <DispatchControl
             v-if="pendingOrder"
@@ -40,13 +40,12 @@
 </template>
 
 <script setup>
-import { ref, shallowRef, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import {onMounted, onUnmounted, ref, shallowRef} from 'vue'
+import {useRouter} from 'vue-router'
 import AMapLoader from '@amap/amap-jsapi-loader'
-import { smartMatch, grabTask, getPendingOrders } from '@/api/dispatch'
-import request from '@/utils/request'
-import { ElMessage } from 'element-plus'
-
+import {smartMatch} from '@/api/dispatch'
+import {getPendingOrders, grabTask} from '@/api/trade'
+import {ElMessage} from 'element-plus'
 import SideMenu from './components/SideMenu.vue'
 import DispatchControl from './components/DispatchControl.vue'
 import DashboardPanel from './components/DashboardPanel.vue'
@@ -144,6 +143,9 @@ const drawSosMarker = (position) => {
 // ==========================================
 // 2. 调度匹配
 // ==========================================
+// ==========================================
+// 2. 调度匹配
+// ==========================================
 const handleSmartDispatch = async () => {
   if (!pendingOrder.value) return ElMessage.warning("当前无调度任务")
   loading.value = true
@@ -153,11 +155,13 @@ const handleSmartDispatch = async () => {
   const reqLat = pendingOrder.value.targetLat || defaultLocation[1]
 
   try {
+    // 🚀 终极防报错对齐版
     const res = await smartMatch({
-      longitude: reqLng,
-      latitude: reqLat,
+      targetLon: reqLng,       // 🚨 修复：从 longitude 改为 targetLon
+      targetLat: reqLat,       // 🚨 修复：从 latitude 改为 targetLat
       goodsId: pendingOrder.value.goodsId,
-      urgency: pendingOrder.value.urgencyLevel
+      urgencyLevel: pendingOrder.value.urgencyLevel,
+      requiredCategory: pendingOrder.value.requiredCategory
     })
 
     if (res.data?.length) {
@@ -232,12 +236,14 @@ const handleGrab = async () => {
 
   try {
     await grabTask(targetOrderId)
-    ElMessage.success({ message: '抢单成功！请前往“我的配送任务”查看路线并执行', offset: 80 })
+    ElMessage.success({message: '抢单成功！请前往“我的配送任务”查看路线并执行', offset: 80})
     router.push('/my-tasks')
   } catch (apiError) {
     ElMessage.warning(apiError.response?.data?.msg || apiError.message || '晚了一小步，该任务已有志愿者领取了')
     isError.value = true
-    setTimeout(() => { isError.value = false }, 500)
+    setTimeout(() => {
+      isError.value = false
+    }, 500)
   } finally {
     fetchMapOrders()
     result.value = null
@@ -297,9 +303,15 @@ const handleFinishMission = () => {
 }
 
 @keyframes pulse {
-  0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
-  70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
 }
 
 .map-wrapper {
@@ -322,7 +334,7 @@ const handleFinishMission = () => {
   padding: 40px;
   border-radius: 20px;
   text-align: center;
-  box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
   z-index: 100;
   pointer-events: none;
 }
@@ -348,7 +360,9 @@ const handleFinishMission = () => {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .map-legend {
@@ -378,8 +392,13 @@ const handleFinishMission = () => {
   border-radius: 50%;
 }
 
-.sos { background: #ef4444; }
-.station { background: #f97316; }
+.sos {
+  background: #ef4444;
+}
+
+.station {
+  background: #f97316;
+}
 </style>
 
 <style>
@@ -409,8 +428,14 @@ const handleFinishMission = () => {
 }
 
 @keyframes mapPulse {
-  0% { transform: scale(0.8); opacity: 1; }
-  100% { transform: scale(2.5); opacity: 0; }
+  0% {
+    transform: scale(0.8);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2.5);
+    opacity: 0;
+  }
 }
 
 /* 2. 极简圆形物资点 (Station) */

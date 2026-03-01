@@ -1,63 +1,35 @@
 import request from '@/utils/request'
 
-// ================= 订单相关 (DispatchOrder) =================
+// ================= 订单源头 (Order) =================
 
-/**
- * 获取大屏待抢订单 (状态为0)
- */
+// 获取大屏待抢订单 (供大屏扫描)
 export function getPendingOrders() {
-    return request({
-        url: '/trade/order/pending-list', //
-        method: 'get'
-    })
+    return request({ url: '/trade/order/pending-list', method: 'get' })
 }
 
-/**
- * 志愿者获取抢单大厅列表
- * @param {object} params 包含 pageNum, pageSize
- */
+// 志愿者获取抢单大厅列表
 export function getAvailableOrders(params) {
-    return request({
-        url: '/trade/order/available-list', //
-        method: 'get',
-        params: params // 对应 @RequestParam
-    })
+    return request({ url: '/trade/order/available-list', method: 'get', params })
 }
 
-/**
- * 受赠方发布紧急求助
- * @param {object} data 需求表单数据
- */
+// 受赠方发布紧急求助
 export function publishDemand(data) {
-    return request({
-        url: '/trade/order/publish-demand', //
-        method: 'post',
-        data: data // 对应 @RequestBody
-    })
+    return request({ url: '/trade/order/publish-demand', method: 'post', data })
 }
 
-// ================= 任务相关 (DeliveryTask) =================
+// 志愿者抢单 (转移至 trade 模块管控)
+export function grabTask(orderId) {
+    return request({ url: '/trade/order/grab', method: 'post', params: { orderId } })
+}
 
-/**
- * 获取我的任务列表
- * @param {object} params 包含 status(可选), pageNum, pageSize
- */
+// ================= 任务执行 (Task) =================
+
+// 获取我的任务列表
 export function getMyTasks(params) {
-    return request({
-        url: '/trade/task/my-tasks', //
-        method: 'get',
-        params: params // 对应 @RequestParam
-    })
+    return request({ url: '/trade/task/my-tasks', method: 'get', params })
 }
 
-/**
- * 确认送达并核销任务
- * @param {number} taskId 任务ID
- */
+// 确认送达并核销任务
 export function checkOutTask(taskId) {
-    return request({
-        url: '/trade/task/checkout', //
-        method: 'post',
-        params: { taskId } // 对应 @RequestParam
-    })
+    return request({ url: '/trade/task/checkout', method: 'post', params: { taskId } })
 }
