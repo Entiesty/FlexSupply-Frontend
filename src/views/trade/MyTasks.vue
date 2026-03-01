@@ -122,10 +122,12 @@ const fetchData = async () => {
       taskList.value = res.data.records || res.data || []
       availableCount.value = taskList.value.length
     } else if (activeTab.value === 'delivering') {
-      const res = await getMyTasks(1) // 1为待配送
+      // 🚨 修复 TypeError：将参数包装为对象 { status: 1 }
+      const res = await getMyTasks({ status: 1 })
       taskList.value = res.data.records || res.data || []
     } else if (activeTab.value === 'completed') {
-      const res = await getMyTasks(3) // 3为已完成
+      // 🚨 修复 TypeError：将参数包装为对象 { status: 3 }
+      const res = await getMyTasks({ status: 3 })
       taskList.value = res.data.records || res.data || []
     }
   } catch (e) {

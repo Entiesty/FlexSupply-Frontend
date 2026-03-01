@@ -26,10 +26,12 @@ export function grabTask(orderId) {
 
 // 获取我的任务列表
 export function getMyTasks(params) {
-    return request({ url: '/trade/task/my-tasks', method: 'get', params })
+    // 🚨 路径由 /my-tasks 修改为后端的 /my-list
+    return request({ url: '/trade/task/my-list', method: 'get', params })
 }
 
 // 确认送达并核销任务
 export function checkOutTask(taskId) {
-    return request({ url: '/trade/task/checkout', method: 'post', params: { taskId } })
+    // 🚨 路径由 /checkout 修改为后端的 /complete
+    return request({ url: '/trade/task/complete', method: 'post', params: { taskId } })
 }
