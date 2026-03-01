@@ -13,3 +13,18 @@ export function auditMerchant(userId, pass) {
         params: { userId, pass }
     })
 }
+
+// 获取全域用户列表
+export function getUserList(params) {
+    return request({ url: '/admin/user/list', method: 'get', params })
+}
+
+// 更新弱势群体身份标签
+export function updateUserTag(userId, tag, isVerified) {
+    return request({ url: '/admin/user/update-tag', method: 'put', params: { userId, tag, isVerified } })
+}
+
+// 志愿者信誉分人工干预 (scoreChange 传正数加分，负数扣分)
+export function updateUserCredit(userId, scoreChange) {
+    return request({ url: '/admin/user/update-credit', method: 'put', params: { userId, scoreChange } })
+}

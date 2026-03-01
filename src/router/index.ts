@@ -63,6 +63,12 @@ const routes: Array<RouteRecordRaw> = [
         meta: { requiresAuth: true, roles: [4] } // 严格限制：仅限系统管理员(Role 4)访问
     },
     {
+        path: '/admin/users',
+        name: 'UserManage',
+        component: () => import('@/views/admin/UserManage.vue'),
+        meta: { requiresAuth: true, roles: [4] } // 仅限管理员
+    },
+    {
         path: '/:pathMatch(.*)*',
         name: 'NotFound',
         component: () => import('@/views/auth/Auth.vue')
