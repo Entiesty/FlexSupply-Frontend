@@ -84,11 +84,12 @@ defineEmits(['dispatch', 'grab', 'finish'])
   pointer-events: auto;
 }
 
-/* 复用之前的卡片样式，略作精简 */
+/* 修改 1：待处理面板移到右侧 */
 .action-card {
   position: absolute;
-  top: 20px;
-  left: 24px;
+  top: 80px;      /* 🚨 增加 top 避开右上角的 top-status 状态栏 */
+  right: 30px;    /* 🚨 从 left: 24px 改为 right: 30px */
+  left: auto;     /* 🚨 清除左侧定位 */
   z-index: 100;
   width: 280px;
   background: #fff;
@@ -150,10 +151,12 @@ defineEmits(['dispatch', 'grab', 'finish'])
   box-shadow: 0 8px 15px rgba(249, 115, 22, 0.2);
 }
 
+/* 修改 2：任务进行中面板移到右侧 */
 .mission-board {
   position: absolute;
-  top: 20px;
-  left: 24px;
+  top: 80px;      /* 🚨 保持与 action-card 一致的 top */
+  right: 30px;    /* 🚨 改为右侧定位 */
+  left: auto;
   z-index: 105;
   width: 320px;
   background: #fff;
@@ -329,8 +332,9 @@ defineEmits(['dispatch', 'grab', 'finish'])
   opacity: 0;
 }
 
+/* 修改 3：由于面板改到了右侧，滑入动画方向也要反转 */
 .mission-slide-enter-from {
-  transform: translateX(-120%);
+  transform: translateX(120%); /* 🚨 从 -120% 改为 120%，使其从屏幕右外侧滑入 */
   opacity: 0;
 }
 

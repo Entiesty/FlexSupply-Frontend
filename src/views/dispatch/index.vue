@@ -255,17 +255,6 @@ const handleFinishMission = () => {
 </script>
 
 <style scoped>
-/* 整个页面采用 Flex 左右布局 */
-.app-layout {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  width: 100vw;
-  height: 100vh;
-  background: #f1f5f9;
-  overflow: hidden;
-}
-
 .main-content {
   flex: 1;
   display: flex;

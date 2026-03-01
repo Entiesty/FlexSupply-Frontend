@@ -55,6 +55,13 @@ const routes: Array<RouteRecordRaw> = [
         component: () => import('@/views/volunteer/ProfileSetting.vue'),
         meta: { requiresAuth: true, roles: [2, 3, 4] } // 允许商家、志愿者、管理员访问个人中心
     },
+    // 🚨 新增：系统算法配置中心
+    {
+        path: '/config',
+        name: 'AlgorithmConfig',
+        component: () => import('@/views/admin/AlgorithmConfig.vue'),
+        meta: { requiresAuth: true, roles: [4] } // 严格限制：仅限系统管理员(Role 4)访问
+    },
     {
         path: '/:pathMatch(.*)*',
         name: 'NotFound',
