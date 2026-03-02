@@ -35,3 +35,8 @@ export function checkOutTask(taskId) {
     // 🚨 路径由 /checkout 修改为后端的 /complete
     return request({ url: '/trade/task/complete', method: 'post', params: { taskId } })
 }
+
+// 🚨 运力熔断：一键转自提
+export function switchOrderToPickup(orderId) {
+    return request({ url: '/trade/order/switch-pickup', method: 'post', params: { orderId } })
+}

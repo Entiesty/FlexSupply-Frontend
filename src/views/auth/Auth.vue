@@ -256,8 +256,7 @@ const handleSubmit = async () => {
       } else if (res.data.role === 3) {
         await router.push('/map')             // 🚨 志愿者登录后直接进入实时调度大屏
       } else if (res.data.role === 4) {
-        // 管理员可以选择去大屏，或者去审核列表。这里默认送去审核大厅
-        await router.push('/admin/review')    // 管理员 -> 后台审核端
+        await router.push('/map')
       } else {
         await router.push('/map')             // 默认保底兜底去大屏
       }

@@ -21,7 +21,7 @@
 
     <div class="chart-container">
       <div class="chart-title">📊 物资储备结构分析</div>
-      <div ref="chartRef" class="echarts-box"></div>
+      <div ref="chartRef" class="echarts-box" style="width: 100%; height: 280px;"></div>
     </div>
 
     <div class="rank-container">
@@ -48,35 +48,107 @@ const chartRef = ref(null)
 let myChart = null
 let refreshTimer = null
 
+// 📦 核心算法：Top N 数据降噪聚合
+const processPieData = (rawData, topN = 4) => {
+  if (!rawData || rawData.length === 0) return []
+
+  // 1. 按库存数量降序排列
+  const sorted = [...rawData].sort((a, b) => b.totalStock - a.totalStock)
+
+  // 2. 如果种类本来就不多于设定值，直接格式化返回
+  if (sorted.length <= topN) {
+    return sorted.map(item => ({ value: item.totalStock, name: item.categoryName }))
+  }
+
+  // 3. 截取前 N 名作为核心数据
+  const topData = sorted.slice(0, topN).map(item => ({ value: item.totalStock, name: item.categoryName }))
+
+  // 4. 将剩下的所有物资库存相加，归入“其他”
+  const othersValue = sorted.slice(topN).reduce((sum, item) => sum + item.totalStock, 0)
+
+  // 5. 追加“其他”项，并赋予低调的颜色
+  topData.push({
+    value: othersValue,
+    name: '其他',
+    itemStyle: { color: '#cbd5e1' }
+  })
+
+  return topData
+}
+
 // 初始化图表
 const initChart = (dataList) => {
   if (!chartRef.value) return
   if (!myChart) myChart = echarts.init(chartRef.value)
 
+  // 调用降噪算法（面板较窄，取 Top 4 最合适）
+  const finalData = processPieData(dataList, 4)
+
+  const totalStock = finalData.reduce((sum, item) => sum + item.value, 0)
+
   const option = {
-    tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-    legend: { bottom: '0%', left: 'center', textStyle: { color: '#64748b', fontSize: 11 } },
-    color: ['#f97316', '#3b82f6', '#10b981', '#f43f5e', '#8b5cf6'],
+    tooltip: {
+      trigger: 'item',
+      formatter: '{b}: {c} 件 ({d}%)',
+      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+      borderRadius: 8,
+      textStyle: { color: '#334155', fontSize: 12 }
+    },
+    legend: {
+      orient: 'horizontal',
+      // 🚨 隔离核心 1：不准图例从底部往上长！
+      // 强制要求图例从容器 58% 的高度开始，向下排列！
+      top: '58%',
+      left: 'center',
+      itemWidth: 8,
+      itemHeight: 8,
+      icon: 'circle',
+      itemGap: 10, // 稍微缩小一点图例间距
+      formatter: (name) => {
+        const item = finalData.find(i => i.name === name)
+        if (!item) return name
+        const percent = totalStock > 0 ? ((item.value / totalStock) * 100).toFixed(1) : 0
+        return `{title|${name}} {val|${item.value}件} {pct|(${percent}%)}`
+      },
+      textStyle: {
+        rich: {
+          title: {
+            width: 70,
+            overflow: 'truncate',
+            color: '#475569',
+            fontSize: 11,
+            fontWeight: 'bold'
+          },
+          val: {
+            color: '#3b82f6',
+            fontSize: 11,
+            fontWeight: '900'
+          },
+          pct: {
+            color: '#94a3b8',
+            fontSize: 10
+          }
+        }
+      }
+    },
+    color: ['#f97316', '#3b82f6', '#10b981', '#f43f5e', '#cbd5e1'],
     series: [
       {
         name: '物资占比',
         type: 'pie',
-        radius: ['45%', '70%'], // 环形图设置
+        // 🚨 隔离核心 2：饼图的圆心锁死在上方 30% 处，半径最大不超过 45%
+        // 这意味着饼图的最下沿绝对不会超过容器的 52.5%！完美避开下方 58% 开始的图例。
+        radius: ['30%', '45%'],
+        center: ['50%', '30%'],
         avoidLabelOverlap: false,
         itemStyle: {
-          borderRadius: 8,
+          borderRadius: 6,
           borderColor: '#fff',
           borderWidth: 2
         },
-        label: { show: false, position: 'center' },
-        emphasis: {
-          label: { show: true, fontSize: '14', fontWeight: 'bold', color: '#1e293b' }
-        },
+        label: { show: false },
         labelLine: { show: false },
-        data: dataList.map(item => ({
-          value: item.totalStock,
-          name: item.categoryName
-        }))
+        data: finalData
       }
     ]
   }
@@ -122,6 +194,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* 样式保持不变，只贴核心部分防丢 */
 .dashboard-panel {
   position: absolute;
   top: 20px;
@@ -139,56 +212,22 @@ onUnmounted(() => {
   gap: 20px;
 }
 
-.panel-header {
-  font-size: 1rem;
-  font-weight: 900;
-  color: #1e293b;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
+.panel-header { font-size: 1rem; font-weight: 900; color: #1e293b; display: flex; align-items: center; gap: 10px; }
+.pulse-dot { width: 10px; height: 10px; background: #3b82f6; border-radius: 50%; box-shadow: 0 0 10px #3b82f6; animation: pulse 2s infinite; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5); } 70% { box-shadow: 0 0 0 8px rgba(59, 130, 246, 0); } 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); } }
 
-.pulse-dot {
-  width: 10px;
-  height: 10px;
-  background: #3b82f6;
-  border-radius: 50%;
-  box-shadow: 0 0 10px #3b82f6;
-  animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-  0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5); }
-  70% { box-shadow: 0 0 0 8px rgba(59, 130, 246, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
-}
-
-/* 数字指标卡片 */
-.metrics-grid {
-  display: flex;
-  gap: 10px;
-  justify-content: space-between;
-}
-.metric-card {
-  flex: 1;
-  background: #f8fafc;
-  padding: 10px;
-  border-radius: 12px;
-  text-align: center;
-  border: 1px solid #f1f5f9;
-}
+.metrics-grid { display: flex; gap: 10px; justify-content: space-between; }
+.metric-card { flex: 1; background: #f8fafc; padding: 10px; border-radius: 12px; text-align: center; border: 1px solid #f1f5f9; }
 .m-label { font-size: 0.7rem; color: #64748b; margin-bottom: 5px; }
 .m-value { font-size: 1.2rem; font-weight: 900; font-family: Impact, sans-serif; }
 .urgent { color: #f43f5e; }
 .success { color: #10b981; }
 .stock { color: #3b82f6; }
 
-/* ECharts 图表 */
 .chart-container { background: #fff; border-radius: 12px; padding: 15px 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.02); }
 .chart-title { font-size: 0.85rem; font-weight: bold; color: #475569; margin-bottom: 10px; padding-left: 5px; }
 .echarts-box { width: 100%; height: 200px; }
 
-/* 排行榜 */
 .rank-container { background: #fff; border-radius: 12px; padding: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.02); }
 .rank-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
 .rank-item { display: flex; align-items: center; justify-content: space-between; font-size: 0.85rem; padding: 6px 0; border-bottom: 1px dashed #f1f5f9; }

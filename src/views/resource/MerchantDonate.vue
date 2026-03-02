@@ -65,8 +65,13 @@ const form = reactive({
 })
 
 onMounted(async () => {
-  const res = await getStationList()
-  stations.value = res.data || []
+  try {
+    const res = await getAllStations()
+    // 后端 /all 返回的是纯 List，所以 res.data 直接就是数组
+    stations.value = res.data || []
+  } catch (e) {
+    console.error('获取驿站列表失败', e)
+  }
 })
 
 const handleDonate = async () => {

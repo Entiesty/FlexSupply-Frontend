@@ -19,3 +19,8 @@ export function getCategoryStock() {
 export function getVolunteerRank() {
     return request({ url: '/dispatch/dashboard/volunteer-rank', method: 'get' })
 }
+
+// 🚨 新增：获取大屏动态配置 (运力熔断阈值)
+export function getDispatchConfig() {
+    return request({ url: '/dispatch/config', method: 'get' })
+}
