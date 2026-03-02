@@ -68,6 +68,13 @@ const routes: Array<RouteRecordRaw> = [
         component: () => import('@/views/admin/UserManage.vue'),
         meta: { requiresAuth: true, roles: [4] } // 仅限管理员
     },
+    // 🚨 新增：全盘订单流转 (对应菜单的 /flow)
+    {
+        path: '/flow',
+        name: 'OrderFlow',
+        component: () => import('@/views/admin/OrderFlow.vue'),
+        meta: { requiresAuth: true, roles: [4] } // 仅限管理员
+    },
     {
         path: '/:pathMatch(.*)*',
         name: 'NotFound',
