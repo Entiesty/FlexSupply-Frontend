@@ -37,6 +37,13 @@ const routes: Array<RouteRecordRaw> = [
         component: () => import('@/views/resource/MerchantDonate.vue'),
         meta: { requiresAuth: true, roles: [2] }
     },
+    // 👇 核心新增：商家的物资溯源记录路由
+    {
+        path: '/merchant/history',
+        name: 'MerchantHistory',
+        component: () => import('@/views/merchant/MerchantHistory.vue'),
+        meta: { requiresAuth: true, roles: [2] } // 严格限制：仅限商家访问
+    },
     {
         path: '/admin/review',
         name: 'AdminReview',
@@ -53,27 +60,25 @@ const routes: Array<RouteRecordRaw> = [
         path: '/volunteer/profile',
         name: 'ProfileSetting',
         component: () => import('@/views/volunteer/ProfileSetting.vue'),
-        meta: { requiresAuth: true, roles: [2, 3, 4] } // 允许商家、志愿者、管理员访问个人中心
+        meta: { requiresAuth: true, roles: [2, 3, 4] }
     },
-    // 🚨 新增：系统算法配置中心
     {
         path: '/config',
         name: 'AlgorithmConfig',
         component: () => import('@/views/admin/AlgorithmConfig.vue'),
-        meta: { requiresAuth: true, roles: [4] } // 严格限制：仅限系统管理员(Role 4)访问
+        meta: { requiresAuth: true, roles: [4] }
     },
     {
         path: '/admin/users',
         name: 'UserManage',
         component: () => import('@/views/admin/UserManage.vue'),
-        meta: { requiresAuth: true, roles: [4] } // 仅限管理员
+        meta: { requiresAuth: true, roles: [4] }
     },
-    // 🚨 新增：全盘订单流转 (对应菜单的 /flow)
     {
         path: '/flow',
         name: 'OrderFlow',
         component: () => import('@/views/admin/OrderFlow.vue'),
-        meta: { requiresAuth: true, roles: [4] } // 仅限管理员
+        meta: { requiresAuth: true, roles: [4] }
     },
     {
         path: '/:pathMatch(.*)*',

@@ -28,3 +28,13 @@ export function getStationPage(params) {
 export function getAllStations() {
     return request({ url: '/resource/station/all', method: 'get' })
 }
+
+// 商家查询自己的捐赠溯源记录
+export function getMerchantGoodsPage(params) {
+    return request({ url: '/resource/goods/merchant/page', method: 'get', params })
+}
+
+// 商家撤销尚未被接管的捐赠物资
+export function revokeGoods(goodsId) {
+    return request({ url: `/resource/goods/revoke/${goodsId}`, method: 'delete' })
+}

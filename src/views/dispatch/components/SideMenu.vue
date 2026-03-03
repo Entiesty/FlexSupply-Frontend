@@ -44,7 +44,14 @@ const router = useRouter()
 const route = useRoute()
 
 const goToHome = () => {
-  router.push('/map')
+  const role = currentUser.value.role
+  if (role === 2) {
+    router.push('/merchant/donate') // 商家回捐赠大厅
+  } else if (role === 1) {
+    router.push('/sos')             // 求助者回 SOS
+  } else {
+    router.push('/map')             // 志愿者和管理员回大屏
+  }
 }
 
 // 建议真实场景下把 userId 也存入 localStorage，这里假设你登录时存了
@@ -65,14 +72,18 @@ const roleName = computed(() => roleMap[currentUser.value.role] || '未知角色
 
 const allMenus = [
   { name: '实时调度大屏', icon: '🗺️', path: '/map', roles: [3, 4] },
-  // 👇 加上这一行，把入口开放给管理员
-  { name: '资质风控审核', icon: '🛡️', path: '/admin/review', roles: [4] },
+  { name: '入驻材料审核', icon: '🛡️', path: '/admin/review', roles: [4] },
+
+  { name: '物资捐赠大厅', icon: '💝', path: '/merchant/donate', roles: [2] },
+  // 👇 核心新增：商家的物资全链路溯源菜单
+  { name: '我的捐赠记录', icon: '📜', path: '/merchant/history', roles: [2] },
+
   { name: '我的配送任务', icon: '🚴', path: '/my-tasks', roles: [3] },
-  { name: '我的荣誉档案', icon: '🏆', path: '/volunteer/credit', roles: [3] },
-  { name: '全盘订单流转', icon: '📦', path: '/flow', roles: [4] },
-  { name: '系统算法配置', icon: '⚙️', path: '/config', roles: [4] },
-  { name: '全域用户治理', icon: '👥', path: '/admin/users', roles: [4] },
-  { name: '账号设置中心', icon: '👤', path: '/volunteer/profile', roles: [2, 3, 4] }
+  { name: '我的信誉档案', icon: '🏆', path: '/volunteer/credit', roles: [3] },
+  { name: '全局订单监控', icon: '📦', path: '/flow', roles: [4] },
+  { name: '调度引擎调参', icon: '⚙️', path: '/config', roles: [4] },
+  { name: '全域用户台账', icon: '👥', path: '/admin/users', roles: [4] },
+  { name: '个人账号设置', icon: '👤', path: '/volunteer/profile', roles: [2, 3, 4] }
 ]
 
 const visibleMenus = computed(() => {
