@@ -28,3 +28,20 @@ export function updateUserTag(userId, tag, isVerified) {
 export function updateUserCredit(userId, scoreChange) {
     return request({ url: '/admin/user/update-credit', method: 'put', params: { userId, scoreChange } })
 }
+
+
+// 1. 获取资质审核列表 (分页)
+export function getAuditPage(params) {
+    // 对接 UserController.java 的 /system/user/admin/audit-page
+    return request({ url: '/system/user/admin/audit-page', method: 'get', params })
+}
+
+// 2. 提交资质审核结果
+export function submitAudit(userId, isPass) {
+    // 对接 UserController.java 的 /system/user/admin/audit/{userId}
+    return request({
+        url: `/system/user/admin/audit/${userId}`,
+        method: 'put',
+        params: { isPass }
+    })
+}

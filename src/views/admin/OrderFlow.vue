@@ -66,10 +66,15 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="requiredCategory" label="需求物资" min-width="120" align="center">
-          <template #default="scope">
-            <el-tag size="small" effect="plain" type="warning" class="custom-tag-orange">
-              {{ scope.row.requiredCategory }}
+        <el-table-column label="需求物资" min-width="120" align="center">
+          <template #default="{ row }">
+            <el-tag
+                size="small"
+                effect="plain"
+                type="warning"
+                class="custom-tag-orange"
+            >
+              {{ (row.requiredCategory && row.requiredCategory.trim() !== '') ? row.requiredCategory : '通用物资' }}
             </el-tag>
           </template>
         </el-table-column>
@@ -92,7 +97,7 @@
 
         <el-table-column prop="status" label="实时状态" min-width="120" align="center">
           <template #default="scope">
-            <el-tag v-if="scope.row.status === 0" type="danger" effect="light">🔴 待匹配</el-tag>
+            <el-tag v-if="scope.row.status === 0" type="danger" effect="light">🟡 待匹配 (等待接单)</el-tag>
             <el-tag v-else-if="scope.row.status === 1" type="primary" effect="light">🔵 调度中</el-tag>
             <el-tag v-else-if="scope.row.status === 2" type="success" effect="light">🟢 已送达</el-tag>
             <el-tag v-else type="info" effect="light">⚫ 已取消</el-tag>
@@ -164,6 +169,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { getAdminOrders } from '@/api/trade'
 
 const queryParams = reactive({
   pageNum: 1,
@@ -189,30 +195,16 @@ const allMockData = reactive([
   { orderId: 5, orderSn: 'REQ20260302E055', requiredCategory: '饮用水', urgencyLevel: 8, deliveryMethod: 1, status: 1, createTime: '2026-03-02 08:30:00' },
 ])
 
-// 模拟获取数据，并包含强大的【前端数据过滤】逻辑
+// 🚨 将 fetchData 彻底替换为真实后端请求
 const fetchData = async () => {
   loading.value = true
   try {
-    setTimeout(() => {
-      // 1. 根据查询条件进行数据过滤
-      let filteredData = allMockData.filter(item => {
-        let match = true
-        // 模糊搜索单号
-        if (queryParams.orderSn && !item.orderSn.includes(queryParams.orderSn)) match = false
-        // 精确匹配状态
-        if (queryParams.status !== null && queryParams.status !== '' && item.status !== queryParams.status) match = false
-        // 精确匹配履约模式
-        if (queryParams.deliveryMethod !== null && queryParams.deliveryMethod !== '' && item.deliveryMethod !== queryParams.deliveryMethod) match = false
-        return match
-      })
-
-      // 2. 赋值给表格展示
-      tableData.value = filteredData
-      total.value = filteredData.length
-      loading.value = false
-    }, 400) // 模拟 400ms 的网络加载延迟
+    const res = await getAdminOrders(queryParams)
+    tableData.value = res.data.records
+    total.value = res.data.total
   } catch (error) {
-    ElMessage.error('获取订单数据失败')
+    ElMessage.error('获取订单数据失败，请检查后端服务')
+  } finally {
     loading.value = false
   }
 }
@@ -256,7 +248,7 @@ const handleTrace = (row) => {
 
 // 状态文本转换工具
 const getStatusText = (status) => {
-  const map = { 0: '🔴 待匹配异常', 1: '🔵 运送调度中', 2: '🟢 已顺利送达', 3: '⚫ 已强制取消' }
+  const map = { 0: '🟡 待匹配 (等待接单)', 1: '🔵 运送调度中', 2: '🟢 已顺利送达', 3: '⚫ 已强制取消' }
   return map[status] || '未知状态'
 }
 

@@ -40,3 +40,8 @@ export function checkOutTask(taskId) {
 export function switchOrderToPickup(orderId) {
     return request({ url: '/trade/order/switch-pickup', method: 'post', params: { orderId } })
 }
+
+// 全盘订单流转 (指挥中心)
+export function getAdminOrders(params) {
+    return request({ url: '/trade/order/admin-page', method: 'get', params })
+}

@@ -65,12 +65,14 @@ const roleName = computed(() => roleMap[currentUser.value.role] || '未知角色
 
 const allMenus = [
   { name: '实时调度大屏', icon: '🗺️', path: '/map', roles: [3, 4] },
+  // 👇 加上这一行，把入口开放给管理员
+  { name: '资质风控审核', icon: '🛡️', path: '/admin/review', roles: [4] },
   { name: '我的配送任务', icon: '🚴', path: '/my-tasks', roles: [3] },
   { name: '我的荣誉档案', icon: '🏆', path: '/volunteer/credit', roles: [3] },
   { name: '全盘订单流转', icon: '📦', path: '/flow', roles: [4] },
   { name: '系统算法配置', icon: '⚙️', path: '/config', roles: [4] },
-  { name: '账号设置中心', icon: '⚙️', path: '/volunteer/profile', roles: [2, 3, 4] },
   { name: '全域用户治理', icon: '👥', path: '/admin/users', roles: [4] },
+  { name: '账号设置中心', icon: '👤', path: '/volunteer/profile', roles: [2, 3, 4] }
 ]
 
 const visibleMenus = computed(() => {

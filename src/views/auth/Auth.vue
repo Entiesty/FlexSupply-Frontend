@@ -48,6 +48,31 @@
           <input v-model="form.username" type="text" :placeholder="roleConfig.placeholder" />
         </label>
 
+        <label v-if="isRegister && form.role === 1" class="field">
+          <span class="field-icon">🏷️</span>
+          <select v-model="form.userTag" class="dynamic-select">
+            <option value="NORMAL">普通求助者</option>
+            <option value="ELDERLY">需照顾老人</option>
+            <option value="DISABLED">残障人士</option>
+            <option value="SAN_WORKER">环卫工人</option>
+          </select>
+        </label>
+
+        <div v-if="isRegister && (form.role === 2 || form.role === 3)" class="upload-wrapper">
+          <p class="upload-hint">{{ form.role === 2 ? '必须上传营业执照以供审核' : '请上传学生证/身份证等有效证件' }}</p>
+          <div class="upload-box" @click="triggerUpload" :class="{'has-img': form.identityProofUrl}">
+            <template v-if="!form.identityProofUrl">
+              <span class="upload-plus">+</span>
+              <span class="upload-text">点击上传图片</span>
+            </template>
+            <template v-else>
+              <img :src="form.identityProofUrl" class="upload-preview" />
+              <div class="upload-mask">点击重新上传</div>
+            </template>
+            <input type="file" ref="fileInput" hidden @change="handleFileChange" accept="image/*" />
+          </div>
+        </div>
+
         <label class="field">
           <span class="field-icon">📱</span>
           <input v-model="form.phone" type="tel" maxlength="11" placeholder="请输入11位手机号"/>
@@ -106,6 +131,7 @@
 import { reactive, ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { login, register, sendSmsCode, resetPassword } from '@/api/auth.js'
+import { uploadFile } from '@/api/common.js' // 引入文件上传 API
 import { ElMessage, ElNotification } from "element-plus"
 
 const router = useRouter()
@@ -116,11 +142,23 @@ const countdown = ref(0)
 
 const captchaCanvas = ref(null)
 const generatedCaptcha = ref('')
+const fileInput = ref(null)
 
-const form = reactive({ phone: '', password: '', username: '', role: 3, smsCode: '', agree: false, captcha: '' })
+// 扩充 form 对象，加入 userTag 和 identityProofUrl
+const form = reactive({
+  phone: '',
+  password: '',
+  username: '',
+  role: 3,
+  smsCode: '',
+  agree: false,
+  captcha: '',
+  userTag: 'NORMAL',
+  identityProofUrl: ''
+})
+
 const phoneRegex = /^1[3-9]\d{9}$/
 
-// 动态角色配置
 const roleConfig = computed(() => {
   switch (form.role) {
     case 1: return { icon: '👴', placeholder: '请输入您的称呼 (如: 张大爷)', tip: '注册后即可一键发布紧急物资求助' };
@@ -129,12 +167,10 @@ const roleConfig = computed(() => {
   }
 })
 
-// 绘制前端图形验证码
+// 图形验证码逻辑
 const drawCaptcha = () => {
   if (!captchaCanvas.value) return;
   const ctx = captchaCanvas.value.getContext('2d');
-
-  // 🚨 这里的长宽和 HTML 里的一致
   const width = 90;
   const height = 34;
 
@@ -173,11 +209,13 @@ const drawCaptcha = () => {
   }
 }
 
-// 模式切换
+// 模式切换，重置表单字段
 const toggleMode = async (mode) => {
   isRegister.value = (mode === 'register' && !isRegister.value);
   isForgot.value = (mode === 'forgot');
-  form.phone = ''; form.password = ''; form.username = ''; form.smsCode = ''; form.role = 3; form.captcha = ''; countdown.value = 0;
+  form.phone = ''; form.password = ''; form.username = ''; form.smsCode = '';
+  form.role = 3; form.captcha = ''; form.identityProofUrl = ''; form.userTag = 'NORMAL';
+  countdown.value = 0;
 
   if (!isRegister.value && !isForgot.value) {
     await nextTick()
@@ -185,14 +223,11 @@ const toggleMode = async (mode) => {
   }
 }
 
-// 获取验证码
+// 获取短信验证码
 const handleSendCode = async () => {
   if (!phoneRegex.test(form.phone)) return ElMessage.warning('请输入正确的 11 位手机号码')
   try {
-    // 🚀 核心修改：动态判断当前是注册还是忘记密码场景
     const sendType = isForgot.value ? 'forgot' : 'register';
-
-    // 把 sendType 传给 API
     const res = await sendSmsCode(form.phone, sendType);
 
     countdown.value = 60
@@ -208,7 +243,29 @@ const handleSendCode = async () => {
     })
   } catch (e) {
     console.error('发送失败', e)
-    // 🚨 这里不用处理弹窗，因为后端的 BusinessException 会被全局拦截器统一报错弹出
+  }
+}
+
+// 触发文件上传
+const triggerUpload = () => {
+  if (fileInput.value) fileInput.value.click()
+}
+
+// 处理 MinIO 图片上传
+const handleFileChange = async (e) => {
+  const file = e.target.files[0]
+  if (!file) return
+  if (file.size > 5 * 1024 * 1024) return ElMessage.warning('图片大小不能超过 5MB')
+
+  try {
+    loading.value = true
+    const res = await uploadFile(file)
+    form.identityProofUrl = res.data
+    ElMessage.success('证明材料上传成功')
+  } catch (error) {
+    console.error('上传失败', error)
+  } finally {
+    loading.value = false
   }
 }
 
@@ -217,9 +274,13 @@ const handleSubmit = async () => {
   if (isRegister.value && !form.agree) return ElMessage.warning('请先勾选同意服务协议')
   if (!phoneRegex.test(form.phone)) return ElMessage.warning('手机号码格式不正确')
   if (!form.password) return ElMessage.warning('请输入密码')
-
   if ((isRegister.value || isForgot.value) && !form.smsCode) return ElMessage.warning('请输入短信验证码')
   if (isRegister.value && !form.username) return ElMessage.warning('请将名称填写完整')
+
+  // 🚀 核心拦截：商家资质
+  if (isRegister.value && form.role === 2 && !form.identityProofUrl) {
+    return ElMessage.warning('爱心商家入驻必须上传营业执照')
+  }
 
   if (!isRegister.value && !isForgot.value) {
     if (!form.captcha) return ElMessage.warning('请输入图形验证码')
@@ -237,8 +298,17 @@ const handleSubmit = async () => {
       ElMessage.success('密码重置成功，请登录！')
       toggleMode('login')
     } else if (isRegister.value) {
-      await register({ phone: form.phone, password: form.password, username: form.username, role: form.role, smsCode: form.smsCode })
-      ElMessage.success('注册成功！请登录')
+      // 🚀 核心装载：传递额外资质属性
+      await register({
+        phone: form.phone,
+        password: form.password,
+        username: form.username,
+        role: form.role,
+        smsCode: form.smsCode,
+        userTag: form.role === 1 ? form.userTag : 'NORMAL',
+        identityProofUrl: form.identityProofUrl
+      })
+      ElMessage.success(form.role === 2 ? '注册成功！请等待管理员审核资质' : '注册成功！请登录')
       toggleMode('login')
     } else {
       const res = await login(form.phone, form.password)
@@ -247,19 +317,12 @@ const handleSubmit = async () => {
       localStorage.setItem('username', res.data.username)
       ElMessage.success('登录成功，欢迎回来')
 
-      // 🚀 核心修改点：根据角色进行智能路由跳转
-      // 🚀 终极智能路由分发引擎
-      if (res.data.role === 1) {
-        await router.push('/sos')             // 受赠方 -> 老人求助端
-      } else if (res.data.role === 2) {
-        await router.push('/merchant/donate') // 商家 -> 物资捐赠端
-      } else if (res.data.role === 3) {
-        await router.push('/map')             // 🚨 志愿者登录后直接进入实时调度大屏
-      } else if (res.data.role === 4) {
-        await router.push('/map')
-      } else {
-        await router.push('/map')             // 默认保底兜底去大屏
-      }
+      // 智能路由跳转
+      if (res.data.role === 1) await router.push('/sos')
+      else if (res.data.role === 2) await router.push('/merchant/donate')
+      else if (res.data.role === 3) await router.push('/map')
+      else if (res.data.role === 4) await router.push('/map')
+      else await router.push('/map')
     }
   } catch (e) {
     console.error('操作失败', e)
@@ -275,7 +338,7 @@ onMounted(() => {
 
 <style scoped>
 /* =========== 基础卡片样式 =========== */
-.login-wrapper { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #fff8f0; overflow: hidden; }
+.login-wrapper { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #fff8f0; overflow: auto; }
 .bg-layer { position: absolute; inset: 0; }
 .blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.5; }
 .b1 { width: 600px; height: 600px; background: #fdba74; top: -100px; left: -100px; }
@@ -283,7 +346,7 @@ onMounted(() => {
 .floats span { position: absolute; left: var(--x); top: var(--y); font-size: var(--s); opacity: 0.3; animation: floatBob 6s ease-in-out infinite var(--d); }
 @keyframes floatBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-25px); } }
 
-.card { position: relative; z-index: 10; width: 420px; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(20px); border: 1px solid #fff; border-radius: 32px; padding: 40px 40px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.08), 0 0 40px rgba(234, 88, 12, 0.05); text-align: center; transition: all 0.3s ease; }
+.card { position: relative; z-index: 10; width: 420px; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(20px); border: 1px solid #fff; border-radius: 32px; padding: 40px 40px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.08), 0 0 40px rgba(234, 88, 12, 0.05); text-align: center; transition: all 0.3s ease; margin: auto; }
 .logo-wrap { position: relative; width: 80px; height: 80px; margin: 0 auto 15px; }
 .logo-icon { position: relative; background: #fff; width: 100%; height: 100%; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05); }
 .logo-glow { position: absolute; inset: -4px; border-radius: 50%; background: linear-gradient(45deg, #f97316, #fbbf24); animation: rotate 4s linear infinite; }
@@ -296,7 +359,6 @@ onMounted(() => {
 /* =========== 表单与控件样式 =========== */
 .form { display: flex; flex-direction: column; gap: 12px; }
 
-/* 🚨 内嵌式大边框布局核心 */
 .field { display: flex; align-items: center; gap: 12px; background: #fff; border: 1.5px solid rgba(124, 45, 18, 0.15); border-radius: 16px; padding: 4px 16px; transition: all 0.3s; }
 .field:focus-within { border-color: #ea580c; box-shadow: 0 0 0 4px rgba(234, 88, 12, 0.1); }
 .field input { flex: 1; border: none; outline: none; padding: 12px 0; font-size: 1rem; color: #431407; background: transparent; min-width: 0; }
@@ -309,14 +371,25 @@ onMounted(() => {
 .warning-tip { color: #ea580c; background: #fff7ed; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
 
-/* 🚀 内嵌式短信按钮 */
 .sms-btn-inline { padding: 6px 12px; border: none; background: #ffedd5; color: #ea580c; font-weight: bold; font-size: 0.8rem; border-radius: 8px; cursor: pointer; transition: 0.3s; white-space: nowrap; }
 .sms-btn-inline:hover:not(:disabled) { background: #fed7aa; }
 .sms-btn-inline:disabled { color: #9ca3af; background: #f3f4f6; cursor: not-allowed; }
 
-/* 🚀 内嵌式图形验证码 */
 .captcha-canvas-inline { border-radius: 8px; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.05); transition: transform 0.2s; margin-right: -4px; }
 .captcha-canvas-inline:hover { transform: scale(1.05); }
+
+/* 🌟 动态表单新增样式 */
+.dynamic-select { flex: 1; border: none; outline: none; background: transparent; color: #431407; font-size: 1rem; cursor: pointer; padding: 12px 0; }
+
+.upload-wrapper { margin-bottom: 5px; text-align: left; }
+.upload-hint { font-size: 0.75rem; color: #ea580c; margin-bottom: 6px; font-weight: bold; margin-left: 5px; }
+.upload-box { height: 110px; border: 2px dashed rgba(124, 45, 18, 0.2); border-radius: 16px; background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: all 0.3s; position: relative; overflow: hidden; }
+.upload-box:hover { border-color: #ea580c; background: #fff7ed; }
+.upload-plus { font-size: 2rem; color: #f97316; font-weight: 300; line-height: 1; }
+.upload-text { font-size: 0.8rem; color: #9a3412; opacity: 0.7; margin-top: 5px; }
+.upload-preview { width: 100%; height: 100%; object-fit: cover; }
+.upload-mask { position: absolute; inset: 0; background: rgba(0,0,0,0.5); color: #fff; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; opacity: 0; transition: 0.3s; backdrop-filter: blur(2px); }
+.upload-box.has-img:hover .upload-mask { opacity: 1; }
 
 .agreement { text-align: left; margin: 5px 0 5px 5px; }
 .checkbox-container { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.75rem; color: #64748b; }
