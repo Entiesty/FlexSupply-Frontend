@@ -30,12 +30,27 @@
           <el-table-column prop="username" label="姓名/名称" min-width="150" />
           <el-table-column prop="phone" label="联系电话" width="150" />
 
+          <el-table-column label="证明材料" width="100" align="center">
+            <template #default="scope">
+              <el-image
+                  v-if="scope.row.identityProofUrl"
+                  style="width: 45px; height: 45px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); cursor: pointer;"
+                  :src="scope.row.identityProofUrl"
+                  :preview-src-list="[scope.row.identityProofUrl]"
+                  preview-teleported
+                  fit="cover"
+              />
+              <span v-else style="color: #94a3b8; font-size: 0.8rem;">未上传</span>
+            </template>
+          </el-table-column>
+
           <template v-if="currentRole === 1">
             <el-table-column label="身份标签" width="150">
               <template #default="scope">
                 <span class="tag-badge">{{ scope.row.userTag }}</span>
               </template>
             </el-table-column>
+
             <el-table-column label="核验状态" width="120" align="center">
               <template #default="scope">
                 <span :class="scope.row.isVerified === 1 ? 'text-green' : 'text-red'">
@@ -99,44 +114,57 @@ const fetchData = async () => {
   }
 }
 
+// ================= 高权限操作区 =================
+
+// 1. 受赠方打标 (带自定义弹窗样式)
 const handleEditTag = (row) => {
-  ElMessageBox.prompt('请输入新的身份标签 (如: NORMAL, ELDERLY, DISABLED)', '特权标签核验', {
+  ElMessageBox.prompt('请输入新的身份标签 (如: NORMAL, ELDERLY, DISABLED)', '🛡️ 特权标签核验', {
     confirmButtonText: '核实验过并打标',
     cancelButtonText: '取消',
-    inputValue: row.userTag
+    inputValue: row.userTag,
+    customClass: 'dopamine-msg-box' // 应用拟物化弹窗样式
   }).then(async ({ value }) => {
     if (!value) return
     try {
       await updateUserTag(row.userId, value, 1)
-      ElMessage.success('特权标签写入成功！')
+      ElMessage.success('特权标签写入成功！多因子算法已生效。')
       fetchData()
     } catch (e) {}
   }).catch(() => {})
 }
 
+// 2. 志愿者信誉干预 (🚨 修复 2：强制输入变动事由留痕)
 const handleCredit = (userId, scoreChange) => {
   const actionName = scoreChange > 0 ? `奖励 ${scoreChange} 分` : `处罚扣除 ${Math.abs(scoreChange)} 分`
-  ElMessageBox.confirm(`确定要对该骑手执行 [${actionName}] 吗？将立即影响其调度权重！`, '信誉干预警告', {
+
+  ElMessageBox.prompt(`请输入对该骑手执行 [${actionName}] 的具体原因：`, '🏆 信誉人工干预', {
     confirmButtonText: '确定执行',
     cancelButtonText: '取消',
-    type: scoreChange > 0 ? 'success' : 'warning'
-  }).then(async () => {
+    inputPattern: /\S+/, // 必须输入可见字符
+    inputErrorMessage: '操作原因不能为空（需记录至流水账本以备对账）',
+    type: scoreChange > 0 ? 'success' : 'warning',
+    customClass: 'dopamine-msg-box'
+  }).then(async ({ value }) => {
     try {
-      await updateUserCredit(userId, scoreChange)
-      ElMessage.success(`信誉分人工干预成功`)
+      // ⚠️ 将 value(事由) 传给后端接口，写入 fb_credit_log
+      await updateUserCredit(userId, scoreChange, value)
+      ElMessage.success(`操作成功：已记入信誉流水账本！`)
       fetchData()
     } catch (e) {}
   }).catch(() => {})
 }
 
+// 3. 强制清退违规商家
 const handleRejectMerchant = (userId) => {
-  ElMessageBox.confirm('强制清退该商家？其发布的所有未接单物资将被下架。', '高危操作', {
+  ElMessageBox.confirm('强制清退该商家？其发布的所有未接单物资将被拦截并下架。', '🚨 高危操作确认', {
     confirmButtonText: '确认清退',
-    type: 'error'
+    cancelButtonText: '暂不处理',
+    type: 'error',
+    customClass: 'dopamine-msg-box'
   }).then(async () => {
     try {
       await auditMerchant(userId, -1)
-      ElMessage.success('已清退该违规商家')
+      ElMessage.success('已清退该违规商家，净化源头库。')
       fetchData()
     } catch (e) {}
   }).catch(() => {})
@@ -146,6 +174,7 @@ onMounted(() => fetchData())
 </script>
 
 <style scoped>
+/* 骨架与框架样式保持完美的原状 */
 .main-content { flex: 1; display: flex; flex-direction: column; position: relative; padding: 40px; }
 .top-status { position: absolute; top: 20px; right: 30px; z-index: 100; background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); padding: 8px 16px; border-radius: 20px; font-size: 0.75rem; color: #64748b; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05); }
 .pulse-dot { width: 8px; height: 8px; background: #3b82f6; border-radius: 50%; box-shadow: 0 0 8px #3b82f6; animation: pulse-blue 2s infinite; }
@@ -188,4 +217,54 @@ onMounted(() => fetchData())
 .btn-pass:hover { background: #10b981; color: white; transform: translateY(-2px); box-shadow: 0 4px 10px rgba(16, 185, 129, 0.2); }
 .btn-reject { background: #fef2f2; color: #ef4444; border: 1px solid #fee2e2; }
 .btn-reject:hover { background: #ef4444; color: white; transform: translateY(-2px); box-shadow: 0 4px 10px rgba(239, 68, 68, 0.2); }
+</style>
+
+<style>
+.dopamine-msg-box {
+  border-radius: 20px !important;
+  padding: 25px !important;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.1) !important;
+  border: 1px solid #f1f5f9 !important;
+  font-family: inherit !important;
+}
+
+.dopamine-msg-box .el-message-box__title {
+  font-weight: 900 !important;
+  font-size: 1.3rem !important;
+  color: #1e293b !important;
+}
+
+.dopamine-msg-box .el-message-box__content {
+  font-size: 1.05rem !important;
+  color: #475569 !important;
+  margin-top: 10px !important;
+}
+
+.dopamine-msg-box .el-input__wrapper {
+  border-radius: 12px !important;
+  padding: 8px 15px !important;
+  box-shadow: 0 0 0 1px #e2e8f0 inset !important;
+}
+
+.dopamine-msg-box .el-input__wrapper.is-focus {
+  box-shadow: 0 0 0 2px #f97316 inset !important;
+}
+
+.dopamine-msg-box .el-button {
+  border-radius: 12px !important;
+  font-weight: 800 !important;
+  padding: 10px 20px !important;
+  transition: all 0.2s !important;
+}
+
+.dopamine-msg-box .el-button--primary {
+  background: linear-gradient(135deg, #f97316, #ea580c) !important;
+  border: none !important;
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3) !important;
+}
+
+.dopamine-msg-box .el-button--primary:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 15px rgba(249, 115, 22, 0.4) !important;
+}
 </style>

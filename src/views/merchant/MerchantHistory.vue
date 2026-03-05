@@ -54,16 +54,26 @@
 
           <el-table-column prop="createTime" label="捐赠时间" width="170" align="center" />
 
-          <el-table-column label="风控干预" width="140" align="center" fixed="right">
+          <el-table-column label="流转操作" width="220" align="center" fixed="right">
             <template #default="scope">
+              <div v-if="scope.row.status === 0" class="action-btn-group">
+                <button class="action-btn btn-primary" @click="handleStart(scope.row)">
+                  🚗 准备自送
+                </button>
+                <button class="action-btn btn-revoke" @click="handleRevoke(scope.row)">
+                  撤销
+                </button>
+              </div>
+
               <button
-                  v-if="scope.row.status === 0"
-                  class="action-btn btn-revoke"
-                  @click="handleRevoke(scope.row)"
+                  v-else-if="scope.row.status === 4"
+                  class="action-btn btn-success"
+                  @click="handleFinish(scope.row)"
               >
-                撤销捐赠
+                ✅ 我已送达
               </button>
-              <el-tooltip v-else content="物资已进入调度流转引擎，无法撤销" placement="top">
+
+              <el-tooltip v-else content="物资已被系统接管或处理完毕，无法操作" placement="top">
                 <button class="action-btn btn-disabled" disabled>锁定流转</button>
               </el-tooltip>
             </template>
@@ -88,7 +98,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getMerchantGoodsPage, revokeGoods } from '@/api/resource'
+import { getMerchantGoodsPage, revokeGoods, startSelfDelivery, finishSelfDelivery } from '@/api/resource'
 
 const loading = ref(false)
 const tableData = ref([])
@@ -101,8 +111,9 @@ const queryParams = ref({
   status: null
 })
 
+// 补充状态 4
 const getStatusText = (status) => {
-  const map = { 0: '待取货', 1: '运送中', 2: '已入库', 3: '已发完' }
+  const map = { 0: '待取货', 1: '骑手运送中', 2: '已入库', 3: '已发完', 4: '商家自送中' }
   return map[status] || '未知'
 }
 
@@ -134,6 +145,61 @@ const handleRevoke = (row) => {
       await revokeGoods(row.goodsId)
       ElMessage.success('撤销成功，已从大盘移除')
       fetchData() // 刷新列表
+    } catch (e) {
+      console.error(e)
+    } finally {
+      loading.value = false
+    }
+  }).catch(() => {})
+}
+
+const handleSelfDelivery = (row) => {
+  ElMessageBox.confirm(
+      `确认您已将【${row.goodsName}】亲自送达指定的社区驿站吗？操作后物资将直接入库。`,
+      '自行送达确认',
+      {
+        confirmButtonText: '我已送达',
+        cancelButtonText: '取消',
+        type: 'success'
+      }
+  ).then(async () => {
+    loading.value = true
+    try {
+      await merchantSelfDelivery(row.goodsId)
+      ElMessage.success('物资入库成功，感谢您的亲力亲为！')
+      fetchData() // 刷新列表，状态会瞬间变成绿色“已入库”
+    } catch (e) {
+      console.error(e)
+    } finally {
+      loading.value = false
+    }
+  }).catch(() => {})
+}
+
+const handleStart = async (row) => {
+  try {
+    loading.value = true
+    await startSelfDelivery(row.goodsId)
+    ElMessage.success('物资已锁定防抢单！请注意交通安全')
+    await fetchData()
+  } catch (e) {
+    console.error(e)
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleFinish = async (row) => {
+  ElMessageBox.confirm(
+      `确认您已将【${row.goodsName}】亲自交到驿站工作人员手中了吗？`,
+      '安全核销确认',
+      { confirmButtonText: '确认入库', cancelButtonText: '取消', type: 'success' }
+  ).then(async () => {
+    loading.value = true
+    try {
+      await finishSelfDelivery(row.goodsId)
+      ElMessage.success('核销成功，感谢您的亲力亲为！')
+      await fetchData()
     } catch (e) {
       console.error(e)
     } finally {
@@ -190,6 +256,14 @@ onMounted(() => fetchData())
 .btn-revoke { background: #fef2f2; color: #ef4444; border: 1px solid #fee2e2; }
 .btn-revoke:hover { background: #ef4444; color: white; transform: translateY(-2px); box-shadow: 0 6px 15px rgba(239, 68, 68, 0.25); }
 .btn-disabled { background: #f1f5f9; color: #94a3b8; cursor: not-allowed; box-shadow: none; }
-
+.btn-success { background: #ecfdf5; color: #10b981; border: 1px solid #d1fae5; }
+.btn-success:hover { background: #10b981; color: white; transform: translateY(-2px); box-shadow: 0 6px 15px rgba(16, 185, 129, 0.25); }
 .pagination-wrap { display: flex; justify-content: center; margin-top: 25px; padding-top: 15px; border-top: 1px solid #f1f5f9; }
+.btn-primary { background: #eff6ff; color: #3b82f6; border: 1px solid #bfdbfe; }
+.status-4 { background: #faf5ff; color: #a855f7; border-color: #e9d5ff; }
+.action-btn-group {
+  display: flex;
+  gap: 12px; /* 完美间距，你可以根据喜好改成 10px 或 15px */
+  justify-content: center; /* 确保两个按钮整体居中 */
+}
 </style>

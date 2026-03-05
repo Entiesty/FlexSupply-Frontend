@@ -45,3 +45,18 @@ export function switchOrderToPickup(orderId) {
 export function getAdminOrders(params) {
     return request({ url: '/trade/order/admin-page', method: 'get', params })
 }
+
+// 受赠方获取当前进行中的求助状态 (大字号看板轮询用)
+export function getMyActiveSos() {
+    return request({ url: '/trade/order/my-active-sos', method: 'get' })
+}
+
+// 受赠方撤销求助
+export function cancelDemand(orderId) {
+    return request({ url: `/trade/order/cancel/${orderId}`, method: 'put' })
+}
+
+// 受赠方获取自己的历史求助档案 (之前应该已经加过了，确认一下有就行)
+export function getMyHistoryOrders(params) {
+    return request({ url: '/trade/order/my-history', method: 'get', params })
+}

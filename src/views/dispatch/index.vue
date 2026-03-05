@@ -11,7 +11,7 @@
     <div class="map-wrapper">
       <div id="amap-container"></div>
 
-      <DashboardPanel/>
+      <DashboardPanel v-if="currentUserRole === 4" />
 
       <DispatchControl
           v-if="pendingOrder"

@@ -25,11 +25,19 @@ const routes: Array<RouteRecordRaw> = [
         component: () => import('@/views/trade/MyTasks.vue'),
         meta: { requiresAuth: true, roles: [3] }
     },
+    // 👇 核心重构：受赠方主工作台 (紧急呼救大舱)
     {
         path: '/sos',
         name: 'ElderlySOS',
         component: () => import('@/views/sos/ElderlySOS.vue'),
         meta: { requiresAuth: true, roles: [1, 4] }
+    },
+    // 👇 核心新增：受赠方的历史求助档案
+    {
+        path: '/recipient/history',
+        name: 'RecipientHistory',
+        component: () => import('@/views/sos/RecipientHistory.vue'),
+        meta: { requiresAuth: true, roles: [1] } // 严格限制：仅限受赠方访问
     },
     {
         path: '/merchant/donate',
@@ -37,12 +45,11 @@ const routes: Array<RouteRecordRaw> = [
         component: () => import('@/views/resource/MerchantDonate.vue'),
         meta: { requiresAuth: true, roles: [2] }
     },
-    // 👇 核心新增：商家的物资溯源记录路由
     {
         path: '/merchant/history',
         name: 'MerchantHistory',
         component: () => import('@/views/merchant/MerchantHistory.vue'),
-        meta: { requiresAuth: true, roles: [2] } // 严格限制：仅限商家访问
+        meta: { requiresAuth: true, roles: [2] }
     },
     {
         path: '/admin/review',
@@ -56,11 +63,12 @@ const routes: Array<RouteRecordRaw> = [
         component: () => import('@/views/volunteer/CreditCenter.vue'),
         meta: { requiresAuth: true, roles: [3] }
     },
+    // 👇 核心修改：个人设置也要允许受赠方(角色 1)进来，用来填健康档案
     {
         path: '/volunteer/profile',
         name: 'ProfileSetting',
         component: () => import('@/views/volunteer/ProfileSetting.vue'),
-        meta: { requiresAuth: true, roles: [2, 3, 4] }
+        meta: { requiresAuth: true, roles: [1, 2, 3, 4] }
     },
     {
         path: '/config',
@@ -79,6 +87,12 @@ const routes: Array<RouteRecordRaw> = [
         name: 'OrderFlow',
         component: () => import('@/views/admin/OrderFlow.vue'),
         meta: { requiresAuth: true, roles: [4] }
+    },
+    {
+        path: '/admin/stations',
+        name: 'StationManage',
+        component: () => import('@/views/admin/StationManage.vue'),
+        meta: { requiresAuth: true, roles: [4] } // 🚨 仅限管理员
     },
     {
         path: '/:pathMatch(.*)*',

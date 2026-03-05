@@ -20,8 +20,9 @@ import SideMenu from '@/views/dispatch/components/SideMenu.vue'
 const route = useRoute()
 
 // 控制哪些页面不需要侧边栏 (登录页、老人求助页)
+// 只有登录页不需要侧边栏，其他所有角色页面都纳入系统大布局
 const showMenu = computed(() => {
-  const noMenuPaths = ['/auth', '/sos', '/']
+  const noMenuPaths = ['/auth', '/']
   return !noMenuPaths.includes(route.path)
 })
 </script>

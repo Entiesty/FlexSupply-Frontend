@@ -46,22 +46,26 @@
           </div>
         </div>
 
-        <div class="section-title"><span>04</span> 物理流向确认</div>
+        <div class="section-title"><span>04</span> 目标捐入驿站设定</div>
         <div class="form-item">
-          <label>定向捐入的社区食物银行/驿站</label>
+          <label>期望存入的社区驿站 (系统将指派志愿者上门取货并送往此地)</label>
           <div class="select-wrapper">
             <select v-model="form.currentStationId" :class="{ 'has-value': form.currentStationId !== '' }">
               <option disabled value="">请选择距您最近的社区驿站...</option>
-              <option v-for="st in stations" :key="st.stationId" :value="st.stationId">
-                📍 {{ st.stationName }} ({{ st.address }})
-              </option>
+              <option
+                  v-for="st in stations"
+                  :key="st.stationId"
+                  :value="st.stationId"
+              >
+                📍 {{ st.stationName }} ({{ st.distance === '距离未知' ? st.address : '距您 ' + st.distance }})
+              </option>w
             </select>
           </div>
         </div>
 
         <button class="submit-btn" :disabled="!isFormValid" @click="handleDonate">
           <span class="btn-shine"></span>
-          确认无误，立即捐赠入库
+          确认无误，发布捐赠 (等待取货)
         </button>
       </div>
     </div>
@@ -71,7 +75,8 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElNotification } from 'element-plus'
-import { getAllStations, donateGoods } from '@/api/resource'
+// 引入智能推荐接口
+import { getRecommendStations, donateGoods } from '@/api/resource'
 
 const loading = ref(false)
 const stations = ref([])
@@ -90,14 +95,37 @@ const isFormValid = computed(() => {
   return form.goodsName && form.category && form.stock && form.expirationDate && form.currentStationId
 })
 
-onMounted(async () => {
-  try {
-    const res = await getAllStations()
-    stations.value = res.data || []
-  } catch (e) {
-    console.error('获取驿站列表失败', e)
+onMounted(() => {
+  loading.value = true
+  // 🌟 调用 HTML5 浏览器原生 API 获取真实物理定位
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          // 用户授权定位，获取到真实经纬度
+          await fetchStations(position.coords.longitude, position.coords.latitude)
+        },
+        async (error) => {
+          console.warn('获取定位失败，降级为无距离模式', error)
+          // 用户拒绝授权或定位失败，不传经纬度
+          await fetchStations()
+        }
+    )
+  } else {
+    fetchStations()
   }
 })
+
+const fetchStations = async (lon = null, lat = null) => {
+  try {
+    // 把真实的经纬度传给后端计算距离
+    const res = await getRecommendStations({ lon, lat })
+    stations.value = res.data || []
+  } catch (e) {
+    console.error('获取驿站失败', e)
+  } finally {
+    loading.value = false
+  }
+}
 
 const handleDonate = async () => {
   loading.value = true
@@ -106,9 +134,10 @@ const handleDonate = async () => {
     await donateGoods(submitData)
 
     ElNotification({
-      title: '🎉 捐赠成功，城市因您而暖！',
-      message: `【${form.goodsName}】已成功录入大盘，调度引擎已接管该物资的后续流转。`,
-      type: 'success', duration: 6000
+      title: '🎉 捐赠意向发布成功！',
+      message: `【${form.goodsName}】已接入调度大盘。系统正在呼叫志愿者上门取货；您也可以在【我的捐赠记录】中操作自行送达。`,
+      type: 'success',
+      duration: 8000 // 延长提示时间，确保商家看清后续流转规则
     })
 
     form.goodsName = ''; form.stock = ''; form.category = ''; form.expirationDate = ''; form.currentStationId = '';
