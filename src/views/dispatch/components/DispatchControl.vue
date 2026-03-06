@@ -49,20 +49,35 @@
     <transition name="drawer-slide">
       <div v-if="result && !isMissionActive" class="result-drawer" :class="{ 'shake-error': isError }">
         <div class="res-content">
-          <div class="res-tag">BEST MATCH 最佳主单匹配</div>
-          <h2 class="res-title">{{ result?.station?.stationName || result?.stationName || '目标据点' }}</h2>
+          <div class="res-tag">
+            {{ pendingOrder?.orderSn?.startsWith('DON') ? '🔵 捐赠集货主干线' : '🔴 紧急派送主干线' }}
+          </div>
+
+          <h2 class="res-title">
+            {{ pendingOrder?.targetName || pendingOrder?.sourceName || result?.station?.stationName || '社区物资流转中心' }}
+          </h2>
+
           <div class="res-stats">
-            <div class="stat-item">🚴 主干距离 <strong>{{ result?.distance || 1500 }}</strong> 米</div>
-            <div class="stat-item">⏱️ 预计耗时 <strong>{{ result?.duration ? Math.ceil(result.duration / 60) : 10 }}</strong> 分</div>
-            <div class="stat-item">📊 综合评分 <strong>{{ result?.finalScore ? result.finalScore.toFixed(2) : '99.00' }}</strong></div>
+            <div class="stat-item">
+              🚴 骑行距离 <strong>{{ result?.distance ? (result.distance / 1000).toFixed(2) : '1.50' }}</strong> km
+            </div>
+            <div class="stat-item">
+              ⏱️ 预计耗时 <strong>{{ result?.duration ? Math.ceil(result.duration / 60) : 10 }}</strong> 分钟
+            </div>
+
+            <div class="stat-item goods-highlight">
+              📦 护送物资：<strong>{{ pendingOrder?.goodsName || pendingOrder?.requiredCategory || '应急物资' }}</strong>
+              <span class="count-badge" v-if="pendingOrder?.goodsCount">x {{ pendingOrder.goodsCount }}</span>
+            </div>
           </div>
 
           <div v-if="piggybackOrders && piggybackOrders.length > 0 && userRole === 3" class="piggyback-pool">
             <div class="pb-header">📦 空间探测：发现附近有 {{ piggybackOrders.length }} 个顺路订单</div>
             <div class="pb-list">
               <div v-for="po in piggybackOrders" :key="po.orderId" class="pb-item">
-                <span class="pb-cat">{{ po.requiredCategory || '急需物资' }}</span>
-                <span class="pb-dist">距当前路线仅 {{ po.relativeDistance }} km</span>
+                <span class="pb-cat">{{ po.goodsName || po.requiredCategory || '急需物资' }}</span>
+                <span class="count-badge" v-if="po.goodsCount">x {{ po.goodsCount }}</span>
+                <span class="pb-dist">距主线 {{ po.relativeDistance }}</span>
               </div>
             </div>
           </div>
@@ -74,7 +89,7 @@
           </div>
           <button v-else class="grab-btn pb-grab-btn" @click="emitGrabBatch">
             <span class="bolt-icon">⚡</span>
-            {{ piggybackOrders.length > 0 ? `一键打包抢单 (共 ${piggybackOrders.length + 1} 单)` : '确认响应 · 立即接单' }}
+            {{ piggybackOrders.length > 0 ? `一键打包接单 (共 ${piggybackOrders.length + 1} 单)` : '确认响应 · 立即接单' }}
           </button>
         </div>
       </div>
@@ -92,12 +107,11 @@ const props = defineProps({
   activeOrder: Object,
   isError: Boolean,
   fallbackCountdown: Number,
-  piggybackOrders: { type: Array, default: () => [] } // 🚨 接收来自大屏的顺路单数据
+  piggybackOrders: { type: Array, default: () => [] }
 })
 
 const emit = defineEmits(['dispatch', 'grab', 'finish', 'notify-pickup', 'switch-pickup'])
 
-// 🚨 核心逻辑：将主单和所有顺路单的 ID 组装成数组，一起发给父组件处理
 const emitGrabBatch = () => {
   const batchIds = [props.pendingOrder.orderId]
   props.piggybackOrders.forEach(o => {
@@ -108,7 +122,6 @@ const emitGrabBatch = () => {
 </script>
 
 <style scoped>
-/* 保持原有基础样式，新增顺路单相关样式 */
 .dispatch-control { pointer-events: none; }
 .dispatch-control > * { pointer-events: auto; }
 .action-card { position: absolute; top: 80px; right: 30px; left: auto; z-index: 100; width: 280px; background: #fff; border-radius: 24px; padding: 24px; border: 1px solid rgba(249, 115, 22, 0.15); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06); }
@@ -135,8 +148,32 @@ const emitGrabBatch = () => {
 .res-action { flex-shrink: 0; padding-left: 20px; display: flex; align-items: center;}
 .res-tag { font-size: 0.7rem; color: #10b981; font-weight: 900; }
 .res-title { font-size: 1.5rem; color: #1e293b; margin: 5px 0 10px; font-weight: 800; }
-.res-stats { display: flex; gap: 20px; font-size: 0.85rem; color: #64748b; }
+.res-stats { display: flex; gap: 20px; font-size: 0.85rem; color: #64748b; align-items: center; }
 .res-stats strong { color: #f97316; font-size: 1rem; }
+
+/* 🌟 新增：物资高亮与数量角标 */
+.goods-highlight {
+  background: #eff6ff;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid #bfdbfe;
+  color: #1e293b;
+}
+.goods-highlight strong {
+  color: #2563eb !important;
+}
+.count-badge {
+  display: inline-block;
+  background: #f97316;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 900;
+  padding: 2px 6px;
+  border-radius: 6px;
+  margin-left: 6px;
+  font-family: monospace;
+  box-shadow: 0 2px 4px rgba(249, 115, 22, 0.3);
+}
 
 /* 🌟 顺路单池 UI 设计 */
 .piggyback-pool { margin-top: 15px; padding-top: 15px; border-top: 1px dashed #e2e8f0; }
@@ -144,6 +181,7 @@ const emitGrabBatch = () => {
 .pb-list { display: flex; flex-wrap: wrap; gap: 10px; }
 .pb-item { background: #eff6ff; border: 1px solid #bfdbfe; padding: 6px 12px; border-radius: 12px; display: flex; align-items: center; gap: 8px; }
 .pb-cat { font-size: 0.85rem; font-weight: bold; color: #1e293b; }
+.pb-item .count-badge { background: #3b82f6; margin-left: 2px; box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3); }
 .pb-dist { font-size: 0.75rem; color: #3b82f6; background: #fff; padding: 2px 6px; border-radius: 6px; font-family: monospace; font-weight: bold;}
 
 /* 打包抢单大按钮 */

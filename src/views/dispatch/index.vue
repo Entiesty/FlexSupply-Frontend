@@ -171,29 +171,56 @@ const fetchMapOrders = async () => {
       const mainOrder = res.data[0]
       pendingOrder.value = mainOrder
 
-      const mainLng = mainOrder.targetLon || userLocation.value[0]
-      const mainLat = mainOrder.targetLat || userLocation.value[1]
+      // 安全提取主单坐标 (防 null)
+      const mainSrcLat = mainOrder.sourceLat || userLocation.value[1]
+      const mainSrcLon = mainOrder.sourceLon || userLocation.value[0]
+      const mainTgtLat = mainOrder.targetLat || userLocation.value[1]
+      const mainTgtLon = mainOrder.targetLon || userLocation.value[0]
+
       const isDonation = mainOrder.orderSn?.startsWith('DON')
 
       const pbArr = []
-      if (!isDonation) {
-        for (let i = 1; i < res.data.length; i++) {
-          const subOrder = res.data[i]
-          if (subOrder.status !== 0 || subOrder.orderSn?.startsWith('DON')) continue
-          const subLat = subOrder.targetLat || userLocation.value[1]
-          const subLng = subOrder.targetLon || userLocation.value[0]
+      // 🚀 核心升级：遍历其余订单，执行“同源同向”智能打包
+      for (let i = 1; i < res.data.length; i++) {
+        const subOrder = res.data[i]
+        if (subOrder.status !== 0) continue
 
-          const dist = calculateDistance(mainLat, mainLng, subLat, subLng)
-          if (dist < 2.5) {
-            subOrder.relativeDistance = dist.toFixed(2)
+        const isSubDonation = subOrder.orderSn?.startsWith('DON')
+        const subSrcLat = subOrder.sourceLat || userLocation.value[1]
+        const subSrcLon = subOrder.sourceLon || userLocation.value[0]
+        const subTgtLat = subOrder.targetLat || userLocation.value[1]
+        const subTgtLon = subOrder.targetLon || userLocation.value[0]
+
+        // 策略 A：捐赠单 (DON) 的打包逻辑
+        // 条件：起点（商家）距离小于 1km，且终点（驿站）是同一个
+        if (isDonation && isSubDonation) {
+          const srcDist = calculateDistance(mainSrcLat, mainSrcLon, subSrcLat, subSrcLon)
+          const tgtDist = calculateDistance(mainTgtLat, mainTgtLon, subTgtLat, subTgtLon)
+
+          if (srcDist < 1.0 && tgtDist < 0.5) {
+            subOrder.relativeDistance = '同网点集货' // UI文案优化
+            pbArr.push(subOrder)
+          }
+        }
+            // 策略 B：求助单 (SOS) 的打包逻辑
+        // 条件：起点（驿站）是同一个，且终点（受赠市民）距离小于 2.5km
+        else if (!isDonation && !isSubDonation) {
+          const srcDist = calculateDistance(mainSrcLat, mainSrcLon, subSrcLat, subSrcLon)
+          const tgtDist = calculateDistance(mainTgtLat, mainTgtLon, subTgtLat, subTgtLon)
+
+          if (srcDist < 0.5 && tgtDist < 2.5) {
+            subOrder.relativeDistance = tgtDist.toFixed(2) + ' km'
             pbArr.push(subOrder)
           }
         }
       }
+
       piggybackOrders.value = pbArr
 
-      drawMarker(isDonation, [mainLng, mainLat], pbArr)
+      // 绘制地图 Markers
+      drawMarker(isDonation, [mainTgtLon, mainTgtLat], pbArr)
 
+      // 自动触发派单面板 (如果符合条件)
       if (currentUserRole.value === 3
           && pendingOrder.value.deliveryMethod === 1
           && !result.value
@@ -201,8 +228,8 @@ const fetchMapOrders = async () => {
 
         autoDispatchedOrderId.value = pendingOrder.value.orderId
 
-        if (isDonation) handleDonationDispatch([mainLng, mainLat])
-        else await handleSmartDispatch([mainLng, mainLat])
+        if (isDonation) handleDonationDispatch([mainTgtLon, mainTgtLat])
+        else await handleSmartDispatch([mainTgtLon, mainTgtLat])
       }
     } else {
       pendingOrder.value = null
@@ -261,17 +288,24 @@ const handleDispatchAction = async () => {
 const handleDonationDispatch = (targetPos) => {
   loading.value = true
   setTimeout(() => {
-    const stationLng = pendingOrder.value.sourceLon || (targetPos[0] + 0.008)
-    const stationLat = pendingOrder.value.sourceLat || (targetPos[1] + 0.008)
+    // 🚨 彻底移除 + 0.008 的假偏移！获取真实的商家起点坐标
+    const srcLng = pendingOrder.value.sourceLon || userLocation.value[0]
+    const srcLat = pendingOrder.value.sourceLat || userLocation.value[1]
 
     result.value = {
-      station: { longitude: stationLng, latitude: stationLat, stationName: pendingOrder.value.stationName || '指定社区接收驿站' },
+      station: {
+        longitude: targetPos[0], // 终点就是准确无误的驿站坐标
+        latitude: targetPos[1],
+        stationName: pendingOrder.value.targetName || '社区接收驿站'
+      },
       orderSn: pendingOrder.value.orderSn,
-      requiredCategory: pendingOrder.value.requiredCategory || pendingOrder.value.materialName || '爱心捐赠物资',
+      requiredCategory: pendingOrder.value.goodsName || pendingOrder.value.requiredCategory || '爱心捐赠物资',
       urgencyLevel: 1
     }
 
-    drawRoute(result.value, targetPos, true)
+    // 🚨 drawRoute(订单数据, 起点坐标, 是否捐赠单)
+    // 这里的传参必须把商家的 srcLng/Lat 当作起点传进去！
+    drawRoute(result.value, [srcLng, srcLat], true)
     loading.value = false
     ElMessage.success('✅ 识别到定向捐赠，已免测算直接生成回收路线！')
   }, 800)
@@ -401,7 +435,8 @@ const handleBatchGrab = async (batchIds) => {
         duration: 4000,
         offset: 80
       })
-      router.push('/my-tasks')
+      // 🚨 核心修改点：带上 tab=progress 参数跳转
+      router.push({ path: '/my-tasks', query: { tab: 'progress' } })
     }
   } finally {
     loading.value = false

@@ -37,15 +37,25 @@
           <div class="log-list" v-else>
             <div class="log-item" v-for="log in logs" :key="log.logId">
               <div class="log-icon" :class="log.changeValue > 0 ? 'plus' : 'minus'">
-                {{ log.changeValue > 0 ? '+' : '-' }}
+                {{ log.changeValue > 0 ? '⭐' : '⚠️' }}
               </div>
+
               <div class="log-detail">
-                <div class="log-reason">{{ log.reason }}</div>
-                <div class="log-time">{{ formatDate(log.createTime) }}</div>
-                <div class="log-order" v-if="log.orderId">关联订单 ID: {{ log.orderId }}</div>
+                <div class="log-reason">{{ log.reason || '系统信誉分结算' }}</div>
+
+                <div class="log-meta">
+                  <span class="log-time">
+                    <el-icon><Clock /></el-icon> {{ formatDate(log.createTime) }}
+                  </span>
+                  <span class="log-order" v-if="log.orderId">
+                    <el-icon><Ticket /></el-icon> 护航追溯码: {{ log.orderSn || `SYS-${10000 + log.orderId}` }}
+                  </span>
+                </div>
               </div>
+
               <div class="log-score" :class="log.changeValue > 0 ? 'text-green' : 'text-red'">
                 {{ log.changeValue > 0 ? '+' : '' }}{{ log.changeValue }}
+                <span class="score-unit">分</span>
               </div>
             </div>
           </div>
@@ -60,18 +70,18 @@
 import { ref, computed, onMounted } from 'vue'
 import SideMenu from '@/views/dispatch/components/SideMenu.vue'
 import { getCreditDashboard, getCreditLogs } from '@/api/volunteer'
+import { Clock, Ticket } from '@element-plus/icons-vue' // 🚨 引入图标
 
 const loading = ref(false)
 const dashboardData = ref({ creditScore: 100, beatPercentage: 0, levelName: '青铜微光' })
 const logs = ref([])
 
-// 动态计算进度条逻辑
 const nextLevelScore = computed(() => {
   const score = dashboardData.value.creditScore
   if (score < 120) return 120
   if (score < 200) return 200
   if (score < 300) return 300
-  return 999 // 满级
+  return 999
 })
 
 const progressPercent = computed(() => {
@@ -81,9 +91,15 @@ const progressPercent = computed(() => {
   return Math.min(100, Math.max(0, (score / target) * 100))
 })
 
+// 🚨 优化时间格式：MM-DD HH:mm，看起来更清爽
 const formatDate = (dateStr) => {
   if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-')
+  const d = new Date(dateStr)
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  const hh = String(d.getHours()).padStart(2, '0')
+  const min = String(d.getMinutes()).padStart(2, '0')
+  return `${mm}-${dd} ${hh}:${min}`
 }
 
 const fetchData = async () => {
@@ -105,45 +121,89 @@ onMounted(() => fetchData())
 </script>
 
 <style scoped>
-.app-layout { position: fixed; inset: 0; display: flex; width: 100vw; height: 100vh; background: #f1f5f9; overflow-y: auto; overflow-x: hidden; }
+.app-layout { position: fixed; inset: 0; display: flex; width: 100vw; height: 100vh; background: #f8fafc; overflow-y: auto; overflow-x: hidden; }
 .main-content { flex: 1; display: flex; flex-direction: column; position: relative; padding: 20px; }
-.top-status { position: absolute; top: 20px; right: 30px; z-index: 100; background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); padding: 8px 16px; border-radius: 20px; font-size: 0.75rem; color: #64748b; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05); }
+.top-status { position: absolute; top: 20px; right: 30px; z-index: 100; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); padding: 10px 18px; border-radius: 20px; font-size: 0.8rem; color: #475569; font-weight: bold; display: flex; align-items: center; gap: 8px; box-shadow: 0 6px 15px rgba(0, 0, 0, 0.05); }
 .pulse-dot { width: 8px; height: 8px; background: #f59e0b; border-radius: 50%; box-shadow: 0 0 8px #f59e0b; animation: pulse-yellow 2s infinite; }
 @keyframes pulse-yellow { 0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); } 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); } }
 
-.credit-container { max-width: 600px; width: 100%; margin: 40px auto; }
+.credit-container { max-width: 650px; width: 100%; margin: 50px auto; }
 
-/* 超炫酷的荣誉卡片 */
-.honor-card { position: relative; background: #1e293b; border-radius: 24px; padding: 30px; color: #fff; overflow: hidden; box-shadow: 0 15px 35px rgba(30, 41, 59, 0.2); margin-bottom: 30px; }
-.card-bg-glow { position: absolute; top: -50%; right: -20%; width: 300px; height: 300px; background: radial-gradient(circle, rgba(245,158,11,0.3) 0%, rgba(245,158,11,0) 70%); border-radius: 50%; }
+/* 超炫酷的荣誉卡片 (保持不变) */
+.honor-card { position: relative; background: #1e293b; border-radius: 28px; padding: 35px; color: #fff; overflow: hidden; box-shadow: 0 20px 40px rgba(30, 41, 59, 0.25); margin-bottom: 35px; }
+.card-bg-glow { position: absolute; top: -50%; right: -20%; width: 350px; height: 350px; background: radial-gradient(circle, rgba(245,158,11,0.25) 0%, rgba(245,158,11,0) 70%); border-radius: 50%; }
 .honor-content { display: flex; justify-content: space-between; align-items: center; position: relative; z-index: 2; margin-bottom: 25px; }
-.level-badge { display: inline-block; background: linear-gradient(135deg, #f59e0b, #ea580c); padding: 6px 14px; border-radius: 20px; font-weight: 900; font-size: 0.85rem; margin-bottom: 10px; box-shadow: 0 4px 10px rgba(245,158,11,0.3); }
-.score-number { font-size: 3.5rem; margin: 0; font-weight: 900; letter-spacing: -1px; text-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+.level-badge { display: inline-block; background: linear-gradient(135deg, #f59e0b, #ea580c); padding: 6px 16px; border-radius: 20px; font-weight: 900; font-size: 0.9rem; margin-bottom: 12px; box-shadow: 0 4px 12px rgba(245,158,11,0.4); }
+.score-number { font-size: 4rem; margin: 0; font-weight: 900; letter-spacing: -1px; text-shadow: 0 4px 10px rgba(0,0,0,0.3); }
 .unit { font-size: 1.2rem; font-weight: normal; color: #94a3b8; }
-.beat-text { font-size: 0.9rem; color: #cbd5e1; margin: 5px 0 0; line-height: 1.5; }
-.beat-text strong { color: #fcd34d; font-size: 1.1rem; }
-.right-icon { font-size: 5rem; opacity: 0.9; filter: drop-shadow(0 10px 10px rgba(0,0,0,0.3)); transform: rotate(15deg); }
+.beat-text { font-size: 0.95rem; color: #cbd5e1; margin: 5px 0 0; line-height: 1.5; }
+.beat-text strong { color: #fcd34d; font-size: 1.2rem; }
+.right-icon { font-size: 6rem; opacity: 0.9; filter: drop-shadow(0 10px 15px rgba(0,0,0,0.4)); transform: rotate(15deg); }
 
-/* 进度条 */
-.progress-box { position: relative; z-index: 2; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.1); }
-.p-labels { display: flex; justify-content: space-between; font-size: 0.8rem; color: #94a3b8; margin-bottom: 8px; font-weight: bold; }
-.progress-bar { height: 8px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; }
-.progress-inner { height: 100%; background: linear-gradient(90deg, #f59e0b, #fbbf24); border-radius: 10px; transition: width 1s cubic-bezier(0.4, 0, 0.2, 1); }
+.progress-box { position: relative; z-index: 2; background: rgba(255,255,255,0.06); padding: 18px; border-radius: 18px; border: 1px solid rgba(255,255,255,0.1); }
+.p-labels { display: flex; justify-content: space-between; font-size: 0.85rem; color: #cbd5e1; margin-bottom: 10px; font-weight: bold; }
+.progress-bar { height: 10px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; }
+.progress-inner { height: 100%; background: linear-gradient(90deg, #fcd34d, #f59e0b); border-radius: 10px; transition: width 1s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 0 10px rgba(245,158,11,0.5);}
 
-/* 流水列表 */
-.logs-section { background: #fff; border-radius: 24px; padding: 25px; box-shadow: 0 8px 20px rgba(0,0,0,0.03); }
-.section-title { margin: 0 0 20px; font-size: 1.2rem; color: #1e293b; font-weight: 900; }
-.log-list { display: flex; flex-direction: column; gap: 15px; }
-.log-item { display: flex; align-items: center; gap: 15px; padding-bottom: 15px; border-bottom: 1px dashed #f1f5f9; }
-.log-item:last-child { border-bottom: none; padding-bottom: 0; }
-.log-icon { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; font-weight: 900; flex-shrink: 0; }
-.log-icon.plus { background: #ecfdf5; color: #10b981; }
-.log-icon.minus { background: #fef2f2; color: #ef4444; }
-.log-detail { flex: 1; }
-.log-reason { font-weight: bold; color: #334155; font-size: 1rem; margin-bottom: 4px; }
-.log-time { font-size: 0.8rem; color: #94a3b8; }
-.log-order { font-size: 0.75rem; color: #cbd5e1; margin-top: 2px; }
-.log-score { font-size: 1.4rem; font-weight: 900; }
-.text-green { color: #10b981; }
+/* 🚨 爆改后的流水列表样式 */
+.logs-section { background: #fff; border-radius: 28px; padding: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.04); }
+.section-title { margin: 0 0 25px; font-size: 1.3rem; color: #0f172a; font-weight: 900; }
+.log-list { display: flex; flex-direction: column; gap: 16px; }
+
+.log-item {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  background: #f8fafc;
+  padding: 20px;
+  border-radius: 20px;
+  border: 1px solid #f1f5f9;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.log-item:hover {
+  transform: translateX(6px);
+  background: #fff;
+  border-color: #e2e8f0;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.04);
+}
+
+.log-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  flex-shrink: 0;
+  box-shadow: inset 0 -3px 0 rgba(0,0,0,0.1);
+}
+.log-icon.plus { background: linear-gradient(135deg, #fef3c7, #fde68a); color: #d97706; text-shadow: 0 2px 4px rgba(217, 119, 6, 0.2);}
+.log-icon.minus { background: linear-gradient(135deg, #fee2e2, #fecaca); color: #ef4444; }
+
+.log-detail { flex: 1; overflow: hidden; }
+.log-reason { font-weight: 900; color: #1e293b; font-size: 1.05rem; margin-bottom: 8px; }
+
+.log-meta { display: flex; align-items: center; gap: 15px; flex-wrap: wrap;}
+.log-time { font-size: 0.85rem; color: #64748b; font-weight: bold; display: flex; align-items: center; gap: 5px;}
+
+/* 炫酷的订单号徽章 */
+.log-order {
+  font-size: 0.8rem;
+  color: #2563eb;
+  background: #eff6ff;
+  padding: 4px 10px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 800;
+  border: 1px solid #bfdbfe;
+  font-family: monospace;
+}
+
+.log-score { font-size: 1.8rem; font-weight: 900; font-family: Impact, sans-serif; letter-spacing: 1px; }
+.score-unit { font-size: 0.9rem; font-family: sans-serif; font-weight: bold; margin-left: 2px;}
+.text-green { color: #10b981; text-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);}
 .text-red { color: #ef4444; }
 </style>
