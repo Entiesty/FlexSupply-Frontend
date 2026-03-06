@@ -17,10 +17,11 @@
             <option :value="null">所有流转状态</option>
             <option :value="0">🟡 待取货 (在店)</option>
             <option :value="1">🔵 运送中 (干线)</option>
+            <option :value="4">🟣 自送中 (商家自行配送)</option>
             <option :value="2">🟢 已入库 (据点)</option>
-            <option :value="3">⚫ 已发完 (送达)</option>
+            <option :value="3">⚫ 已发完 (送达市民)</option>
           </select>
-          <button class="search-btn" @click="fetchData">精准溯源</button>
+          <button class="search-btn" @click="fetchData">🔍 检索记录</button>
         </div>
 
         <el-table :data="tableData" style="width: 100%" class="custom-table" v-loading="loading" :empty-text="'暂无捐赠记录，快去捐赠大厅传递爱心吧！'">
@@ -33,17 +34,17 @@
 
           <el-table-column label="捐赠数量" width="120" align="center">
             <template #default="scope">
-              <span class="stock-num">{{ scope.row.stock }} 份</span>
+              <span class="stock-num">{{ scope.row.stock }}</span>
             </template>
           </el-table-column>
 
-          <el-table-column prop="stationName" label="定向流转驿站" min-width="150" align="center">
+          <el-table-column prop="stationName" label="定向流转驿站" min-width="160" align="center">
             <template #default="scope">
-              <span class="station-badge">📍 {{ scope.row.stationName || '分配中...' }}</span>
+              <span class="station-badge">📍 {{ scope.row.stationName || '系统分配中...' }}</span>
             </template>
           </el-table-column>
 
-          <el-table-column label="当前状态节点" width="160" align="center">
+          <el-table-column label="当前状态节点" width="140" align="center">
             <template #default="scope">
               <div class="status-node" :class="'status-' + scope.row.status">
                 <span class="node-dot"></span>
@@ -52,30 +53,24 @@
             </template>
           </el-table-column>
 
-          <el-table-column prop="createTime" label="捐赠时间" width="170" align="center" />
-
-          <el-table-column label="流转操作" width="220" align="center" fixed="right">
+          <el-table-column label="流转操作与追踪" width="240" align="center" fixed="right">
             <template #default="scope">
-              <div v-if="scope.row.status === 0" class="action-btn-group">
-                <button class="action-btn btn-primary" @click="handleStart(scope.row)">
-                  🚗 准备自送
+              <div class="action-btn-group">
+
+                <button class="action-btn btn-trace" @click="openTrace(scope.row)">
+                  📍 物资追踪
                 </button>
-                <button class="action-btn btn-revoke" @click="handleRevoke(scope.row)">
-                  撤销
-                </button>
+
+                <template v-if="scope.row.status === 0">
+                  <button class="action-btn btn-primary" @click="handleStart(scope.row)">🚗 自送</button>
+                  <button class="action-btn btn-revoke" @click="handleRevoke(scope.row)">撤销</button>
+                </template>
+
+                <template v-else-if="scope.row.status === 4">
+                  <button class="action-btn btn-success" @click="handleFinish(scope.row)">✅ 确认送达驿站</button>
+                </template>
+
               </div>
-
-              <button
-                  v-else-if="scope.row.status === 4"
-                  class="action-btn btn-success"
-                  @click="handleFinish(scope.row)"
-              >
-                ✅ 我已送达
-              </button>
-
-              <el-tooltip v-else content="物资已被系统接管或处理完毕，无法操作" placement="top">
-                <button class="action-btn btn-disabled" disabled>锁定流转</button>
-              </el-tooltip>
             </template>
           </el-table-column>
         </el-table>
@@ -92,6 +87,60 @@
         </div>
       </div>
     </div>
+
+    <el-dialog v-model="traceVisible" :title="`📦 爱心包裹追踪`" width="550px" custom-class="trace-dialog">
+      <div class="trace-container" v-if="currentTraceItem">
+
+        <div class="trace-summary">
+          <div class="summary-item">
+            <span class="label">捐赠物资：</span>
+            <span class="value goods-name">{{ currentTraceItem.goodsName }}</span>
+            <span class="value goods-count">剩余 {{ currentTraceItem.stock }} 份</span>
+          </div>
+          <div class="summary-item">
+            <span class="label">目标驿站：</span>
+            <span class="value">🏥 {{ currentTraceItem.stationName || '系统分配中' }}</span>
+          </div>
+        </div>
+
+        <el-timeline class="custom-timeline">
+          <el-timeline-item :timestamp="currentTraceItem.createTime" color="#3b82f6" size="large">
+            <h4 class="tl-title">💝 感谢您的爱心捐赠</h4>
+            <p class="tl-desc">您的捐赠意向已录入城市调度大盘，正在匹配运力。</p>
+          </el-timeline-item>
+
+          <el-timeline-item
+              :color="currentTraceItem.status === 1 || currentTraceItem.status === 4 || currentTraceItem.status >= 2 ? '#f97316' : '#e2e8f0'"
+              :hollow="currentTraceItem.status === 0">
+            <h4 class="tl-title" :class="{'pending-text': currentTraceItem.status === 0}">
+              {{ currentTraceItem.status === 4 ? '🚗 您正在亲自护送物资前往驿站' : (currentTraceItem.status >= 1 ? '🚴 骑手已接单，物资运送中' : '⏳ 等待骑手接单/商家自送...') }}
+            </h4>
+            <p class="tl-desc" v-if="currentTraceItem.status === 1 || currentTraceItem.status === 4">城市护航者正在全力保障物资安全抵达目的地。</p>
+          </el-timeline-item>
+
+          <el-timeline-item
+              :color="currentTraceItem.status >= 2 ? '#10b981' : '#e2e8f0'"
+              :hollow="currentTraceItem.status < 2"
+              size="large">
+            <h4 class="tl-title" :class="{'pending-text': currentTraceItem.status < 2}">
+              {{ currentTraceItem.status >= 2 ? `🏥 物资已安全抵达【${currentTraceItem.stationName}】` : '⏳ 等待物资抵达食物银行驿站...' }}
+            </h4>
+            <p class="tl-desc" v-if="currentTraceItem.status >= 2">工作人员已清点核销，正式入库，等待受助人申领。</p>
+          </el-timeline-item>
+
+          <el-timeline-item
+              :color="currentTraceItem.status === 3 ? '#ef4444' : '#e2e8f0'"
+              :hollow="currentTraceItem.status < 3"
+              size="large">
+            <h4 class="tl-title" :class="{'pending-text': currentTraceItem.status < 3}">
+              {{ currentTraceItem.status === 3 ? '🎉 物资已全部分发给困难市民！' : '⏳ 等待流转至最终受助人...' }}
+            </h4>
+            <p class="tl-desc" v-if="currentTraceItem.status === 3">这份物资已经在这个城市中化作了一道微光，再次感谢您的善举！</p>
+          </el-timeline-item>
+
+        </el-timeline>
+      </div>
+    </el-dialog>
   </main>
 </template>
 
@@ -111,7 +160,10 @@ const queryParams = ref({
   status: null
 })
 
-// 补充状态 4
+// 追踪弹窗控制
+const traceVisible = ref(false)
+const currentTraceItem = ref(null)
+
 const getStatusText = (status) => {
   const map = { 0: '待取货', 1: '骑手运送中', 2: '已入库', 3: '已发完', 4: '商家自送中' }
   return map[status] || '未知'
@@ -130,44 +182,23 @@ const fetchData = async () => {
   }
 }
 
+// 🚨 打开轨迹追踪面板
+const openTrace = (row) => {
+  currentTraceItem.value = row
+  traceVisible.value = true
+}
+
 const handleRevoke = (row) => {
   ElMessageBox.confirm(
       `确定要撤销【${row.goodsName}】的捐赠吗？撤销后该物资将从全城调度大盘中移除。`,
       '撤销防呆确认',
-      {
-        confirmButtonText: '确认撤销',
-        cancelButtonText: '点错了，保留',
-        type: 'warning'
-      }
+      { confirmButtonText: '确认撤销', cancelButtonText: '点错了，保留', type: 'warning' }
   ).then(async () => {
     loading.value = true
     try {
       await revokeGoods(row.goodsId)
       ElMessage.success('撤销成功，已从大盘移除')
-      fetchData() // 刷新列表
-    } catch (e) {
-      console.error(e)
-    } finally {
-      loading.value = false
-    }
-  }).catch(() => {})
-}
-
-const handleSelfDelivery = (row) => {
-  ElMessageBox.confirm(
-      `确认您已将【${row.goodsName}】亲自送达指定的社区驿站吗？操作后物资将直接入库。`,
-      '自行送达确认',
-      {
-        confirmButtonText: '我已送达',
-        cancelButtonText: '取消',
-        type: 'success'
-      }
-  ).then(async () => {
-    loading.value = true
-    try {
-      await merchantSelfDelivery(row.goodsId)
-      ElMessage.success('物资入库成功，感谢您的亲力亲为！')
-      fetchData() // 刷新列表，状态会瞬间变成绿色“已入库”
+      fetchData()
     } catch (e) {
       console.error(e)
     } finally {
@@ -237,7 +268,7 @@ onMounted(() => fetchData())
 
 .goods-name { font-weight: 900; font-size: 1.05rem; color: #1e293b; display: block; }
 .category-tag { display: inline-block; margin-top: 5px; font-size: 0.75rem; background: #f1f5f9; color: #64748b; padding: 2px 8px; border-radius: 6px; font-weight: bold; }
-.stock-num { font-family: monospace; font-size: 1.1rem; color: #ea580c; font-weight: 900; }
+.stock-num { font-family: monospace; font-size: 1.1rem; color: #ea580c; font-weight: 900; background: #fff7ed; padding: 2px 8px; border-radius: 8px; border: 1px dashed #fdba74;}
 .station-badge { background: #eff6ff; color: #2563eb; padding: 6px 12px; border-radius: 8px; font-weight: bold; font-size: 0.85rem; }
 
 /* 状态节点设计 */
@@ -247,23 +278,41 @@ onMounted(() => fetchData())
 .status-0 .node-dot { background: #ea580c; box-shadow: 0 0 8px #ea580c; }
 .status-1 { background: #eff6ff; color: #3b82f6; border-color: #dbeafe; }
 .status-1 .node-dot { background: #3b82f6; animation: pulse-blue 1.5s infinite; }
+.status-4 { background: #faf5ff; color: #a855f7; border-color: #e9d5ff; }
+.status-4 .node-dot { background: #a855f7; animation: pulse-purple 1.5s infinite; }
 .status-2 { background: #ecfdf5; color: #10b981; border-color: #d1fae5; }
 .status-2 .node-dot { background: #10b981; }
-.status-3 { background: #f1f5f9; color: #64748b; border-color: #e2e8f0; }
-.status-3 .node-dot { background: #94a3b8; }
+.status-3 { background: #fef2f2; color: #ef4444; border-color: #fecaca; }
+.status-3 .node-dot { background: #ef4444; }
 
-.action-btn { border: none; padding: 8px 16px; border-radius: 10px; font-weight: 900; cursor: pointer; transition: all 0.2s; font-size: 0.85rem; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+@keyframes pulse-blue { 0% { box-shadow: 0 0 0 0 rgba(59,130,246, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(59,130,246, 0); } 100% { box-shadow: 0 0 0 0 rgba(59,130,246, 0); } }
+@keyframes pulse-purple { 0% { box-shadow: 0 0 0 0 rgba(168,85,247, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(168,85,247, 0); } 100% { box-shadow: 0 0 0 0 rgba(168,85,247, 0); } }
+
+.action-btn-group { display: flex; gap: 8px; justify-content: center; }
+.action-btn { border: none; padding: 8px 14px; border-radius: 10px; font-weight: 900; cursor: pointer; transition: all 0.2s; font-size: 0.85rem; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+.btn-trace { background: #f8fafc; color: #475569; border: 1px solid #e2e8f0; }
+.btn-trace:hover { background: #1e293b; color: white; transform: translateY(-2px); box-shadow: 0 6px 15px rgba(30, 41, 59, 0.2); }
 .btn-revoke { background: #fef2f2; color: #ef4444; border: 1px solid #fee2e2; }
 .btn-revoke:hover { background: #ef4444; color: white; transform: translateY(-2px); box-shadow: 0 6px 15px rgba(239, 68, 68, 0.25); }
-.btn-disabled { background: #f1f5f9; color: #94a3b8; cursor: not-allowed; box-shadow: none; }
 .btn-success { background: #ecfdf5; color: #10b981; border: 1px solid #d1fae5; }
 .btn-success:hover { background: #10b981; color: white; transform: translateY(-2px); box-shadow: 0 6px 15px rgba(16, 185, 129, 0.25); }
-.pagination-wrap { display: flex; justify-content: center; margin-top: 25px; padding-top: 15px; border-top: 1px solid #f1f5f9; }
 .btn-primary { background: #eff6ff; color: #3b82f6; border: 1px solid #bfdbfe; }
-.status-4 { background: #faf5ff; color: #a855f7; border-color: #e9d5ff; }
-.action-btn-group {
-  display: flex;
-  gap: 12px; /* 完美间距，你可以根据喜好改成 10px 或 15px */
-  justify-content: center; /* 确保两个按钮整体居中 */
-}
+.btn-primary:hover { background: #3b82f6; color: white; transform: translateY(-2px); box-shadow: 0 6px 15px rgba(59, 130, 246, 0.25); }
+.pagination-wrap { display: flex; justify-content: center; margin-top: 25px; padding-top: 15px; border-top: 1px solid #f1f5f9; }
+
+/* ================= 轨迹溯源弹窗专属 UI ================= */
+.trace-container { padding: 0 10px; }
+.trace-summary { background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 12px; padding: 16px 20px; margin-bottom: 30px; display: flex; flex-direction: column; gap: 10px; }
+.summary-item { display: flex; align-items: center; font-size: 0.95rem; }
+.summary-item .label { color: #64748b; width: 80px; }
+.summary-item .goods-name { font-weight: 900; color: #1e293b; font-size: 1.1rem; margin-right: 12px; }
+.summary-item .goods-count { background: #fff7ed; color: #ea580c; padding: 2px 8px; border-radius: 8px; font-weight: 900; border: 1px dashed #fdba74; }
+
+.custom-timeline { padding-left: 10px; }
+.tl-title { margin: 0 0 6px 0; font-size: 1.1rem; color: #1e293b; font-weight: 900; }
+.tl-desc { margin: 0; font-size: 0.85rem; color: #64748b; line-height: 1.5; }
+.pending-text { color: #94a3b8 !important; font-weight: bold; }
+
+:deep(.el-timeline-item__node--large) { width: 16px; height: 16px; left: -2px; }
+:deep(.el-timeline-item__wrapper) { padding-left: 28px; top: -4px; }
 </style>

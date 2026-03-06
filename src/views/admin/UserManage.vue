@@ -44,6 +44,14 @@
             </template>
           </el-table-column>
 
+          <el-table-column label="账号状态" width="100" align="center">
+            <template #default="scope">
+              <span :class="scope.row.status === 1 ? 'text-green' : 'text-red'">
+                {{ scope.row.status === 1 ? '正常' : '已封禁' }}
+              </span>
+            </template>
+          </el-table-column>
+
           <template v-if="currentRole === 1">
             <el-table-column label="身份标签" width="150">
               <template #default="scope">
@@ -72,7 +80,8 @@
             <template #default="scope">
               <button v-if="currentRole === 1" class="action-btn btn-pass" @click="handleEditTag(scope.row)">打标/核验</button>
 
-              <button v-if="currentRole === 2" class="action-btn btn-reject" @click="handleRejectMerchant(scope.row.userId)">强制清退</button>
+              <button v-if="currentRole === 2 && scope.row.status !== 0" class="action-btn btn-reject" @click="handleRejectMerchant(scope.row.userId)">强制清退</button>
+              <span v-else-if="currentRole === 2 && scope.row.status === 0" style="color: #ef4444; font-weight: bold; font-size: 0.85rem; padding: 0 10px;">🚫 已执行清退</span>
 
               <template v-if="currentRole === 3">
                 <button class="action-btn btn-pass" @click="handleCredit(scope.row.userId, 10)">奖励</button>
@@ -89,7 +98,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getUserList, updateUserTag, updateUserCredit, auditMerchant } from '@/api/admin'
+import { getUserList, updateUserTag, updateUserCredit, auditMerchant, evictUser } from '@/api/admin'
 
 const loading = ref(false)
 const userList = ref([])
@@ -163,8 +172,9 @@ const handleRejectMerchant = (userId) => {
     customClass: 'dopamine-msg-box'
   }).then(async () => {
     try {
-      await auditMerchant(userId, -1)
-      ElMessage.success('已清退该违规商家，净化源头库。')
+      // 🚨 核心修复：把 auditMerchant(userId, -1) 换成真正的熔断接口！
+      await evictUser(userId)
+      ElMessage.success('已清退该违规商家，未履约的单子和库存已全线熔断！')
       fetchData()
     } catch (e) {}
   }).catch(() => {})

@@ -45,3 +45,7 @@ export function submitAudit(userId, isPass) {
         params: { isPass }
     })
 }
+
+export function evictUser(userId) {
+    return request({ url: `/admin/user/evict/${userId}`, method: 'put' })
+}

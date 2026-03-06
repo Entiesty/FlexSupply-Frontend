@@ -1,294 +1,383 @@
 <template>
-  <main class="main-content">
-    <div class="top-status">
-      <span class="pulse-dot"></span> 骑手调度终端在线 · 保持通讯畅通
-    </div>
-
-    <div class="tasks-container">
-      <header class="page-header">
-        <div class="header-left">
-          <h2 class="title">🚴 骑手工作台</h2>
-          <p class="subtitle">城市护航者，今天也要平安送达哦！</p>
-        </div>
-        <div class="credit-badge">我的信誉<br><span class="score">{{ myCredit }}</span></div>
-      </header>
-
-      <div class="tabs">
-        <div class="tab-item" :class="{ active: activeTab === 'available' }" @click="switchTab('available')">
-          抢单大厅 <span class="badge" v-if="availableCount">{{ availableCount }}</span>
-        </div>
-        <div class="tab-item" :class="{ active: activeTab === 'delivering' }" @click="switchTab('delivering')">
-          待配送
-        </div>
-        <div class="tab-item" :class="{ active: activeTab === 'completed' }" @click="switchTab('completed')">
-          已完成
+  <div class="workspace-container">
+    <div class="page-header">
+      <div class="header-left">
+        <div class="icon-wrapper"><el-icon><Monitor /></el-icon></div>
+        <div>
+          <h1 class="page-title">运力调度工作台</h1>
+          <p class="page-subtitle">城市微光指挥中心 - 实时护航序列监控</p>
         </div>
       </div>
+      <div class="header-right">
+        <div class="credit-badge">
+          <span class="label">当前护航信誉分</span>
+          <span class="value">100 <span class="unit">分</span></span>
+        </div>
+      </div>
+    </div>
 
-      <div class="task-list" v-loading="loading">
-        <el-empty v-if="taskList.length === 0" description="雷达扫描中，暂无相关任务哦~" />
+    <div class="segmented-control">
+      <div class="segment-btn" :class="{ active: activeTab === 'available' }" @click="switchTab('available')">
+        <span class="dot" v-if="activeTab === 'available'"></span> 抢单大厅
+      </div>
+      <div class="segment-btn" :class="{ active: activeTab === 'progress' }" @click="switchTab('progress')">
+        <span class="dot" v-if="activeTab === 'progress'"></span> 正在护送
+      </div>
+      <div class="segment-btn" :class="{ active: activeTab === 'history' }" @click="switchTab('history')">
+        <span class="dot" v-if="activeTab === 'history'"></span> 历史档案
+      </div>
+    </div>
 
-        <div class="task-card" v-for="item in taskList" :key="item.id || item.orderId || item.taskId">
-          <div class="card-header">
-            <div class="head-info">
-              <span class="order-no">#{{ (item.orderNo || item.orderSn || 'ORD-SYS-NEW').slice(-6) }}</span>
-              <span class="urgency" :class="'level-' + (item.urgencyLevel || 1)">
-                {{ getUrgencyText(item.urgencyLevel) }}
-              </span>
-            </div>
-            <div v-if="activeTab === 'delivering'" class="countdown-badge">⏳ 剩余 28 分钟</div>
-            <div v-if="activeTab === 'available'" class="distance-badge">距您 <strong>{{ item.distance || '1.2' }}</strong> km</div>
+    <div class="task-list-wrapper"
+         v-loading="loading"
+         element-loading-text="调度引擎数据同步中..."
+         element-loading-background="rgba(248, 250, 252, 0.75)">
+
+      <div v-if="!loading && taskList.length === 0" class="empty-status">
+        <el-icon class="empty-icon"><Compass /></el-icon>
+        <h3>当前频段暂无任务数据</h3>
+      </div>
+
+      <div class="task-row" v-for="item in taskList" :key="item.orderId || item.taskId">
+
+        <div class="col-meta">
+          <div class="type-badge" :class="isDonation(item.orderSn) ? 'bg-blue' : 'bg-red'">
+            {{ isDonation(item.orderSn) ? '🔵 捐赠集货' : '🔴 紧急求助' }}
           </div>
+          <div class="order-sn">{{ item.orderSn }}</div>
+          <div class="urgency" v-if="item.urgencyLevel">紧急度 {{ item.urgencyLevel }}</div>
+        </div>
 
-          <div class="card-body">
-            <div class="location-box">
-              <div class="loc-item">
-                <span class="icon from">取</span>
-                <div class="loc-text">
-                  <div class="loc-name">{{ item.sourceStationName || item.stationName || '涂寨镇社区食物银行' }}</div>
-                  <div class="loc-user">{{ item.sourceStationAddress || item.stationAddress || '惠安县涂寨镇政府旁' }}</div>
-                </div>
-              </div>
-              <div class="loc-line"></div>
-              <div class="loc-item">
-                <span class="icon to">送</span>
-                <div class="loc-text">
-                  <div class="loc-name">{{ item.receiverAddress || '受赠方安全地址' }}</div>
-                  <div class="loc-user">{{ item.receiverName || '求助市民' }} <span class="phone-mask">138****{{ Math.floor(Math.random()*9000)+1000 }}</span></div>
-                </div>
-              </div>
-            </div>
-
-            <div class="material-info">
-              <div class="m-box">
-                <span class="m-label">📦 核心运载物</span>
-                <div class="m-highlight-group">
-                  <span class="m-highlight" :title="item.goodsName || item.requiredCategory || '综合应急救助包'">
-                    {{ item.goodsName || item.requiredCategory || '综合应急救助包' }}
-                  </span>
-                  <span class="m-count-badge">需拉取: {{ item.goodsCount || item.stock || 1 }}</span>
-                </div>
-              </div>
-              <div class="m-box">
-                <span class="m-label">⚠️ 履约要求</span>
-                <span class="m-desc">大件请备货车，拍照核销</span>
-              </div>
+        <div class="col-route">
+          <div class="route-point">
+            <div class="point-icon source">取</div>
+            <div class="point-info">
+              <div class="p-name" :title="item.sourceName">{{ item.sourceName || '起点未知' }}</div>
+              <div class="p-address" :title="item.sourceAddress">{{ item.sourceAddress || '地址未录入' }}</div>
             </div>
           </div>
 
-          <div class="card-footer">
-            <template v-if="activeTab === 'available'">
-              <button class="action-btn map-btn">🗺️ 路线预览</button>
-              <button class="action-btn grab-btn" @click="handleGrab(item)">⚡ 立即抢单</button>
-            </template>
-            <template v-if="activeTab === 'delivering'">
-              <div class="contact-actions">
-                <a :href="'tel:' + (item.stationPhone || '10086')" class="call-btn from-call">📞 联系据点</a>
-                <a :href="'tel:' + (item.receiverPhone || '10086')" class="call-btn to-call">📱 联系市民</a>
-              </div>
-              <button class="action-btn complete-btn" @click="openPhotoModal(item)">📸 拍照核销送达</button>
-            </template>
-            <template v-if="activeTab === 'completed'">
-              <div class="completed-stamp"><span class="stamp-icon">✔️</span> 已送达核销，信誉分 +10</div>
-            </template>
+          <div class="route-connection">
+            <div class="line"></div>
+            <el-icon class="arrow"><Right /></el-icon>
+          </div>
+
+          <div class="route-point">
+            <div class="point-icon target">送</div>
+            <div class="point-info">
+              <div class="p-name" :title="item.targetName">{{ item.targetName || '终点未知' }}</div>
+              <div class="p-address" :title="item.targetAddress">{{ item.targetAddress || '地址未录入' }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-goods">
+          <div class="goods-box">
+            <span class="g-name" :title="item.goodsName || item.requiredCategory">
+              {{ item.goodsName || item.requiredCategory || '未知物资' }}
+            </span>
+            <span class="g-count">x <strong>{{ item.goodsCount || 0 }}</strong></span>
+          </div>
+        </div>
+
+        <div class="col-actions">
+          <button class="btn-tool" @click="openMapPreview(item)" :disabled="!isValidCoordinate(item.sourceLon, item.sourceLat) || !isValidCoordinate(item.targetLon, item.targetLat)">
+            <el-icon><MapLocation /></el-icon> 路线推演
+          </button>
+
+          <button v-if="activeTab === 'available'" class="btn-main grab" @click="handleGrab(item)">
+            立即响应
+          </button>
+
+          <button v-if="activeTab === 'progress'" class="btn-main finish" @click="openCheckoutDialog(item)">
+            送达核销
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <el-drawer v-model="mapDrawerVisible" title="🗺️ 任务路径推演" size="40%" @opened="initMapRouting">
+      <div class="map-wrapper">
+        <div id="amap-routing-container"></div>
+        <div class="map-overlay-panel" v-if="routeEstimate.distance">
+          <div class="overlay-item">
+            <span class="label">测算距离</span>
+            <span class="value">{{ routeEstimate.distance }} <small>km</small></span>
+          </div>
+          <div class="overlay-item">
+            <span class="label">预计耗时</span>
+            <span class="value">{{ routeEstimate.time }} <small>min</small></span>
           </div>
         </div>
       </div>
+    </el-drawer>
 
-      <transition name="fade">
-        <div class="photo-modal-overlay" v-if="showPhotoModal">
-          <div class="photo-modal-card">
-            <div class="modal-header">
-              <h3>📸 拍摄送达凭证</h3>
-              <p>请将物资放置在指定位置，拍摄清晰的照片以完成闭环核销。</p>
-            </div>
-            <div class="upload-area" :class="{ 'has-photo': uploadedPhoto }" @click="simulateUpload">
-              <template v-if="!uploadedPhoto">
-                <div class="upload-icon">📷</div><p>点击调用相机 / 上传凭证</p><span class="upload-tip">支持 JPG/PNG</span>
-              </template>
-              <img v-else :src="uploadedPhoto" class="preview-img" alt="凭证预览" />
-            </div>
-            <div class="modal-actions">
-              <button class="modal-btn cancel" @click="showPhotoModal = false">取消</button>
-              <button class="modal-btn confirm" :disabled="!uploadedPhoto" @click="confirmDelivery">🚀 确认送达</button>
-            </div>
-          </div>
-        </div>
-      </transition>
-      <transition name="bounce">
-        <div class="clay-overlay" v-if="showClayPopup">
-          <div class="clay-card">
-            <div class="clay-icon">🏆</div><h3 class="clay-title">履约成功！</h3><p class="clay-desc">城市的温度，因你而提升</p>
-            <div class="clay-score">+10 信誉分</div><button class="clay-btn" @click="closePopup">继续接单</button>
-          </div>
-        </div>
-      </transition>
-    </div>
-  </main>
+    <el-dialog v-model="checkoutVisible" title="🛡️ 护航履约确认" width="400px">
+      <div class="upload-zone">
+        <p class="upload-tip">请上传物资交接现场照片，完成闭环。</p>
+        <el-upload class="custom-uploader" drag action="#" :auto-upload="false" :on-change="handlePhotoSelect">
+          <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
+          <div class="el-upload__text">拖拽图片或 <em>点击上传</em></div>
+        </el-upload>
+      </div>
+      <template #footer>
+        <el-button @click="checkoutVisible = false">取消</el-button>
+        <el-button type="success" @click="submitCheckout" :loading="submitLoading">提交核销</el-button>
+      </template>
+    </el-dialog>
+  </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ref, reactive, onMounted, nextTick } from 'vue'
+import { ElMessage, ElNotification } from 'element-plus'
+import { Monitor, Right, MapLocation, UploadFilled, Compass, Van, Bicycle } from '@element-plus/icons-vue'
 import { getAvailableOrders, grabTask, getMyTasks, checkOutTask } from '@/api/trade'
+// 🚨 核心修复 1：引入高德动态加载器
+import AMapLoader from '@amap/amap-jsapi-loader'
 
 const activeTab = ref('available')
 const loading = ref(false)
 const taskList = ref([])
-const availableCount = ref(0)
-const myCredit = ref(120)
 
-const showClayPopup = ref(false)
-const showPhotoModal = ref(false)
-const uploadedPhoto = ref(null)
-const currentDeliveryItem = ref(null)
+const mapDrawerVisible = ref(false)
+let currentMapOrder = null
+let amapInstance = null
+const routeEstimate = reactive({ distance: 0, time: 0 })
 
-const switchTab = (tab) => { activeTab.value = tab; fetchData() }
-const getUrgencyText = (level) => {
-  const map = { 1: '普通求助', 2: '较急求助', 3: '十万火急', 4: '十万火急', 5: '十万火急' }
-  return map[level] || '紧急救援'
+const checkoutVisible = ref(false)
+const submitLoading = ref(false)
+const currentCheckoutOrder = ref(null)
+const selectedPhoto = ref(null)
+
+const isDonation = (sn) => sn?.startsWith('DON-')
+
+const isValidCoordinate = (lon, lat) => {
+  return lon && lat && !isNaN(lon) && !isNaN(lat) && lon > 0 && lat > 0
 }
 
-const fetchData = async () => {
-  loading.value = true; taskList.value = []
+const switchTab = async (tab) => {
+  if (activeTab.value === tab) return
+  activeTab.value = tab
+  await loadData()
+}
+
+const loadData = async () => {
+  loading.value = true
   try {
+    let res;
     if (activeTab.value === 'available') {
-      const res = await getAvailableOrders(); taskList.value = res.data?.records || res.data || []; availableCount.value = taskList.value.length
-    } else if (activeTab.value === 'delivering') {
-      const res = await getMyTasks({ status: 1 }); taskList.value = res.data?.records || res.data || []
-    } else if (activeTab.value === 'completed') {
-      const res = await getMyTasks({ status: 3 }); taskList.value = res.data?.records || res.data || []
+      res = await getAvailableOrders()
+    } else {
+      const backendStatus = activeTab.value === 'progress' ? 1 : 3
+      res = await getMyTasks({ status: backendStatus })
     }
-  } catch (e) { console.error(e) } finally { loading.value = false }
+
+    if (res.data && Array.isArray(res.data.records)) {
+      taskList.value = res.data.records
+    } else {
+      taskList.value = []
+    }
+  } catch (error) {
+    console.error('获取任务异常:', error)
+    taskList.value = []
+  } finally {
+    loading.value = false
+  }
 }
 
 const handleGrab = async (item) => {
   try {
-    const id = item.id || item.orderId
-    await grabTask(id)
-    ElMessage.success({ message: '抢单成功！请立即前往据点取货', duration: 3000 })
-    switchTab('delivering')
-  } catch (e) {
-    const backendMsg = e.response?.data?.message || e.response?.data?.msg
-    if (!backendMsg) ElMessage.warning('抢单失败：该任务已被其他骑手接下')
+    await grabTask(item.orderId)
+    ElNotification({ title: '指令已确认', message: `单号 ${item.orderSn} 已接入序列。`, type: 'success' })
+    loadData()
+  } catch (err) {}
+}
+
+const openMapPreview = (item) => {
+  if (!isValidCoordinate(item.sourceLon, item.sourceLat) || !isValidCoordinate(item.targetLon, item.targetLat)) {
+    ElMessage.warning('订单坐标数据不完整，高德引擎无法推演路线')
+    return
+  }
+  currentMapOrder = item
+  mapDrawerVisible.value = true
+  routeEstimate.distance = 0; routeEstimate.time = 0;
+}
+
+// 🚨 核心修复 2：完全对齐 index.vue 的高德加载逻辑
+const initMapRouting = () => {
+  nextTick(() => {
+    // 注入安全密钥
+    window._AMapSecurityConfig = {
+      securityJsCode: import.meta.env.VITE_AMAP_SECURITY_CODE,
+    }
+
+    AMapLoader.load({
+      key: import.meta.env.VITE_AMAP_KEY,
+      version: '2.0',
+      plugins: ['AMap.Riding']
+    }).then((AMap) => {
+      if (amapInstance) {
+        amapInstance.destroy()
+      }
+
+      amapInstance = new AMap.Map('amap-routing-container', {
+        zoom: 14,
+        center: [currentMapOrder.sourceLon, currentMapOrder.sourceLat],
+        mapStyle: 'amap://styles/fresh'
+      })
+
+      const ridingService = new AMap.Riding({ map: amapInstance, hideMarkers: false })
+      const start = new AMap.LngLat(currentMapOrder.sourceLon, currentMapOrder.sourceLat)
+      const end = new AMap.LngLat(currentMapOrder.targetLon, currentMapOrder.targetLat)
+
+      ridingService.search(start, end, (status, result) => {
+        if (status === 'complete' && result.routes && result.routes.length) {
+          const route = result.routes[0]
+          routeEstimate.distance = (route.distance / 1000).toFixed(2)
+          routeEstimate.time = Math.ceil(route.time / 60)
+        } else {
+          ElMessage.warning('高德测算异常：距离可能过远或跨海')
+        }
+      })
+    }).catch(e => {
+      console.error("高德地图加载失败", e)
+      ElMessage.error('地图组件初始化失败，请检查 Key 或网络')
+    })
+  })
+}
+
+const openCheckoutDialog = (item) => {
+  currentCheckoutOrder.value = item
+  selectedPhoto.value = null
+  checkoutVisible.value = true
+}
+
+const handlePhotoSelect = (file) => selectedPhoto.value = file
+
+const submitCheckout = async () => {
+  if (!selectedPhoto.value) return ElMessage.warning('需要现场影像留档')
+  submitLoading.value = true
+  try {
+    if (!currentCheckoutOrder.value.taskId) return ElMessage.error('任务追溯码丢失')
+    await checkOutTask(currentCheckoutOrder.value.taskId)
+    checkoutVisible.value = false
+    ElMessage.success('核销闭环完成，信誉分已发放！')
+    loadData()
+  } catch (err) {
+  } finally {
+    submitLoading.value = false
   }
 }
 
-const openPhotoModal = (item) => { currentDeliveryItem.value = item; uploadedPhoto.value = null; showPhotoModal.value = true }
-const simulateUpload = () => {
-  if (uploadedPhoto.value) return
-  ElMessage.info('正在调用摄像头...')
-  setTimeout(() => { uploadedPhoto.value = 'https://images.unsplash.com/photo-1585832770485-e68a5dbcf525?auto=format&fit=crop&q=80&w=400&h=300'; ElMessage.success('凭证上传成功') }, 800)
-}
-const confirmDelivery = async () => {
-  try {
-    const id = currentDeliveryItem.value.id || currentDeliveryItem.value.taskId || currentDeliveryItem.value.orderId
-    await checkOutTask(id)
-    showPhotoModal.value = false; showClayPopup.value = true; myCredit.value += 10
-  } catch (e) { ElMessage.error('网络异常，核销失败') }
-}
-const closePopup = () => { showClayPopup.value = false; switchTab('completed') }
-
-onMounted(() => fetchData())
+onMounted(() => loadData())
 </script>
 
 <style scoped>
-.main-content { flex: 1; display: flex; flex-direction: column; position: relative; padding: 20px; background: #f8fafc; min-height: 100vh; }
-.top-status { position: absolute; top: 20px; right: 30px; z-index: 100; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); padding: 8px 16px; border-radius: 20px; font-size: 0.75rem; color: #64748b; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05); font-weight: bold;}
-.pulse-dot { width: 8px; height: 8px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; animation: pulse-green 2s infinite; }
-@keyframes pulse-green { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); } 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
+/* ================= 宽屏基础容器 ================= */
+.workspace-container {
+  min-height: calc(100vh - 60px);
+  background: #f8fafc;
+  padding: 32px 40px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  box-sizing: border-box;
+}
 
-.tasks-container { max-width: 600px; width: 100%; margin: 50px auto 20px; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
-.title { font-size: 1.8rem; color: #1e293b; margin: 0 0 5px 0; font-weight: 900; }
-.subtitle { margin: 0; font-size: 0.9rem; color: #64748b; }
-.credit-badge { background: #fff; color: #64748b; padding: 10px 15px; border-radius: 16px; font-weight: bold; font-size: 0.8rem; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.03); border: 2px solid #f1f5f9;}
-.score { font-size: 1.4rem; color: #f97316; font-weight: 900; font-family: Impact, sans-serif; }
+/* ================= 顶部 Header ================= */
+.page-header {
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px;
+}
+.header-left { display: flex; align-items: center; gap: 16px; }
+.icon-wrapper { width: 48px; height: 48px; background: #3b82f6; color: white; border-radius: 12px; display: flex; justify-content: center; align-items: center; font-size: 24px; box-shadow: 0 8px 16px rgba(59, 130, 246, 0.25); }
+.page-title { font-size: 22px; font-weight: 900; color: #0f172a; margin: 0 0 4px; letter-spacing: 0.5px; }
+.page-subtitle { font-size: 14px; color: #64748b; margin: 0; }
 
-.tabs { display: flex; background: #e2e8f0; border-radius: 16px; padding: 6px; margin-bottom: 25px; }
-.tab-item { flex: 1; text-align: center; padding: 12px 0; font-weight: bold; color: #64748b; border-radius: 12px; cursor: pointer; transition: all 0.3s; position: relative; font-size: 0.95rem; }
-.tab-item.active { background: #fff; color: #3b82f6; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); }
-.badge { position: absolute; top: 4px; right: 12%; background: #ef4444; color: white; font-size: 0.7rem; padding: 2px 6px; border-radius: 10px; border: 2px solid #fff;}
+.credit-badge { display: flex; flex-direction: column; align-items: flex-end; background: white; padding: 10px 24px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 10px rgba(0,0,0,0.02); }
+.credit-badge .label { font-size: 12px; color: #64748b; font-weight: bold; }
+.credit-badge .value { font-size: 26px; font-weight: 900; color: #f59e0b; line-height: 1; margin-top: 6px; }
+.credit-badge .unit { font-size: 14px; font-weight: normal; color: #94a3b8; }
 
-.task-list { display: flex; flex-direction: column; gap: 20px; }
-.task-card { background: #fff; border-radius: 24px; padding: 24px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04); border: 1px solid #f1f5f9; transition: transform 0.2s; overflow: hidden; }
-.task-card:hover { transform: translateY(-3px); box-shadow: 0 15px 35px rgba(0, 0, 0, 0.08); }
+/* ================= 分段控制器 Tabs ================= */
+.segmented-control { display: inline-flex; background: #e2e8f0; padding: 4px; border-radius: 12px; margin-bottom: 24px; }
+.segment-btn { padding: 10px 24px; font-size: 15px; font-weight: bold; color: #475569; border-radius: 8px; cursor: pointer; transition: 0.3s; display: flex; align-items: center; gap: 8px; user-select: none; }
+.segment-btn:hover { color: #2563eb; }
+.segment-btn.active { background: white; color: #0f172a; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.segment-btn .dot { width: 6px; height: 6px; background: #3b82f6; border-radius: 50%; box-shadow: 0 0 6px rgba(59, 130, 246, 0.6); }
 
-.card-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px dashed #f1f5f9; padding-bottom: 15px; margin-bottom: 20px; }
-.head-info { display: flex; align-items: center; gap: 10px; }
-.order-no { font-family: monospace; color: #94a3b8; font-weight: bold; font-size: 1.1rem; }
-.urgency { font-weight: bold; padding: 4px 10px; border-radius: 8px; font-size: 0.75rem; }
-.level-1 { background: #ecfdf5; color: #10b981; } .level-2 { background: #fff7ed; color: #f97316; }
-.level-3, .level-4, .level-5 { background: #fef2f2; color: #ef4444; animation: blink-red 2s infinite;}
-@keyframes blink-red { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+/* ================= 核心：横向列表设计 ================= */
+.task-list-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 400px;
+  border-radius: 16px;
+}
 
-.countdown-badge { background: #fef2f2; color: #ef4444; font-weight: 900; font-size: 0.85rem; padding: 6px 12px; border-radius: 12px; }
-.distance-badge { font-size: 0.9rem; color: #64748b; background: #f1f5f9; padding: 4px 10px; border-radius: 8px;}
-.distance-badge strong { color: #f97316; font-size: 1.1rem; }
+.empty-status { padding: 80px 0; text-align: center; color: #94a3b8; }
+.empty-icon { font-size: 54px; margin-bottom: 16px; color: #cbd5e1; }
+.empty-status h3 { color: #334155; font-size: 18px; font-weight: bold; margin-bottom: 8px; }
 
-.location-box { position: relative; display: flex; flex-direction: column; gap: 25px; margin-bottom: 20px; }
-.loc-item { display: flex; align-items: flex-start; gap: 15px; }
-.icon { width: 32px; height: 32px; border-radius: 50%; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; font-weight: bold; z-index: 2; border: 3px solid #fff; }
-.from { background: #3b82f6; box-shadow: 0 4px 10px rgba(59, 130, 246, 0.4); }
-.to { background: #f97316; box-shadow: 0 4px 10px rgba(249, 115, 22, 0.4); }
-.loc-line { position: absolute; left: 15px; top: 30px; bottom: 30px; width: 2px; background: #e2e8f0; z-index: 1; }
-.loc-text { display: flex; flex-direction: column; gap: 4px; flex: 1; }
-.loc-name { font-weight: 900; color: #1e293b; font-size: 1.1rem; }
-.loc-user { font-size: 0.85rem; color: #64748b; display: flex; justify-content: space-between; }
-.phone-mask { background: #f1f5f9; padding: 2px 6px; border-radius: 6px; font-family: monospace; font-size: 0.8rem;}
+.task-row {
+  display: flex;
+  align-items: center;
+  background: white;
+  border-radius: 16px;
+  padding: 20px 24px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.02);
+  border: 1px solid #f1f5f9;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.task-row:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 25px rgba(0, 0, 0, 0.06);
+  border-color: #e2e8f0;
+}
 
-/* 🚨 物资明细区域 */
-.material-info { background: #f8fafc; padding: 15px; border-radius: 16px; border: 1px solid #e2e8f0; display: flex; flex-direction: column; gap: 8px; }
-.m-box { display: flex; align-items: center; justify-content: space-between; font-size: 0.9rem; }
-.m-label { color: #64748b; font-weight: bold; }
-.m-highlight-group { display: flex; align-items: center; gap: 8px; }
-.m-highlight { font-weight: 900; color: #f97316; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
-.m-count-badge { background: #fee2e2; color: #dc2626; padding: 2px 8px; border-radius: 8px; font-weight: 900; font-size: 0.8rem; border: 1px dashed #fca5a5; white-space: nowrap; }
-.m-desc { color: #10b981; font-weight: bold; }
+/* 列 1：元数据 */
+.col-meta { width: 170px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; border-right: 1px dashed #e2e8f0; padding-right: 20px; }
+.type-badge { display: inline-block; padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 800; color: white; align-self: flex-start; letter-spacing: 0.5px; }
+.bg-blue { background: #3b82f6; box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3); }
+.bg-red { background: #ef4444; box-shadow: 0 2px 6px rgba(239, 68, 68, 0.3); }
+.order-sn { font-family: monospace; font-size: 13px; color: #64748b; font-weight: 500; }
+.urgency { font-size: 12px; font-weight: 800; color: #d97706; background: #fef3c7; padding: 3px 8px; border-radius: 4px; align-self: flex-start; border: 1px solid #fde68a; }
 
-.card-footer { margin-top: 20px; display: flex; gap: 15px; justify-content: flex-end; align-items: center; }
-.action-btn { border: none; border-radius: 14px; font-weight: 900; cursor: pointer; transition: 0.2s; font-size: 1rem; flex: 1; padding: 15px 0; }
-.map-btn { background: #f1f5f9; color: #475569; flex: 0.5; }
-.map-btn:hover { background: #e2e8f0; }
-.grab-btn { background: #3b82f6; color: #fff; box-shadow: 0 6px 20px rgba(59, 130, 246, 0.3); }
-.grab-btn:hover { background: #2563eb; transform: translateY(-2px); box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4); }
+/* 列 2：路线对比 */
+.col-route { flex: 1; display: flex; align-items: center; padding: 0 32px; gap: 16px; overflow: hidden; }
+.route-point { flex: 1; display: flex; align-items: flex-start; gap: 12px; overflow: hidden; }
+.point-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; justify-content: center; align-items: center; font-size: 14px; font-weight: 900; color: white; flex-shrink: 0; box-shadow: inset 0 -2px 0 rgba(0,0,0,0.1); }
+.point-icon.source { background: #f97316; }
+.point-icon.target { background: #10b981; }
+.point-info { display: flex; flex-direction: column; gap: 4px; overflow: hidden; width: 100%; }
+.p-name { font-size: 15px; font-weight: 900; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.p-address { font-size: 13px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
 
-.contact-actions { display: flex; gap: 10px; flex: 0.8; }
-.call-btn { flex: 1; text-align: center; text-decoration: none; padding: 12px 0; border-radius: 12px; font-weight: bold; font-size: 0.85rem; transition: 0.2s; }
-.from-call { background: #eff6ff; color: #3b82f6; border: 1px solid #bfdbfe; }
-.to-call { background: #fff7ed; color: #f97316; border: 1px solid #fed7aa; }
-.complete-btn { background: #10b981; color: #fff; box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3); flex: 1.2; }
-.complete-btn:hover { background: #059669; transform: translateY(-2px); }
-.completed-stamp { font-weight: 900; font-size: 1rem; color: #10b981; background: #ecfdf5; padding: 10px 20px; border-radius: 12px; width: 100%; text-align: center; border: 1px dashed #a7f3d0; }
+.route-connection { display: flex; align-items: center; color: #94a3b8; width: 50px; flex-shrink: 0; }
+.route-connection .line { flex: 1; height: 2px; background: repeating-linear-gradient(to right, #cbd5e1 0, #cbd5e1 4px, transparent 4px, transparent 8px); }
 
-.photo-modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 999; }
-.photo-modal-card { width: 320px; background: #fff; border-radius: 28px; padding: 30px 25px; text-align: center; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); border: 1px solid #f1f5f9; }
-.modal-header h3 { margin: 0 0 10px 0; color: #1e293b; font-size: 1.4rem; font-weight: 900; }
-.modal-header p { margin: 0 0 20px 0; color: #64748b; font-size: 0.85rem; line-height: 1.5; }
-.upload-area { background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 20px; height: 180px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: 0.3s; margin-bottom: 25px; overflow: hidden; position: relative; }
-.upload-area:hover { border-color: #3b82f6; background: #eff6ff; }
-.upload-area.has-photo { border-style: solid; border-color: #10b981; padding: 0; }
-.upload-icon { font-size: 2.5rem; margin-bottom: 10px; opacity: 0.8; }
-.upload-area p { margin: 0; color: #3b82f6; font-weight: bold; font-size: 0.95rem; }
-.upload-tip { color: #94a3b8; font-size: 0.75rem; margin-top: 5px; }
-.preview-img { width: 100%; height: 100%; object-fit: cover; }
+/* 列 3：物资 */
+.col-goods { width: 180px; flex-shrink: 0; padding: 0 24px; border-left: 1px dashed #e2e8f0; display: flex; align-items: center; }
+.goods-box { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+.g-name { font-size: 15px; font-weight: 900; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
+.g-count { font-size: 16px; color: #3b82f6; font-weight: 900; }
 
-.modal-actions { display: flex; gap: 15px; }
-.modal-btn { flex: 1; padding: 14px; border: none; border-radius: 14px; font-weight: bold; font-size: 1rem; cursor: pointer; transition: 0.2s; }
-.modal-btn.cancel { background: #f1f5f9; color: #64748b; }
-.modal-btn.confirm { background: #10b981; color: #fff; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3); }
-.modal-btn.confirm:disabled { background: #cbd5e1; color: #94a3b8; box-shadow: none; cursor: not-allowed; }
-.fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
+/* 列 4：操作按钮 */
+.col-actions { width: 130px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; }
+.btn-tool { padding: 8px 0; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; color: #475569; font-weight: bold; cursor: pointer; transition: 0.2s; display: flex; justify-content: center; align-items: center; gap: 6px; }
+.btn-tool:hover:not(:disabled) { background: #e2e8f0; color: #0f172a; }
+.btn-tool:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-main { padding: 10px 0; border: none; border-radius: 8px; color: white; font-weight: 900; cursor: pointer; transition: 0.3s; letter-spacing: 1px; }
+.btn-main.grab { background: linear-gradient(135deg, #3b82f6, #2563eb); box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3); }
+.btn-main.grab:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(37, 99, 235, 0.4); }
+.btn-main.finish { background: linear-gradient(135deg, #10b981, #059669); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3); }
+.btn-main.finish:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(16, 185, 129, 0.4); }
 
-.clay-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.clay-card { width: 280px; background: #f8fafc; border-radius: 36px; padding: 30px 20px; text-align: center; box-shadow: 30px 30px 60px rgba(0, 0, 0, 0.15), -10px -10px 20px rgba(255, 255, 255, 0.8), inset 4px 4px 10px rgba(255, 255, 255, 0.9), inset -4px -4px 15px rgba(0, 0, 0, 0.05); border: 4px solid #ffffff; }
-.clay-icon { width: 80px; height: 80px; margin: 0 auto 15px; background: #ffedd5; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 3rem; box-shadow: inset 5px 5px 10px rgba(255, 255, 255, 0.8), inset -5px -5px 10px rgba(234, 88, 12, 0.1), 10px 10px 20px rgba(0, 0, 0, 0.05); }
-.clay-title { margin: 0 0 5px; color: #1e293b; font-size: 1.4rem; font-weight: 900; }
-.clay-score { margin: 0 auto 25px; padding: 10px; background: #ecfdf5; color: #10b981; font-weight: 900; font-size: 1.5rem; border-radius: 16px; width: fit-content; box-shadow: inset 3px 3px 6px rgba(255, 255, 255, 0.8), inset -3px -3px 6px rgba(16, 185, 129, 0.1); }
-.clay-btn { width: 80%; padding: 14px; border: none; border-radius: 20px; background: #3b82f6; color: white; font-size: 1.1rem; font-weight: bold; cursor: pointer; box-shadow: 6px 6px 12px rgba(59, 130, 246, 0.3), inset 3px 3px 8px rgba(255, 255, 255, 0.4), inset -3px -3px 8px rgba(0, 0, 0, 0.1); transition: 0.2s; }
-.clay-btn:active { transform: scale(0.96); }
-.bounce-enter-active { animation: bounce-in 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-.bounce-leave-active { animation: bounce-in 0.4s reverse; }
-@keyframes bounce-in { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+/* ================= 侧边栏和弹窗 ================= */
+.map-wrapper { width: 100%; height: 100%; position: relative; }
+#amap-routing-container { width: 100%; height: 100%; }
+.map-overlay-panel { position: absolute; top: 20px; left: 20px; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); padding: 15px 25px; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); display: flex; gap: 20px; border: 1px solid #e2e8f0; }
+.overlay-item { display: flex; flex-direction: column; }
+.overlay-item .label { font-size: 12px; font-weight: bold; color: #64748b; margin-bottom: 4px; }
+.overlay-item .value { font-size: 24px; font-weight: 900; color: #0f172a; }
+.upload-zone { text-align: center; }
+.upload-tip { color: #64748b; font-size: 14px; margin-bottom: 16px; }
 </style>
