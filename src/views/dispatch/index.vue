@@ -1,46 +1,66 @@
 <template>
   <main class="main-content">
-    <div class="top-status" :class="{ 'emergency-mode': sysMode === 'EMERGENCY' }">
-      <span class="pulse-dot" :style="{ background: sysMode === 'EMERGENCY' ? '#ef4444' : '#10b981' }"></span>
-      当前运行模式: <strong>{{ sysMode === 'NORMAL' ? '🟢 平时常态调度' : '🔴 急时应急调度' }}</strong>
-      <button v-if="currentUserRole === 4" class="mode-switch-btn" @click="toggleSysMode">
-        切换至{{ sysMode === 'NORMAL' ? '急时' : '平时' }}
-      </button>
-    </div>
 
-    <div class="map-wrapper">
-      <div id="amap-container"></div>
-
-      <DashboardPanel v-if="currentUserRole === 4" />
-
-      <DispatchControl
-          v-if="pendingOrder"
-          :pendingOrder="pendingOrder"
-          :userRole="currentUserRole"
-          :loading="loading"
-          :result="result"
-          :isMissionActive="isMissionActive"
-          :activeOrder="activeOrder"
-          :isError="isError"
-          :fallbackCountdown="fallbackCountdown"
-          @dispatch="handleSmartDispatch"
-          @grab="handleGrab"
-          @finish="handleFinishMission"
-          @notify-pickup="handleNotifyPickup"
-          @switch-pickup="handleSwitchToPickup"
-      />
-
-      <div v-else class="empty-task-panel">
-        <div class="radar-spinner" :class="{ 'emergency-spin': sysMode === 'EMERGENCY' }"></div>
-        <h3>{{ sysMode === 'NORMAL' ? '暂无调度需求' : '应急预案已启动，全城戒备' }}</h3>
-        <p>城市运转良好，调度大脑正在实时监听中...</p>
-      </div>
-
-      <div class="map-legend">
-        <div class="legend-item"><span class="dot sos"></span>求助点</div>
-        <div class="legend-item"><span class="dot station"></span>物资站</div>
+    <div v-if="currentUserRole !== 4 && isVerified === 0" class="lock-screen">
+      <div class="lock-panel">
+        <div class="lock-icon">
+          <span class="shield">🛡️</span>
+        </div>
+        <h2 class="lock-title">系统接入权限受限</h2>
+        <p class="lock-desc">您的城市护航者资质正在由指挥中心进行人工核验。<br>在此期间，调度大屏与实况数据将对您保持锁定。</p>
+        <div class="lock-status">
+          <span class="spinner"></span> 正在等待中心下发授权...
+        </div>
+        <button class="go-profile-btn" @click="router.push('/profile')">前往个人中心完善资料</button>
       </div>
     </div>
+
+    <template v-else>
+      <div class="top-status" :class="{ 'emergency-mode': sysMode === 'EMERGENCY' }">
+        <span class="pulse-dot" :style="{ background: sysMode === 'EMERGENCY' ? '#ef4444' : '#10b981' }"></span>
+        当前运行模式: <strong>{{ sysMode === 'NORMAL' ? '🟢 平时常态调度' : '🔴 急时应急调度' }}</strong>
+        <button v-if="currentUserRole === 4" class="mode-switch-btn" @click="toggleSysMode">
+          切换至{{ sysMode === 'NORMAL' ? '急时' : '平时' }}
+        </button>
+      </div>
+
+      <div class="map-wrapper">
+        <div id="amap-container"></div>
+
+        <DashboardPanel v-if="currentUserRole === 4" />
+
+        <DispatchControl
+            v-if="pendingOrder"
+            :pendingOrder="pendingOrder"
+            :userRole="currentUserRole"
+            :loading="loading"
+            :result="result"
+            :isMissionActive="isMissionActive"
+            :activeOrder="activeOrder"
+            :isError="isError"
+            :fallbackCountdown="fallbackCountdown"
+            :piggybackOrders="piggybackOrders"
+            @dispatch="handleDispatchAction"
+            @grab="handleBatchGrab"
+            @finish="handleFinishMission"
+            @notify-pickup="handleNotifyPickup"
+            @switch-pickup="handleSwitchToPickup"
+        />
+
+        <div v-else class="empty-task-panel">
+          <div class="radar-spinner" :class="{ 'emergency-spin': sysMode === 'EMERGENCY' }"></div>
+          <h3>{{ sysMode === 'NORMAL' ? '暂无调度需求' : '应急预案已启动，全城戒备' }}</h3>
+          <p>城市运转良好，红蓝双轨调度引擎正在实时监听中...</p>
+        </div>
+
+        <div class="map-legend">
+          <div class="legend-item"><span class="dot sos"></span>主求救点</div>
+          <div class="legend-item"><span class="dot pb"></span>顺路打包点</div>
+          <div class="legend-item"><span class="dot don"></span>捐赠商铺</div>
+          <div class="legend-item"><span class="dot station"></span>社区物资站</div>
+        </div>
+      </div>
+    </template>
   </main>
 </template>
 
@@ -48,17 +68,16 @@
 import { onMounted, onUnmounted, ref, shallowRef } from 'vue'
 import { useRouter } from 'vue-router'
 import AMapLoader from '@amap/amap-jsapi-loader'
-// 🚨 把 getDispatchConfig 补到 import 列表里
 import { smartMatch, getDispatchConfig } from '@/api/dispatch'
-import { getPendingOrders, grabTask, switchOrderToPickup } from '@/api/trade' // 🚨 引入新接口
+import { getPendingOrders, grabTask, switchOrderToPickup } from '@/api/trade'
+import { getUserProfile } from '@/api/user'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import DispatchControl from './components/DispatchControl.vue'
 import DashboardPanel from './components/DashboardPanel.vue'
 
-
 const router = useRouter()
 
-// 1. 获取当前真实角色
+// ================= 全局状态与权限 =================
 const roleStr = localStorage.getItem('userRole')
 const currentUserRole = ref(roleStr ? Number(roleStr) : 3)
 
@@ -67,83 +86,133 @@ window._AMapSecurityConfig = { securityJsCode: import.meta.env.VITE_AMAP_SECURIT
 const sysMode = ref('NORMAL')
 const map = shallowRef(null)
 let AMap = null
+
+// 🚨 新增：资质审核状态标志位
+const isVerified = ref(0)
+
+// ================= 调度核心状态 =================
 const loading = ref(false)
 const result = ref(null)
 const isError = ref(false)
 const isMissionActive = ref(false)
 const activeOrder = ref({})
-
-const defaultLocation = [118.092000, 24.485000]
 const pendingOrder = ref(null)
 const autoDispatchedOrderId = ref(null)
-let pollingTimer = null
 
-// 🚨 倒计时状态
+const piggybackOrders = ref([])
+
 const fallbackCountdown = ref(0)
-let fallbackTimer = null
-// 修改后：变成响应式变量，默认先给个 30
 const dynamicThreshold = ref(30)
+let pollingTimer = null
+let fallbackTimer = null
 
-onMounted(async () => { // 🚨 加上 async
-  initMap()
+const userLocation = ref([118.092000, 24.623500])
 
-  // 🚨 挂载时，先去后端问一下：老板，今天熔断时间定多少秒？
+const calculateDistance = (lat1, lon1, lat2, lon2) => {
+  const R = 6371
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLon = (lon2 - lon1) * Math.PI / 180
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon/2) * Math.sin(dLon/2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+  return R * c
+}
+
+// 🚨 生命周期改造：必须先拿权限，再决定是否渲染大屏
+onMounted(async () => {
   try {
-    const configRes = await getDispatchConfig()
-    if (configRes.data) {
-      dynamicThreshold.value = configRes.data // 比如读取到了 yaml 里的 900
+    const userRes = await getUserProfile()
+    if (userRes?.data) {
+      // 获取后端的审核状态
+      isVerified.value = userRes.data.isVerified !== undefined ? userRes.data.isVerified : 1
+      if (userRes.data.currentLon && userRes.data.currentLat) {
+        userLocation.value = [userRes.data.currentLon, userRes.data.currentLat]
+      }
     }
   } catch (e) {
-    console.warn('获取动态配置失败，使用默认 30s')
+    console.warn('获取资料失败，可能未登录')
   }
 
-  await fetchMapOrders()
-  pollingTimer = setInterval(() => {
-    if (!pendingOrder.value && !isMissionActive.value) fetchMapOrders()
-  }, 5000)
+  // 🚨 核心拦截逻辑：只有管理员，或者已审核通过的用户，才允许初始化地图和雷达！
+  if (currentUserRole.value === 4 || isVerified.value === 1) {
+    initMap()
+
+    try {
+      const configRes = await getDispatchConfig()
+      if (configRes?.data) dynamicThreshold.value = configRes.data
+    } catch (e) {}
+
+    await fetchMapOrders()
+    pollingTimer = setInterval(() => {
+      if (!pendingOrder.value && !isMissionActive.value) {
+        fetchMapOrders()
+      }
+    }, 5000)
+  }
 })
 
 onUnmounted(() => {
   if (map.value) map.value.destroy()
   if (pollingTimer) clearInterval(pollingTimer)
-  clearFallbackTimer() // 离开时清理计时器
+  clearFallbackTimer()
 })
 
 const toggleSysMode = () => {
-  if (sysMode.value === 'NORMAL') {
-    sysMode.value = 'EMERGENCY'
-    ElMessage.error({ message: '⚠️ 已切换为【急时应急模式】，算法权重已向紧急度倾斜，仅应急物资可见！', duration: 4000 })
-  } else {
-    sysMode.value = 'NORMAL'
-    ElMessage.success({ message: '✅ 已恢复为【平时常态模式】，资源调度已恢复常规策略。', duration: 4000 })
-  }
+  sysMode.value = sysMode.value === 'NORMAL' ? 'EMERGENCY' : 'NORMAL'
+  if(sysMode.value === 'EMERGENCY') ElMessage.error({ message: '⚠️ 已进入【急时应急模式】，请注意资源倾斜', duration: 4000 })
+  else ElMessage.success({ message: '✅ 已恢复为【平时常态模式】', duration: 4000 })
 }
 
 const fetchMapOrders = async () => {
   try {
     const res = await getPendingOrders()
-    if (res.data && res.data.length > 0) {
-      pendingOrder.value = res.data[0]
-      const lng = pendingOrder.value.targetLon || defaultLocation[0]
-      const lat = pendingOrder.value.targetLat || defaultLocation[1]
-      drawSosMarker([lng, lat])
+    if (res?.data && res.data.length > 0) {
+      const mainOrder = res.data[0]
+      pendingOrder.value = mainOrder
 
-      // 只有配送单才给志愿者自动推演
+      const mainLng = mainOrder.targetLon || userLocation.value[0]
+      const mainLat = mainOrder.targetLat || userLocation.value[1]
+      const isDonation = mainOrder.orderSn?.startsWith('DON')
+
+      const pbArr = []
+      if (!isDonation) {
+        for (let i = 1; i < res.data.length; i++) {
+          const subOrder = res.data[i]
+          if (subOrder.status !== 0 || subOrder.orderSn?.startsWith('DON')) continue
+          const subLat = subOrder.targetLat || userLocation.value[1]
+          const subLng = subOrder.targetLon || userLocation.value[0]
+
+          const dist = calculateDistance(mainLat, mainLng, subLat, subLng)
+          if (dist < 2.5) {
+            subOrder.relativeDistance = dist.toFixed(2)
+            pbArr.push(subOrder)
+          }
+        }
+      }
+      piggybackOrders.value = pbArr
+
+      drawMarker(isDonation, [mainLng, mainLat], pbArr)
+
       if (currentUserRole.value === 3
           && pendingOrder.value.deliveryMethod === 1
           && !result.value
           && autoDispatchedOrderId.value !== pendingOrder.value.orderId) {
+
         autoDispatchedOrderId.value = pendingOrder.value.orderId
-        await handleSmartDispatch()
+
+        if (isDonation) handleDonationDispatch([mainLng, mainLat])
+        else await handleSmartDispatch([mainLng, mainLat])
       }
     } else {
       pendingOrder.value = null
       result.value = null
+      piggybackOrders.value = []
       if (map.value) map.value.clearMap()
-      clearFallbackTimer() // 没任务时清理计时器
+      clearFallbackTimer()
     }
   } catch (error) {
-    console.error('获取大屏订单失败', error)
+    console.error('调度大盘异常', error)
   }
 }
 
@@ -154,183 +223,250 @@ const initMap = () => {
     plugins: ['AMap.MoveAnimation', 'AMap.Riding']
   }).then((amap) => {
     AMap = amap
-    map.value = new AMap.Map('amap-container', { viewMode: '3D', pitch: 40, zoom: 15, center: defaultLocation, mapStyle: 'amap://styles/fresh' })
-  }).catch(e => console.error(e))
+    map.value = new AMap.Map('amap-container', {
+      viewMode: '3D', pitch: 40, zoom: 15, center: userLocation.value, mapStyle: 'amap://styles/fresh'
+    })
+  }).catch(e => {
+    ElMessage.error('地图引擎加载异常')
+  })
 }
 
-const drawSosMarker = (position) => {
+const drawMarker = (isDonation, position, pbArr = []) => {
   if (!AMap || !map.value) return
   map.value.clearMap()
   map.value.setCenter(position)
-  new AMap.Marker({ map: map.value, position: position, content: '<div class="sos-pulse-marker"></div>', offset: new AMap.Pixel(-8, -8) })
+
+  const markerClass = isDonation ? 'don-pulse-marker' : 'sos-pulse-marker'
+  new AMap.Marker({
+    map: map.value, position: position, content: `<div class="${markerClass}"></div>`, offset: new AMap.Pixel(-8, -8)
+  })
+
+  pbArr.forEach(po => {
+    const lon = po.targetLon || userLocation.value[0]
+    const lat = po.targetLat || userLocation.value[1]
+    new AMap.Marker({
+      map: map.value, position: [lon, lat], content: `<div class="pb-mini-marker"></div>`, offset: new AMap.Pixel(-5, -5)
+    })
+  })
 }
 
-const handleSmartDispatch = async () => {
-  if (!pendingOrder.value) return ElMessage.warning("当前无调度任务")
-  if (loading.value) return
+const handleDispatchAction = async () => {
+  const isDonation = pendingOrder.value.orderSn?.startsWith('DON')
+  const lng = pendingOrder.value.targetLon || userLocation.value[0]
+  const lat = pendingOrder.value.targetLat || userLocation.value[1]
+  if (isDonation) handleDonationDispatch([lng, lat])
+  else await handleSmartDispatch([lng, lat])
+}
 
+const handleDonationDispatch = (targetPos) => {
+  loading.value = true
+  setTimeout(() => {
+    const stationLng = pendingOrder.value.sourceLon || (targetPos[0] + 0.008)
+    const stationLat = pendingOrder.value.sourceLat || (targetPos[1] + 0.008)
+
+    result.value = {
+      station: { longitude: stationLng, latitude: stationLat, stationName: pendingOrder.value.stationName || '指定社区接收驿站' },
+      orderSn: pendingOrder.value.orderSn,
+      requiredCategory: pendingOrder.value.requiredCategory || pendingOrder.value.materialName || '爱心捐赠物资',
+      urgencyLevel: 1
+    }
+
+    drawRoute(result.value, targetPos, true)
+    loading.value = false
+    ElMessage.success('✅ 识别到定向捐赠，已免测算直接生成回收路线！')
+  }, 800)
+}
+
+const handleSmartDispatch = async (targetPos) => {
+  if (!pendingOrder.value) return
   loading.value = true
   result.value = null
 
-  const reqLng = pendingOrder.value.targetLon || defaultLocation[0]
-  const reqLat = pendingOrder.value.targetLat || defaultLocation[1]
-  const safeCategory = pendingOrder.value.requiredCategory || '米面粮油'
-
+  const safeCategory = pendingOrder.value.requiredCategory || '应急物资'
   try {
     const res = await smartMatch({
-      targetLon: reqLng, targetLat: reqLat, requiredCategory: safeCategory, urgencyLevel: pendingOrder.value.urgencyLevel || 5
+      targetLon: targetPos[0], targetLat: targetPos[1],
+      requiredCategory: safeCategory, urgencyLevel: pendingOrder.value.urgencyLevel || 5
     })
 
-    if (res.data && res.data.length > 0) {
+    if (res?.data && res.data.length > 0) {
       result.value = res.data[0]
       result.value.orderSn = pendingOrder.value.orderSn || '未知单号'
       result.value.requiredCategory = safeCategory
       result.value.urgencyLevel = pendingOrder.value.urgencyLevel
 
-      drawRoute(result.value, [reqLng, reqLat])
+      drawRoute(result.value, targetPos, false)
 
-      // 🚨 触发倒计时机制 (仅对管理员且是配送单生效)
-      if (currentUserRole.value === 4 && pendingOrder.value.deliveryMethod === 1) {
-        startFallbackTimer()
-      }
+      if (currentUserRole.value === 4 && pendingOrder.value.deliveryMethod === 1) startFallbackTimer()
     } else {
-      ElMessage.info(`附近暂无 [${safeCategory}] 的物资据点`)
+      ElMessage.info(`测算完毕：附近 5 公里暂无 [${safeCategory}]`)
     }
   } catch (e) {
-    ElMessage.error(e.response?.data?.msg || '调度服务异常')
+    ElMessage.error(`调度失败: ${e.response?.data?.message || '引擎异常'}`)
   } finally {
     loading.value = false
   }
 }
 
-const drawRoute = (data, targetPos) => {
+const drawRoute = (data, targetPos, isDonation) => {
   if (!AMap || !map.value) return
-  const lng = data?.station?.longitude || 118.0894250
-  const lat = data?.station?.latitude || 24.4798330
-  const stationLoc = [lng, lat]
+  const stationLoc = [data?.station?.longitude || userLocation.value[0], data?.station?.latitude || userLocation.value[1]]
+
   map.value.clearMap()
 
-  new AMap.Marker({ map: map.value, position: targetPos, content: '<div class="sos-pulse-marker"></div>', offset: new AMap.Pixel(-8, -8) })
-  new AMap.Marker({ map: map.value, position: stationLoc, content: '<div class="station-mini-marker">🏥</div>', offset: new AMap.Pixel(-14, -14) })
+  if (isDonation) {
+    new AMap.Marker({ map: map.value, position: targetPos, content: '<div class="don-pulse-marker"></div>', offset: new AMap.Pixel(-8, -8) })
+    new AMap.Marker({ map: map.value, position: stationLoc, content: '<div class="station-mini-marker">🏥</div>', offset: new AMap.Pixel(-14, -14) })
+  } else {
+    new AMap.Marker({ map: map.value, position: stationLoc, content: '<div class="station-mini-marker">🏥</div>', offset: new AMap.Pixel(-14, -14) })
+    new AMap.Marker({ map: map.value, position: targetPos, content: '<div class="sos-pulse-marker"></div>', offset: new AMap.Pixel(-8, -8) })
+
+    piggybackOrders.value.forEach(po => {
+      const lon = po.targetLon || userLocation.value[0]
+      const lat = po.targetLat || userLocation.value[1]
+      new AMap.Marker({
+        map: map.value, position: [lon, lat], content: `<div class="pb-mini-marker"></div>`, offset: new AMap.Pixel(-5, -5)
+      })
+    })
+  }
+
+  const startPoint = isDonation ? targetPos : stationLoc
+  const endPoint = isDonation ? stationLoc : targetPos
 
   const riding = new AMap.Riding({ map: map.value, hideMarkers: true, autoFitView: true })
-  riding.search(stationLoc, targetPos, () => {})
+  riding.search(startPoint, endPoint, (status) => {
+    if(status !== 'complete') console.warn('路线规划受限')
+  })
 }
 
-// 🚨 修改计时器，使用动态读到的阈值
 const startFallbackTimer = () => {
   clearFallbackTimer()
-  // 从 yaml 读取到多少秒，这里就倒计时多少秒
   fallbackCountdown.value = dynamicThreshold.value
-
   fallbackTimer = setInterval(() => {
     fallbackCountdown.value--
-    if (fallbackCountdown.value <= 0) {
-      clearFallbackTimer()
-      autoTriggerFallback()
-    }
+    if (fallbackCountdown.value <= 0) { clearFallbackTimer(); autoTriggerFallback(); }
   }, 1000)
 }
 
-const clearFallbackTimer = () => {
-  if (fallbackTimer) clearInterval(fallbackTimer)
-  fallbackCountdown.value = 0
-}
+const clearFallbackTimer = () => { if (fallbackTimer) clearInterval(fallbackTimer); fallbackCountdown.value = 0 }
 
 const autoTriggerFallback = async () => {
   if (pendingOrder.value && pendingOrder.value.deliveryMethod === 1) {
     try {
-      await switchOrderToPickup(pendingOrder.value.orderId) // 🚨 真实向后端写库
+      await switchOrderToPickup(pendingOrder.value.orderId)
       pendingOrder.value.deliveryMethod = 2
-      ElMessage.warning({ message: '🚨 超时未响应！系统已自动触发运力熔断，后台状态已变更为自提模式', duration: 5000 })
-    } catch (e) {
-      console.error('熔断写库失败', e)
-    }
+      ElMessage.warning({ message: '🚨 超时未响应！启动兜底市民自提模式', duration: 5000 })
+    } catch (e) {}
   }
 }
 
 const handleSwitchToPickup = () => {
-  ElMessageBox.confirm('当前可能运力不足。是否触发【运力熔断机制】，将此单真实转为市民自提？', '⚠️ 运力熔断预警', {
-    confirmButtonText: '确认转自提', cancelButtonText: '继续等待', type: 'warning'
-  }).then(async () => {
+  ElMessageBox.confirm('是否转为自提？', '指挥中心干预', { confirmButtonText: '确认', type: 'warning' }).then(async () => {
     try {
-      await switchOrderToPickup(pendingOrder.value.orderId) // 🚨 真实向后端写库
+      await switchOrderToPickup(pendingOrder.value.orderId)
       pendingOrder.value.deliveryMethod = 2
-      clearFallbackTimer() // 手动操作后立刻清理计时器
-      ElMessage.success('已切换为自提模式！数据库已同步更新。')
-    } catch (e) {
-      ElMessage.error(e.response?.data?.msg || '操作失败')
-    }
+      clearFallbackTimer()
+      ElMessage.success('已切换为自提模式。')
+    } catch (e) {}
   })
 }
 
-// 下发自提通知
 const handleNotifyPickup = () => {
-  ElMessageBox.confirm('是否锁定库存并将自提提货码及导航路线下发给该市民？', '下发自提通知', {
-    confirmButtonText: '立即下发', cancelButtonText: '取消', type: 'success',
-  }).then(() => {
-    ElMessage.success('已通过短信/APP推送通知市民前往自提！')
-    pendingOrder.value = null
-    result.value = null
-    if (map.value) map.value.clearMap()
+  ElMessageBox.confirm('是否下发提货码？', '确认', { confirmButtonText: '下发', type: 'success' }).then(() => {
+    ElMessage.success('居民已收到自提指南。')
+    pendingOrder.value = null; result.value = null; map.value.clearMap()
   })
 }
 
-const handleGrab = async () => {
-  if (!pendingOrder.value?.orderId) return ElMessage.error("订单异常，无法抢单")
+const handleBatchGrab = async (batchIds) => {
+  let ids = Array.isArray(batchIds) ? batchIds : [pendingOrder.value?.orderId]
+  if (!ids || ids.length === 0 || !ids[0]) return ElMessage.error("订单状态异常")
+
+  loading.value = true
+  let successCount = 0
+
   try {
-    await grabTask(pendingOrder.value.orderId)
-    ElMessage.success({message: '抢单成功！请尽快前往据点取货', offset: 80})
-    router.push('/my-tasks')
-  } catch (apiError) {
-    ElMessage.warning(apiError.response?.data?.msg || '任务已被其他志愿者抢先一步')
-    isError.value = true
-    setTimeout(() => { isError.value = false }, 500)
+    for (const id of ids) {
+      try {
+        await grabTask(id)
+        successCount++
+      } catch (innerE) {
+        console.warn(`订单 ${id} 抢单被拦截，原因已由全局拦截器提示`);
+      }
+    }
+
+    if (successCount > 0) {
+      ElMessage.success({
+        message: `⚡ 运力集约成功！已为您打包派发 ${successCount} 个护航行程！`,
+        duration: 4000,
+        offset: 80
+      })
+      router.push('/my-tasks')
+    }
   } finally {
+    loading.value = false
     fetchMapOrders()
     result.value = null
   }
 }
 
 const handleFinishMission = () => {
-  isMissionActive.value = false
-  result.value = null
-  fetchMapOrders()
+  isMissionActive.value = false; result.value = null; fetchMapOrders()
 }
 </script>
 
 <style scoped>
-/* 保持你的原样式完全不变即可！把刚才教你的那套复制过来 */
-.main-content { flex: 1; display: flex; flex-direction: column; position: relative; }
+.main-content { flex: 1; display: flex; flex-direction: column; position: relative; overflow: hidden; background: #f1f5f9; }
 
-/* 🚨 修改顶部状态栏：平急两用动态样式 */
+/* 🚨 锁定屏酷炫样式 */
+.lock-screen { position: absolute; inset: 0; background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(15px); display: flex; align-items: center; justify-content: center; z-index: 999; }
+.lock-panel { text-align: center; background: rgba(255, 255, 255, 0.05); padding: 50px; border-radius: 30px; border: 1px solid rgba(255, 255, 255, 0.1); max-width: 400px; box-shadow: 0 25px 50px rgba(0,0,0,0.5); }
+.lock-icon { width: 80px; height: 80px; margin: 0 auto 20px; background: rgba(249, 115, 22, 0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; border: 2px solid #f97316; animation: float 3s ease-in-out infinite; }
+.lock-title { color: #fff; font-size: 1.8rem; font-weight: 900; margin: 0 0 10px; letter-spacing: 2px; }
+.lock-desc { color: #94a3b8; font-size: 0.95rem; line-height: 1.6; margin-bottom: 25px; }
+.lock-status { display: inline-flex; align-items: center; gap: 10px; color: #f97316; font-weight: bold; background: rgba(249, 115, 22, 0.1); padding: 8px 20px; border-radius: 20px; margin-bottom: 30px; }
+.spinner { width: 14px; height: 14px; border: 2px solid #f97316; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; }
+.go-profile-btn { background: #3b82f6; color: #fff; border: none; padding: 14px 30px; border-radius: 16px; font-weight: 900; font-size: 1rem; cursor: pointer; transition: 0.3s; box-shadow: 0 10px 20px rgba(59, 130, 246, 0.3); }
+.go-profile-btn:hover { background: #2563eb; transform: translateY(-3px); box-shadow: 0 15px 30px rgba(59, 130, 246, 0.4); }
+
+@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+
+/* 正常界面样式 */
 .top-status { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 100; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); padding: 10px 24px; border-radius: 30px; font-size: 0.9rem; color: #1e293b; display: flex; align-items: center; gap: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); border: 2px solid #e2e8f0; transition: 0.5s; }
 .top-status.emergency-mode { background: #fef2f2; border-color: #ef4444; color: #991b1b; }
 .mode-switch-btn { margin-left: 10px; padding: 4px 12px; font-size: 0.75rem; font-weight: bold; color: #fff; background: #3b82f6; border: none; border-radius: 12px; cursor: pointer; transition: 0.3s; }
 .mode-switch-btn:hover { background: #2563eb; transform: scale(1.05); }
 .emergency-mode .mode-switch-btn { background: #ef4444; }
-
 .pulse-dot { width: 10px; height: 10px; border-radius: 50%; animation: pulse 2s infinite; }
 @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); } 70% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); } 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
-
-.map-wrapper { flex: 1; position: relative; }
+.map-wrapper { flex: 1; position: relative; width: 100%; height: 100%; }
 #amap-container { width: 100%; height: 100%; }
 .empty-task-panel { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 40px; border-radius: 20px; text-align: center; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1); z-index: 100; pointer-events: none; }
-.empty-task-panel h3 { color: #1e293b; margin: 15px 0 5px 0; }
+.empty-task-panel h3 { color: #1e293b; margin: 15px 0 5px 0; font-weight: 800; }
 .empty-task-panel p { color: #64748b; font-size: 14px; }
 .radar-spinner { width: 50px; height: 50px; border: 4px solid #f1f5f9; border-top-color: #10b981; border-radius: 50%; margin: 0 auto; animation: spin 1s linear infinite; }
-.radar-spinner.emergency-spin { border-top-color: #ef4444; animation: spin 0.5s linear infinite; } /* 急时转得更快 */
+.radar-spinner.emergency-spin { border-top-color: #ef4444; animation: spin 0.5s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
 .map-legend { position: absolute; bottom: 30px; right: 30px; background: #fff; padding: 12px 18px; border-radius: 12px; box-shadow: 0 10px 15px rgba(0, 0, 0, 0.05); font-size: 0.75rem; border: 1px solid #f1f5f9; z-index: 100; }
-.legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; color: #64748b; }
+.legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; color: #64748b; font-weight: bold; }
 .dot { width: 8px; height: 8px; border-radius: 50%; }
 .sos { background: #ef4444; }
+.don { background: #3b82f6; }
+.pb { background: #94a3b8; }
 .station { background: #f97316; }
 </style>
 
 <style>
+/* 地图打点样式保持不变 */
 .sos-pulse-marker { width: 16px; height: 16px; background: #ef4444; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 10px rgba(239, 68, 68, 0.6); position: relative; }
 .sos-pulse-marker::after { content: ''; position: absolute; top: -5px; left: -5px; width: 20px; height: 20px; border: 2px solid #ef4444; border-radius: 50%; animation: mapPulse 1.5s ease-out infinite; }
+
+.don-pulse-marker { width: 16px; height: 16px; background: #3b82f6; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 10px rgba(59, 130, 246, 0.6); position: relative; }
+.don-pulse-marker::after { content: ''; position: absolute; top: -5px; left: -5px; width: 20px; height: 20px; border: 2px solid #3b82f6; border-radius: 50%; animation: mapPulse 1.5s ease-out infinite; }
+
+.pb-mini-marker { width: 10px; height: 10px; background: #94a3b8; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); }
+
 @keyframes mapPulse { 0% { transform: scale(0.8); opacity: 1; } 100% { transform: scale(2.5); opacity: 0; } }
 .station-mini-marker { width: 28px; height: 28px; background: #fff; border: 3px solid #f97316; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; box-shadow: 0 4px 12px rgba(249, 115, 22, 0.4); color: #f97316; font-weight: bold; }
 </style>

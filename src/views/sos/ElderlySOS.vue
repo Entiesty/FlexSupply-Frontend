@@ -14,7 +14,6 @@
       </header>
 
       <div class="glass-panel" v-loading="loading">
-
         <div class="user-info-bar">
           <div class="avatar-wrap">
             <img v-if="userInfo.avatar" :src="userInfo.avatar" class="avatar-img" alt="avatar" />
@@ -34,13 +33,11 @@
             <div class="card-text"><h3>我需要药</h3><p>急救药物 / 常备用药</p></div>
             <div class="sos-arrow">〉</div>
           </div>
-
           <div class="sos-card food" @click="openDrawer('粮油副食', ['热乎盒饭', '米面粮油', '方便食品', '生鲜水果'], 2)">
             <div class="card-icon-wrap"><span class="card-icon">🍚</span></div>
             <div class="card-text"><h3>我要吃饭</h3><p>餐食 / 饮水 / 基础粮油</p></div>
             <div class="sos-arrow">〉</div>
           </div>
-
           <div class="sos-card warm" @click="openDrawer('应急与生活', ['防寒衣物', '棉被毯子', '暖贴/取暖', '生活用品'], 1)">
             <div class="card-icon-wrap"><span class="card-icon">🧥</span></div>
             <div class="card-text"><h3>生活困难</h3><p>防寒 / 保暖 / 日用物资</p></div>
@@ -53,34 +50,27 @@
             <div class="radar-spinner"></div>
             <h3 class="status-title">您的求助正在处理中</h3>
           </div>
-
           <div class="active-detail">
             <p class="detail-label">求助内容：</p>
             <p class="detail-value">{{ activeOrder.requiredCategory }} - {{ activeOrder.description || '无具体说明' }}</p>
             <p class="order-sn">系统单号: {{ activeOrder.orderSn }}</p>
           </div>
-
           <div class="timeline">
             <div class="timeline-item" :class="{ active: activeOrder.status >= 0 }">
-              <div class="dot"></div>
-              <div class="content"><h4>1. 社区已收到</h4><p>正在为您寻找距离最近的物资与志愿者</p></div>
+              <div class="dot"></div><div class="content"><h4>1. 社区已收到</h4><p>正在为您寻找距离最近的物资与志愿者</p></div>
             </div>
             <div class="timeline-item" :class="{ active: activeOrder.status >= 1 }">
-              <div class="dot"></div>
-              <div class="content"><h4>2. 志愿者在路上</h4><p>爱心使者已出发，正飞奔向您</p></div>
+              <div class="dot"></div><div class="content"><h4>2. 志愿者在路上</h4><p>爱心使者已出发，正飞奔向您</p></div>
             </div>
             <div class="timeline-item" :class="{ active: activeOrder.status >= 2 }">
-              <div class="dot"></div>
-              <div class="content"><h4>3. 物资已送达</h4><p>请您确认是否收到物资</p></div>
+              <div class="dot"></div><div class="content"><h4>3. 物资已送达</h4><p>请您确认是否收到物资</p></div>
             </div>
           </div>
-
           <div class="action-btns">
             <button class="refresh-btn" @click="fetchActiveOrder">刷新最新进度</button>
             <button class="cancel-btn" @click="handleCancel" v-if="activeOrder.status === 0">撤销求助</button>
           </div>
         </div>
-
       </div>
     </div>
 
@@ -92,12 +82,10 @@
             {{ sub }}
           </button>
         </div>
-
         <div class="confirm-zone">
           <div class="selected-status" :class="{'is-selected': selectedSub}">
             {{ selectedSub ? `确认需要：${selectedSub}` : '请先点击上方的一项' }}
           </div>
-
           <button class="long-press-btn" :class="{'disabled': !selectedSub}"
                   @mousedown="startPress" @mouseup="cancelPress" @mouseleave="cancelPress"
                   @touchstart="startPress" @touchend="cancelPress">
@@ -152,9 +140,7 @@ const fetchActiveOrder = async () => {
   try {
     const res = await getMyActiveSos()
     activeOrder.value = res.data || null
-  } catch (e) {
-    console.error('获取求助状态失败', e)
-  }
+  } catch (e) {}
 }
 
 const initRealLocation = () => {
@@ -195,9 +181,7 @@ onMounted(async () => {
   timer = setInterval(fetchActiveOrder, 5000)
 })
 
-onUnmounted(() => {
-  if (timer) clearInterval(timer)
-})
+onUnmounted(() => { if (timer) clearInterval(timer) })
 
 const openDrawer = (mainCat, subs, urgency) => {
   if (!currentLon.value || !currentLat.value) {
@@ -233,6 +217,9 @@ const cancelPress = () => {
 const handleFinalSubmit = async () => {
   drawerVisible.value = false
   loading.value = true
+
+  // 🚨 核心逻辑：selectedSub 就是老人选的具体需求（比如：降压药）
+  // 把它装在 description 里发给后端，后端会自动拼装成 GoodsName 展示在指挥大屏和骑手端！
   const demandData = {
     requiredCategory: currentMainCat.value,
     urgencyLevel: currentUrgency.value,
@@ -259,7 +246,6 @@ const handleFinalSubmit = async () => {
   }
 }
 
-// 2. 替换底部的 handleCancel 方法
 const handleCancel = () => {
   ElMessageBox.confirm('是否确定撤销本次求助？撤销后志愿者将停止配送。', '温馨提示', {
     confirmButtonText: '确定撤销',
@@ -267,16 +253,12 @@ const handleCancel = () => {
     type: 'warning',
     customClass: 'elderly-msg-box'
   }).then(async () => {
-    // 🚨 接入真实的后端撤销逻辑
     try {
       loading.value = true
-      await cancelDemand(activeOrder.value.orderId) // 发送给后端真实改库
+      await cancelDemand(activeOrder.value.orderId)
       ElMessage.success('求助已成功撤销！')
-      activeOrder.value = null // 清除界面的进行中状态
-
-      // 撤销后，你可以选择刷新一下数据，或者什么都不做
+      activeOrder.value = null
     } catch (error) {
-      console.error('撤销失败', error)
     } finally {
       loading.value = false
     }
@@ -285,7 +267,6 @@ const handleCancel = () => {
 </script>
 
 <style scoped>
-/* 🌟 核心统一：完全对齐 MerchantDonate / MerchantHistory 的布局 */
 .main-content { flex: 1; display: flex; flex-direction: column; position: relative; padding: 40px; background: #f1f5f9; min-height: 100vh; overflow-y: auto;}
 .top-status { position: absolute; top: 20px; right: 30px; z-index: 100; background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); padding: 8px 16px; border-radius: 20px; font-size: 0.85rem; color: #64748b; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05); font-weight: bold;}
 .pulse-dot { width: 10px; height: 10px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; animation: pulse-green 2s infinite; }
@@ -293,14 +274,12 @@ const handleCancel = () => {
 @keyframes pulse-green { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); } 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
 @keyframes pulse-orange { 0% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(249, 115, 22, 0); } 100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0); } }
 
-/* 居中限制区域，保证桌面端体验极佳 */
 .sos-wrapper { max-width: 900px; margin: 0 auto; width: 100%; padding-bottom: 50px;}
-.page-header h2 { color: #1e293b; font-size: 2.2rem; margin: 0 0 8px 0; font-weight: 900; letter-spacing: 1px; color: #ef4444; }
+.page-header h2 { color: #ef4444; font-size: 2.2rem; margin: 0 0 8px 0; font-weight: 900; letter-spacing: 1px; }
 .page-header p { color: #64748b; font-size: 1.1rem; margin: 0 0 25px 0; }
 
 .glass-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-radius: 24px; padding: 35px 40px; box-shadow: 0 15px 35px rgba(0,0,0,0.06); border: 1px solid #fff; }
 
-/* 用户信息条 (融入面板内) */
 .user-info-bar { display: flex; align-items: center; gap: 20px; }
 .avatar-wrap { background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); padding: 4px; border-radius: 50%; box-shadow: 0 4px 10px rgba(249, 115, 22, 0.3); display: flex; align-items: center; justify-content: center;}
 .avatar { display: block; font-size: 2.5rem; background: #fff; border-radius: 50%; width: 55px; height: 55px; line-height: 55px; text-align: center; }
@@ -310,7 +289,6 @@ const handleCancel = () => {
 
 .divider { height: 1px; background: #f1f5f9; margin: 25px 0; }
 
-/* 核心大卡片区 */
 .sos-actions { display: flex; flex-direction: column; gap: 20px; }
 .sos-card { display: flex; align-items: center; background: #fff; border-radius: 20px; padding: 25px; box-shadow: 0 8px 25px rgba(0,0,0,0.03); cursor: pointer; transition: all 0.3s; border: 2px solid transparent; }
 .sos-card:hover { transform: translateY(-3px); box-shadow: 0 12px 30px rgba(0,0,0,0.06); }
@@ -322,17 +300,10 @@ const handleCancel = () => {
 .card-text p { margin: 0; font-size: 1.1rem; color: #64748b; font-weight: 500; }
 .sos-arrow { font-size: 1.8rem; color: #cbd5e1; padding-left: 10px; font-weight: bold; }
 
-.urgent { border-color: #ffe4e6; }
-.urgent .card-icon-wrap { background: #fff1f2; }
-.urgent:hover { border-color: #fca5a5; }
-.food { border-color: #ffedd5; }
-.food .card-icon-wrap { background: #fff7ed; }
-.food:hover { border-color: #fdba74; }
-.warm { border-color: #e0f2fe; }
-.warm .card-icon-wrap { background: #f0f9ff; }
-.warm:hover { border-color: #7dd3fc; }
+.urgent { border-color: #ffe4e6; } .urgent .card-icon-wrap { background: #fff1f2; } .urgent:hover { border-color: #fca5a5; }
+.food { border-color: #ffedd5; } .food .card-icon-wrap { background: #fff7ed; } .food:hover { border-color: #fdba74; }
+.warm { border-color: #e0f2fe; } .warm .card-icon-wrap { background: #f0f9ff; } .warm:hover { border-color: #7dd3fc; }
 
-/* 状态追踪面板 */
 .status-header { display: flex; align-items: center; gap: 15px; margin-bottom: 25px; }
 .radar-spinner { width: 28px; height: 28px; border: 4px solid #ffedd5; border-top-color: #f97316; border-radius: 50%; animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -357,10 +328,8 @@ const handleCancel = () => {
 .cancel-btn { flex: 1; background: #f8fafc; border: 2px solid #e2e8f0; padding: 18px; border-radius: 16px; font-size: 1.1rem; color: #64748b; font-weight: bold; cursor: pointer; transition: 0.2s;}
 .cancel-btn:hover { background: #f1f5f9; color: #ef4444; border-color: #fca5a5; }
 
-/* 抽屉样式优化 */
 .drawer-content { padding: 30px; height: 100%; display: flex; flex-direction: column; max-width: 800px; margin: 0 auto;}
 .drawer-title { font-size: 1.8rem; font-weight: 900; margin: 0 0 25px 0; color: #1e293b; text-align: center; }
-
 .sub-category-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: auto; }
 .sub-item { padding: 25px 15px; border-radius: 16px; border: 2px solid #f1f5f9; background: #f8fafc; font-size: 1.3rem; font-weight: bold; color: #475569; transition: 0.2s; cursor: pointer;}
 .sub-item.active { border-color: #f97316; background: #fff7ed; color: #ea580c; box-shadow: 0 6px 15px rgba(249,115,22,0.15); transform: scale(1.02);}

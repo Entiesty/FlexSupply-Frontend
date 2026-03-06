@@ -17,9 +17,13 @@ export function publishDemand(data) {
     return request({ url: '/trade/order/publish-demand', method: 'post', data })
 }
 
-// 志愿者抢单 (转移至 trade 模块管控)
+// 找到这部分代码，修改 URL 路径！
 export function grabTask(orderId) {
-    return request({ url: '/trade/order/grab', method: 'post', params: { orderId } })
+    return request({
+        url: '/dispatch/grab', // 🚨 核心修复：把原来的 /trade/order/grab 改成这个！
+        method: 'post',
+        params: { orderId }
+    })
 }
 
 // ================= 任务执行 (Task) =================
@@ -59,4 +63,12 @@ export function cancelDemand(orderId) {
 // 受赠方获取自己的历史求助档案 (之前应该已经加过了，确认一下有就行)
 export function getMyHistoryOrders(params) {
     return request({ url: '/trade/order/my-history', method: 'get', params })
+}
+
+// 在 src/api/trade.js 中加入这行
+export function cancelOrder(orderId) {
+    return request({
+        url: `/trade/order/cancel/${orderId}`,
+        method: 'put'
+    })
 }
