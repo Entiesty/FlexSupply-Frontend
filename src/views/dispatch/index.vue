@@ -319,8 +319,10 @@ const handleSmartDispatch = async (targetPos) => {
   const safeCategory = pendingOrder.value.requiredCategory || '应急物资'
   try {
     const res = await smartMatch({
-      targetLon: targetPos[0], targetLat: targetPos[1],
-      requiredCategory: safeCategory, urgencyLevel: pendingOrder.value.urgencyLevel || 5
+      targetLon: targetPos[0],
+      targetLat: targetPos[1],
+      requiredCategory: safeCategory,
+      urgencyLevel: pendingOrder.value.urgencyLevel || 5
     })
 
     if (res?.data && res.data.length > 0) {

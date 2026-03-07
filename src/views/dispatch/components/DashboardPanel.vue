@@ -20,7 +20,7 @@
     </div>
 
     <div class="chart-container">
-      <div class="chart-title">📊 物资储备结构分析</div>
+      <div class="chart-title">🌹 储备品类丰富度分析</div>
       <div ref="chartRef" class="echarts-box" style="width: 100%; height: 280px;"></div>
     </div>
 
@@ -52,21 +52,19 @@ let refreshTimer = null
 const processPieData = (rawData, topN = 4) => {
   if (!rawData || rawData.length === 0) return []
 
-  // 1. 按库存数量降序排列
+  // 1. 按库存批次降序排列
   const sorted = [...rawData].sort((a, b) => b.totalStock - a.totalStock)
 
-  // 2. 如果种类本来就不多于设定值，直接格式化返回
   if (sorted.length <= topN) {
     return sorted.map(item => ({ value: item.totalStock, name: item.categoryName }))
   }
 
-  // 3. 截取前 N 名作为核心数据
+  // 2. 截取前 N 名作为核心数据
   const topData = sorted.slice(0, topN).map(item => ({ value: item.totalStock, name: item.categoryName }))
 
-  // 4. 将剩下的所有物资库存相加，归入“其他”
+  // 3. 将剩下的所有批次相加，归入“其他”
   const othersValue = sorted.slice(topN).reduce((sum, item) => sum + item.totalStock, 0)
 
-  // 5. 追加“其他”项，并赋予低调的颜色
   topData.push({
     value: othersValue,
     name: '其他',
@@ -81,72 +79,79 @@ const initChart = (dataList) => {
   if (!chartRef.value) return
   if (!myChart) myChart = echarts.init(chartRef.value)
 
-  // 调用降噪算法（面板较窄，取 Top 4 最合适）
   const finalData = processPieData(dataList, 4)
+
+  // 🌹 让数据自动升序排列，这样玫瑰图会呈现出漂亮的“螺旋阶梯”变大的视觉效果
+  finalData.sort((a, b) => a.value - b.value)
 
   const totalStock = finalData.reduce((sum, item) => sum + item.value, 0)
 
   const option = {
+    // 匹配系统的核心色彩规范
+    color: ['#8b5cf6', '#10b981', '#f97316', '#ef4444', '#3b82f6'],
     tooltip: {
       trigger: 'item',
-      formatter: '{b}: {c} 件 ({d}%)',
-      backgroundColor: 'rgba(255, 255, 255, 0.95)',
-      borderRadius: 8,
-      textStyle: { color: '#334155', fontSize: 12 }
+      backgroundColor: 'rgba(15, 23, 42, 0.9)', // 暗色玻璃态高级感提示框
+      borderColor: '#334155',
+      textStyle: { color: '#f8fafc', fontSize: 13 },
+      // 动态格式化提示词，明确显示“批次”
+      formatter: function (params) {
+        return `
+          <div style="font-weight:900;margin-bottom:6px;">${params.name}</div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="display:inline-block;border-radius:50%;width:8px;height:8px;background-color:${params.color};"></span>
+            <span style="color:#cbd5e1;">当前储备：</span>
+            <span style="color:#f97316;font-weight:900;font-size:1.2rem;">${params.value}</span>
+            <span style="color:#94a3b8;font-size:0.8rem;">批次</span>
+          </div>
+          <div style="color:#94a3b8;font-size:0.85rem;margin-top:4px;padding-left:14px;">
+            占比架构：${params.percent}%
+          </div>
+        `;
+      }
     },
     legend: {
       orient: 'horizontal',
-      // 🚨 隔离核心 1：不准图例从底部往上长！
-      // 强制要求图例从容器 58% 的高度开始，向下排列！
-      top: '58%',
+      top: '68%', // 🚨 给上方张牙舞爪的玫瑰留出充足的空间
       left: 'center',
-      itemWidth: 8,
-      itemHeight: 8,
+      itemWidth: 10,
+      itemHeight: 10,
       icon: 'circle',
-      itemGap: 10, // 稍微缩小一点图例间距
+      itemGap: 12,
       formatter: (name) => {
         const item = finalData.find(i => i.name === name)
         if (!item) return name
         const percent = totalStock > 0 ? ((item.value / totalStock) * 100).toFixed(1) : 0
-        return `{title|${name}} {val|${item.value}件} {pct|(${percent}%)}`
+        // 🚨 文案全面替换为“批”
+        return `{title|${name}} {val|${item.value}批} {pct|(${percent}%)}`
       },
       textStyle: {
         rich: {
-          title: {
-            width: 70,
-            overflow: 'truncate',
-            color: '#475569',
-            fontSize: 11,
-            fontWeight: 'bold'
-          },
-          val: {
-            color: '#3b82f6',
-            fontSize: 11,
-            fontWeight: '900'
-          },
-          pct: {
-            color: '#94a3b8',
-            fontSize: 10
-          }
+          title: { width: 68, color: '#475569', fontSize: 11, fontWeight: 'bold' },
+          val: { color: '#3b82f6', fontSize: 11, fontWeight: '900' },
+          pct: { color: '#94a3b8', fontSize: 10 }
         }
       }
     },
-    color: ['#f97316', '#3b82f6', '#10b981', '#f43f5e', '#cbd5e1'],
     series: [
       {
-        name: '物资占比',
+        name: '储备丰富度',
         type: 'pie',
-        // 🚨 隔离核心 2：饼图的圆心锁死在上方 30% 处，半径最大不超过 45%
-        // 这意味着饼图的最下沿绝对不会超过容器的 52.5%！完美避开下方 58% 开始的图例。
-        radius: ['30%', '45%'],
-        center: ['50%', '30%'],
+        // 🌟 核心开关：开启按半径展示的南丁格尔玫瑰图！
+        roseType: 'radius',
+        // 内空外阔，[内圈半径, 外圈最大半径]
+        radius: ['15%', '60%'],
+        // 整体位置微调：往上提，给图例让位
+        center: ['50%', '35%'],
         avoidLabelOverlap: false,
         itemStyle: {
-          borderRadius: 6,
-          borderColor: '#fff',
-          borderWidth: 2
+          borderRadius: 6,        // 扇形边缘圆滑，拟物化现代感
+          borderColor: '#ffffff', // 强制描白边，切出扇形缝隙
+          borderWidth: 2,
+          shadowBlur: 10,         // 加一点泛光阴影
+          shadowColor: 'rgba(0, 0, 0, 0.05)'
         },
-        label: { show: false },
+        label: { show: false },   // 为了整洁，直接隐藏外部引线，靠 Hover 和 Legend 看数据
         labelLine: { show: false },
         data: finalData
       }
@@ -167,7 +172,6 @@ const fetchAllData = async () => {
     metrics.value = metricsRes.data
     rankList.value = rankRes.data
 
-    // 如果有图表数据，则渲染图表
     if (stockRes.data && stockRes.data.length > 0) {
       nextTick(() => initChart(stockRes.data))
     }
@@ -178,10 +182,8 @@ const fetchAllData = async () => {
 
 onMounted(() => {
   fetchAllData()
-  // 每 30 秒无感刷新一次大屏数据
   refreshTimer = setInterval(fetchAllData, 30000)
 
-  // 监听窗口缩放，自动重绘图表防止变形
   window.addEventListener('resize', () => {
     if (myChart) myChart.resize()
   })
@@ -194,7 +196,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* 样式保持不变，只贴核心部分防丢 */
 .dashboard-panel {
   position: absolute;
   top: 20px;

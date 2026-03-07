@@ -28,19 +28,21 @@
         <div class="divider"></div>
 
         <div class="sos-actions" v-if="!activeOrder">
-          <div class="sos-card urgent" @click="openDrawer('医疗与特需', ['感冒发烧', '降压/心脏药', '外伤处理', '营养补品'], 3)">
+          <div class="sos-card urgent" @click="openDrawer('医疗与特需', ['感冒发烧', '降压/心脏药', '外伤处理', '营养补品'], 10)">
             <div class="card-icon-wrap"><span class="card-icon">💊</span></div>
-            <div class="card-text"><h3>我需要药</h3><p>急救药物 / 常备用药</p></div>
+            <div class="card-text"><h3>我需要药</h3><p>急救药物 / 常备用药 (极高优)</p></div>
             <div class="sos-arrow">〉</div>
           </div>
-          <div class="sos-card food" @click="openDrawer('粮油副食', ['热乎盒饭', '米面粮油', '方便食品', '生鲜水果'], 2)">
+
+          <div class="sos-card food" @click="openDrawer('粮油副食', ['热乎盒饭', '米面粮油', '方便食品', '生鲜水果'], 7)">
             <div class="card-icon-wrap"><span class="card-icon">🍚</span></div>
-            <div class="card-text"><h3>我要吃饭</h3><p>餐食 / 饮水 / 基础粮油</p></div>
+            <div class="card-text"><h3>我要吃饭</h3><p>餐食 / 饮水 / 基础粮油 (高优)</p></div>
             <div class="sos-arrow">〉</div>
           </div>
-          <div class="sos-card warm" @click="openDrawer('应急与生活', ['防寒衣物', '棉被毯子', '暖贴/取暖', '生活用品'], 1)">
+
+          <div class="sos-card warm" @click="openDrawer('应急与生活', ['防寒衣物', '棉被毯子', '暖贴/取暖', '生活用品'], 3)">
             <div class="card-icon-wrap"><span class="card-icon">🧥</span></div>
-            <div class="card-text"><h3>生活困难</h3><p>防寒 / 保暖 / 日用物资</p></div>
+            <div class="card-text"><h3>生活困难</h3><p>防寒 / 保暖 / 日用物资 (普通)</p></div>
             <div class="sos-arrow">〉</div>
           </div>
         </div>
@@ -52,20 +54,34 @@
           </div>
           <div class="active-detail">
             <p class="detail-label">求助内容：</p>
-            <p class="detail-value">{{ activeOrder.requiredCategory }} - {{ activeOrder.description || '无具体说明' }}</p>
+            <p class="detail-value">{{ getShortDesc(activeOrder.description) || activeOrder.requiredCategory }}</p>
             <p class="order-sn">系统单号: {{ activeOrder.orderSn }}</p>
           </div>
+
           <div class="timeline">
             <div class="timeline-item" :class="{ active: activeOrder.status >= 0 }">
               <div class="dot"></div><div class="content"><h4>1. 社区已收到</h4><p>正在为您寻找距离最近的物资与志愿者</p></div>
             </div>
             <div class="timeline-item" :class="{ active: activeOrder.status >= 1 }">
-              <div class="dot"></div><div class="content"><h4>2. 志愿者在路上</h4><p>爱心使者已出发，正飞奔向您</p></div>
+              <div class="dot"></div>
+              <div class="content">
+                <h4>2. 志愿者在路上</h4>
+                <p>爱心使者已出发，正飞奔向您</p>
+
+                <div v-if="activeOrder.status >= 1" class="rider-contact-box">
+                  <div class="rc-info">
+                    <span class="rc-avatar">🚴</span>
+                    <span class="rc-name">爱心志愿者为您服务</span>
+                  </div>
+                  <a :href="'tel:' + (activeOrder.volunteerPhone || '13800138000')" class="rc-call-btn">📞 一键拨号</a>
+                </div>
+              </div>
             </div>
             <div class="timeline-item" :class="{ active: activeOrder.status >= 2 }">
               <div class="dot"></div><div class="content"><h4>3. 物资已送达</h4><p>请您确认是否收到物资</p></div>
             </div>
           </div>
+
           <div class="action-btns">
             <button class="refresh-btn" @click="fetchActiveOrder">刷新最新进度</button>
             <button class="cancel-btn" @click="handleCancel" v-if="activeOrder.status === 0">撤销求助</button>
@@ -105,10 +121,12 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElNotification, ElMessageBox } from 'element-plus'
 import { publishDemand, getMyActiveSos, cancelDemand } from '@/api/trade'
 import { getUserProfile } from '@/api/user'
 
+const route = useRoute()
 const loading = ref(false)
 const activeOrder = ref(null)
 const userInfo = ref({})
@@ -127,13 +145,28 @@ const selectedSub = ref('')
 const pressProgress = ref(0)
 let pressTimer = null
 
+// 提取真实的短描述（过滤掉后面拼接的门牌号）
+const getShortDesc = (desc) => {
+  if (!desc) return ''
+  return desc.split(' | ')[0]
+}
+
+// 语音播报 API
+const playVoiceFeedback = (text) => {
+  if ('speechSynthesis' in window) {
+    const utterance = new SpeechSynthesisUtterance(text)
+    utterance.lang = 'zh-CN'
+    utterance.rate = 0.9 // 语速调慢，适合老人
+    utterance.pitch = 1.0
+    window.speechSynthesis.speak(utterance)
+  }
+}
+
 const fetchUserInfo = async () => {
   try {
     const res = await getUserProfile()
     if (res.data) userInfo.value = res.data
-  } catch (e) {
-    console.error('获取用户信息失败', e)
-  }
+  } catch (e) { console.error('获取用户信息失败', e) }
 }
 
 const fetchActiveOrder = async () => {
@@ -145,32 +178,19 @@ const fetchActiveOrder = async () => {
 
 const initRealLocation = () => {
   locationText.value = '正在获取物理定位...'
-  if (!navigator.geolocation) {
-    useFallbackLocation('设备不支持定位')
-    return
-  }
+  if (!navigator.geolocation) { useFallbackLocation('设备不支持定位'); return }
   navigator.geolocation.getCurrentPosition(
-      (position) => {
-        currentLon.value = position.coords.longitude
-        currentLat.value = position.coords.latitude
-        locationText.value = '已获取高精度定位'
-      },
-      (error) => {
-        useFallbackLocation('信号弱或未授权')
-      },
+      (position) => { currentLon.value = position.coords.longitude; currentLat.value = position.coords.latitude; locationText.value = '已获取高精度定位' },
+      (error) => { useFallbackLocation('信号弱或未授权') },
       { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
   )
 }
 
 const useFallbackLocation = (reason) => {
   if (userInfo.value.currentLon && userInfo.value.currentLat) {
-    currentLon.value = userInfo.value.currentLon
-    currentLat.value = userInfo.value.currentLat
-    locationText.value = `常住地址定位 (${reason})`
+    currentLon.value = userInfo.value.currentLon; currentLat.value = userInfo.value.currentLat; locationText.value = `常住地址定位 (${reason})`
   } else {
-    currentLon.value = 118.092000
-    currentLat.value = 24.485000
-    locationText.value = `系统默认定位 (${reason})`
+    currentLon.value = 118.092000; currentLat.value = 24.485000; locationText.value = `系统默认定位 (${reason})`
   }
 }
 
@@ -179,57 +199,52 @@ onMounted(async () => {
   initRealLocation()
   await fetchActiveOrder()
   timer = setInterval(fetchActiveOrder, 5000)
+
+  // 监听“再来一单”传过来的参数
+  if (route.query.reorder && route.query.cat) {
+    openDrawer(route.query.cat, [route.query.reorder], 5)
+    selectedSub.value = route.query.reorder
+  }
 })
 
 onUnmounted(() => { if (timer) clearInterval(timer) })
 
 const openDrawer = (mainCat, subs, urgency) => {
-  if (!currentLon.value || !currentLat.value) {
-    ElMessage.warning('正在努力获取您的位置，请稍候一秒再试...')
-    return
-  }
-  currentMainCat.value = mainCat
-  currentSubCategories.value = subs
-  currentUrgency.value = urgency
-  selectedSub.value = ''
-  pressProgress.value = 0
-  drawerVisible.value = true
+  if (!currentLon.value || !currentLat.value) { ElMessage.warning('正在努力获取您的位置，请稍候一秒再试...'); return }
+  currentMainCat.value = mainCat; currentSubCategories.value = subs; currentUrgency.value = urgency; selectedSub.value = ''; pressProgress.value = 0; drawerVisible.value = true
 }
 
 const startPress = (e) => {
-  e.preventDefault()
-  if (!selectedSub.value) return
-  pressProgress.value = 0
+  e.preventDefault(); if (!selectedSub.value) return; pressProgress.value = 0
   pressTimer = setInterval(() => {
     pressProgress.value += 4
-    if (pressProgress.value >= 100) {
-      clearInterval(pressTimer)
-      handleFinalSubmit()
-    }
+    if (pressProgress.value >= 100) { clearInterval(pressTimer); handleFinalSubmit() }
   }, 100)
 }
-
-const cancelPress = () => {
-  if (pressTimer) clearInterval(pressTimer)
-  pressProgress.value = 0
-}
+const cancelPress = () => { if (pressTimer) clearInterval(pressTimer); pressProgress.value = 0 }
 
 const handleFinalSubmit = async () => {
   drawerVisible.value = false
   loading.value = true
 
-  // 🚨 核心逻辑：selectedSub 就是老人选的具体需求（比如：降压药）
-  // 把它装在 description 里发给后端，后端会自动拼装成 GoodsName 展示在指挥大屏和骑手端！
+  // 将老人的详细门牌号和健康备注，硬拼接到描述里发给骑手！
+  const doorStr = userInfo.value.doorNumber ? ` | 门牌: ${userInfo.value.doorNumber}` : ' | 门牌: 未填'
+  const remarkStr = userInfo.value.healthRemark ? ` | 备注: ${userInfo.value.healthRemark}` : ''
+  const fullDescription = `${selectedSub.value}${doorStr}${remarkStr}`
+
   const demandData = {
     requiredCategory: currentMainCat.value,
-    urgencyLevel: currentUrgency.value,
+    urgencyLevel: currentUrgency.value, // 🚨 这里把 10, 7, 3 传给了后端！
     targetLon: currentLon.value,
     targetLat: currentLat.value,
-    description: selectedSub.value
+    description: fullDescription
   }
 
   try {
     await publishDemand(demandData)
+    // 触发语音播报安抚长者
+    playVoiceFeedback(`求救已发出，请安心等待，爱心志愿者马上就来。`)
+
     ElNotification({
       title: '✅ 呼救成功',
       message: `<div style="font-size: 1.2rem; margin-top:10px;">您需要的 <b>【${selectedSub.value}】</b> 社区已收到！<br/>请安心等待，志愿者马上就来！</div>`,
@@ -239,29 +254,16 @@ const handleFinalSubmit = async () => {
     })
     await fetchActiveOrder()
   } catch (e) {
+    playVoiceFeedback(`哎呀，网络好像出问题了，请您直接拨打社区电话求助。`)
     ElMessage.error('网络不太好，请打社区电话求助哦')
   } finally {
-    pressProgress.value = 0
-    loading.value = false
+    pressProgress.value = 0; loading.value = false
   }
 }
 
 const handleCancel = () => {
-  ElMessageBox.confirm('是否确定撤销本次求助？撤销后志愿者将停止配送。', '温馨提示', {
-    confirmButtonText: '确定撤销',
-    cancelButtonText: '我点错了',
-    type: 'warning',
-    customClass: 'elderly-msg-box'
-  }).then(async () => {
-    try {
-      loading.value = true
-      await cancelDemand(activeOrder.value.orderId)
-      ElMessage.success('求助已成功撤销！')
-      activeOrder.value = null
-    } catch (error) {
-    } finally {
-      loading.value = false
-    }
+  ElMessageBox.confirm('是否确定撤销本次求助？撤销后志愿者将停止配送。', '温馨提示', { confirmButtonText: '确定撤销', cancelButtonText: '我点错了', type: 'warning', customClass: 'elderly-msg-box' }).then(async () => {
+    try { loading.value = true; await cancelDemand(activeOrder.value.orderId); ElMessage.success('求助已成功撤销！'); activeOrder.value = null } catch (error) {} finally { loading.value = false }
   }).catch(() => {})
 }
 </script>
@@ -322,6 +324,14 @@ const handleCancel = () => {
 .timeline-item h4 { margin: 0 0 8px; font-size: 1.4rem; color: #1e293b; font-weight: 900; }
 .timeline-item p { margin: 0; font-size: 1.1rem; color: #64748b; font-weight: bold; }
 
+/* 骑手电话框 */
+.rider-contact-box { margin-top: 15px; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 12px; padding: 15px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 10px rgba(16, 185, 129, 0.1);}
+.rc-info { display: flex; align-items: center; gap: 10px; }
+.rc-avatar { font-size: 1.8rem; background: #fff; border-radius: 50%; width: 40px; height: 40px; text-align: center; line-height: 40px;}
+.rc-name { font-size: 1.1rem; color: #065f46; font-weight: 900;}
+.rc-call-btn { background: #10b981; color: white; text-decoration: none; padding: 10px 18px; border-radius: 10px; font-size: 1.1rem; font-weight: 900; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3); transition: 0.2s;}
+.rc-call-btn:active { transform: scale(0.95); }
+
 .action-btns { display: flex; gap: 20px; margin-top: 40px;}
 .refresh-btn { flex: 2; background: #fff7ed; border: 2px solid #fdba74; padding: 18px; border-radius: 16px; font-size: 1.2rem; color: #ea580c; font-weight: 900; cursor: pointer; transition: all 0.2s; }
 .refresh-btn:hover { background: #ffedd5; transform: translateY(-2px); box-shadow: 0 6px 15px rgba(234, 88, 12, 0.15);}
@@ -344,7 +354,6 @@ const handleCancel = () => {
 .btn-text { position: relative; z-index: 2; letter-spacing: 2px;}
 .press-tip { font-size: 1rem; color: #94a3b8; margin-top: 15px; font-weight: bold;}
 </style>
-
 <style>
 .sos-drawer .el-drawer__body { padding: 0; background: #fff; }
 .sos-drawer { border-radius: 30px 30px 0 0 !important; box-shadow: 0 -10px 40px rgba(0,0,0,0.1) !important;}

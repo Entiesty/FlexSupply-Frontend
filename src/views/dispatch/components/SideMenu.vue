@@ -71,28 +71,33 @@ const roleMap = {
 const roleName = computed(() => roleMap[currentUser.value.role] || '未知角色')
 
 const allMenus = [
-  // --- 受赠方菜单 (Role 1) ---
-  { name: '紧急呼救大舱', icon: '🚨', path: '/sos', roles: [1] },
-  { name: '我的受赠档案', icon: '📜', path: '/recipient/history', roles: [1] },
+  // === 🌐 核心大盘 (Role 3, 4) ===
+  { name: '实时调度大屏', icon: '🗺️', path: '/map', roles: [3, 4] },
 
-  // --- 商家菜单 (Role 2) ---
-  { name: '物资捐赠大厅', icon: '💝', path: '/merchant/donate', roles: [2] },
-  { name: '我的捐赠记录', icon: '📦', path: '/merchant/history', roles: [2] },
+  // === 🚨 指挥中心运营核心 (Role 4) ===
+  { name: '异常预警监控', icon: '🚨', path: '/admin/exception-monitor', roles: [4] },
+  { name: '全局订单流转', icon: '📊', path: '/flow', roles: [4] },
 
-  // --- 志愿者菜单 (Role 3) ---
+  // === 🏢 指挥中心资源管控 (Role 4) ===
+  { name: '物理据点管理', icon: '🏥', path: '/admin/stations', roles: [4] },
+  { name: '全域用户台账', icon: '👥', path: '/admin/users', roles: [4] },
+  { name: '入驻材料审核', icon: '🛡️', path: '/admin/review', roles: [4] },
+  { name: '调度引擎调参', icon: '⚙️', path: '/config', roles: [4] },
+
+  // === 🚴 志愿者专属菜单 (Role 3) ===
   { name: '我的配送任务', icon: '🚴', path: '/my-tasks', roles: [3] },
   { name: '我的信誉档案', icon: '🏆', path: '/volunteer/credit', roles: [3] },
 
-  // --- 指挥中心/管理员菜单 (Role 4) ---
-  { name: '入驻材料审核', icon: '🛡️', path: '/admin/review', roles: [4] },
-  { name: '物理据点管理', icon: '🏥', path: '/admin/stations', roles: [4] },
-  { name: '全局订单监控', icon: '📊', path: '/flow', roles: [4] },
-  { name: '调度引擎调参', icon: '⚙️', path: '/config', roles: [4] },
-  { name: '全域用户台账', icon: '👥', path: '/admin/users', roles: [4] },
+  // === 🏪 爱心商家菜单 (Role 2) ===
+  { name: '物资捐赠大厅', icon: '💝', path: '/merchant/donate', roles: [2] },
+  { name: '我的捐赠记录', icon: '📦', path: '/merchant/history', roles: [2] },
 
-  // --- 共用菜单 ---
-  { name: '实时调度大屏', icon: '🗺️', path: '/map', roles: [3, 4] },
-  { name: '个人账号设置', icon: '👤', path: '/volunteer/profile', roles: [1, 2, 3, 4] } // 🚨 加入 1
+  // === 👴 受赠市民菜单 (Role 1) ===
+  { name: '紧急呼救大舱', icon: '🚨', path: '/sos', roles: [1] },
+  { name: '我的受赠档案', icon: '📜', path: '/recipient/history', roles: [1] },
+
+  // === ⚙️ 通用设置 ===
+  { name: '个人账号设置', icon: '👤', path: '/volunteer/profile', roles: [1, 2, 3, 4] }
 ]
 
 const visibleMenus = computed(() => {

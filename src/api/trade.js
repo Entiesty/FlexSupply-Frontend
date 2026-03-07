@@ -72,3 +72,11 @@ export function cancelOrder(orderId) {
         method: 'put'
     })
 }
+
+// 获取滞留异常订单大屏数据
+export function getExceptionMonitorList() {
+    return request({
+        url: '/trade/order/exception-monitor',
+        method: 'get'
+    })
+}

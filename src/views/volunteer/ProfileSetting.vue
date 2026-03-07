@@ -68,10 +68,10 @@
               <input type="text" v-model="profileForm.username" placeholder="请输入您的姓名" class="input-normal" />
             </div>
 
-            <template v-if="stats.role === 3 || stats.role === 2">
+            <template v-if="[1, 2, 3].includes(stats.role)">
               <div class="inner-divider"></div>
               <div class="info-row">
-                <label>{{ stats.role === 3 ? '📍 常驻服务辖区 (算法派单基准点)' : '📍 实体商铺位置 (系统上门取货精准坐标)' }}</label>
+                <label>{{ stats.role === 3 ? '📍 常驻服务辖区 (算法派单基准点)' : (stats.role === 2 ? '📍 实体商铺位置 (系统上门取货精准坐标)' : '📍 家庭住址 (志愿者上门精准定位)') }}</label>
                 <div class="location-picker-box">
                   <div class="loc-display" :class="{'has-val': profileForm.currentLon}">
                     <div class="loc-address">{{ profileForm.addressName || '尚未设置坐标，请点击右侧按钮进行地图选点' }}</div>
@@ -81,6 +81,21 @@
                   </div>
                   <button type="button" class="pick-map-btn" @click="openMapDialog">🗺️ 地图选点</button>
                 </div>
+              </div>
+            </template>
+
+            <template v-if="stats.role === 1">
+              <div class="info-row">
+                <label>🏠 详细门牌号 (必填，精确到室)</label>
+                <input type="text" v-model="profileForm.doorNumber" placeholder="例如：3栋2单元402室" class="input-normal" />
+              </div>
+              <div class="info-row">
+                <label>☎️ 紧急联系人电话 (子女/亲属)</label>
+                <input type="text" v-model="profileForm.emergencyPhone" placeholder="请输入紧急联系电话" class="input-normal" />
+              </div>
+              <div class="info-row">
+                <label>❤️ 健康与送达备注 (让志愿者更懂您)</label>
+                <input type="text" v-model="profileForm.healthRemark" placeholder="例如：有糖尿病不吃甜、腿脚不便需敲门大声点" class="input-normal" />
               </div>
             </template>
 
@@ -151,7 +166,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import * as echarts from 'echarts'
+import * as echarts from 'echarts' // 🚨 恢复 Echarts 引擎
 import AMapLoader from '@amap/amap-jsapi-loader'
 import { getUserProfile, updateUserProfile, updatePassword, getDashboardStats, updateAvatar } from '@/api/user'
 import { uploadFile } from '@/api/common'
@@ -170,7 +185,8 @@ const roleThemeClass = computed(() => {
   return map[stats.value.role] || 'theme-volunteer'
 })
 
-const profileForm = reactive({ username: '', currentLon: '', currentLat: '', addressName: '' })
+// 包含了老人的门牌号和备注
+const profileForm = reactive({ username: '', currentLon: '', currentLat: '', addressName: '', doorNumber: '', emergencyPhone: '', healthRemark: '' })
 const pwdForm = reactive({ oldPassword: '', newPassword: '', confirmPassword: '' })
 
 // ================= 高德地图核心逻辑 =================
@@ -191,16 +207,13 @@ const openMapDialog = () => {
   mapVisible.value = true
 }
 
-// 供 Element Plus 调用的异步下拉查询方法
 const querySearchAsync = (queryString, cb) => {
   if (!queryString || !autoCompleteInstance) {
     cb([])
     return
   }
-  // 底层静默调用高德的搜索 API
   autoCompleteInstance.search(queryString, (status, result) => {
     if (status === 'complete' && result.tips) {
-      // 过滤掉那些没有具体经纬度坐标的无效脏数据
       const validTips = result.tips.filter(item => item.location)
       cb(validTips)
     } else {
@@ -209,7 +222,6 @@ const querySearchAsync = (queryString, cb) => {
   })
 }
 
-// 处理用户在下拉框中选中某一项的事件
 const handleSelectPoi = (poi) => {
   if (poi && poi.location) {
     const addressName = (poi.district || '') + (poi.address || '') + (poi.name || '')
@@ -219,7 +231,6 @@ const handleSelectPoi = (poi) => {
   }
 }
 
-// 保留硬搜索能力 (应对用户直接敲击回车或点击搜索按钮)
 const handleSearchAddress = () => {
   if (!searchKeyword.value.trim()) return ElMessage.warning('请输入要搜索的地址信息')
   if (!geocoderInstance || !mapInstance) return ElMessage.error('地图组件未完全就绪，请稍后再试')
@@ -235,7 +246,6 @@ const handleSearchAddress = () => {
   })
 }
 
-// 统一的地图状态更新与飞跃方法
 const updateMapByLocation = (lng, lat, addressStr) => {
   tempLoc.lng = lng
   tempLoc.lat = lat
@@ -251,7 +261,6 @@ const updateMapByLocation = (lng, lat, addressStr) => {
   }
 }
 
-// 根据经纬度，静默调用高德API反向解析出中文地址
 const resolveAddressFromCoords = (lng, lat) => {
   window._AMapSecurityConfig = {
     securityJsCode: import.meta.env.VITE_AMAP_SECURITY_CODE,
@@ -264,9 +273,7 @@ const resolveAddressFromCoords = (lng, lat) => {
     const geocoder = new AMap.Geocoder({ radius: 1000, extensions: "all" })
     geocoder.getAddress([lng, lat], (status, result) => {
       if (status === 'complete' && result.info === 'OK') {
-        // 成功解析出中文地址，替换掉那句难看的提示语！
         profileForm.addressName = result.regeocode.formattedAddress
-        // 同时把弹窗里的临时变量也同步一下
         tempLoc.address = result.regeocode.formattedAddress
       } else {
         profileForm.addressName = '已绑定卫星坐标 (具体街道解析失败)'
@@ -298,8 +305,6 @@ const initMap = () => {
     })
 
     geocoderInstance = new AMap.Geocoder({ radius: 1000, extensions: "all" })
-
-    // 初始化高德的 AutoComplete (纯数据模式，不绑定 UI)
     autoCompleteInstance = new AMap.AutoComplete({})
 
     if (tempLoc.lng) {
@@ -331,6 +336,7 @@ const confirmLocation = () => {
   profileForm.addressName = tempLoc.address
   mapVisible.value = false
 }
+
 // =================================================
 
 const formatUserTag = (tag) => {
@@ -348,7 +354,11 @@ const fetchAllData = async () => {
     profileForm.currentLon = profileRes.data.currentLon || ''
     profileForm.currentLat = profileRes.data.currentLat || ''
 
-    // 只要有坐标，就去翻译它！
+    // 兼容加载长者数据
+    profileForm.doorNumber = profileRes.data.doorNumber || ''
+    profileForm.emergencyPhone = profileRes.data.emergencyPhone || ''
+    profileForm.healthRemark = profileRes.data.healthRemark || ''
+
     if (profileForm.currentLon && profileForm.currentLat) {
       profileForm.addressName = '正在解析卫星定位...'
       resolveAddressFromCoords(profileForm.currentLon, profileForm.currentLat)
@@ -366,6 +376,7 @@ const fetchAllData = async () => {
   }
 }
 
+// 🚨 恢复：完整无损的志愿者雷达图逻辑
 const initRadarChart = () => {
   if (!radarChartRef.value) return
   if (!myRadarChart) myRadarChart = echarts.init(radarChartRef.value)
@@ -425,16 +436,22 @@ const handleUpdateProfile = async () => {
   if (!profileForm.username.trim()) return ElMessage.warning('姓名不能为空')
   const payload = { username: profileForm.username }
 
-  // 🚨 核心修复 2：保存提交时，同时兼容商家和骑手
-  if (stats.value.role === 3 || stats.value.role === 2) {
+  if ([1, 2, 3].includes(stats.value.role)) {
     if (!profileForm.currentLon) return ElMessage.warning('请通过地图设置您的精准坐标')
     payload.currentLon = parseFloat(profileForm.currentLon)
     payload.currentLat = parseFloat(profileForm.currentLat)
   }
 
+  if (stats.value.role === 1) {
+    if (!profileForm.doorNumber) return ElMessage.warning('请填写您的详细门牌号，方便志愿者上门！')
+    payload.doorNumber = profileForm.doorNumber
+    payload.emergencyPhone = profileForm.emergencyPhone
+    payload.healthRemark = profileForm.healthRemark
+  }
+
   try {
     await updateUserProfile(payload)
-    ElMessage.success('基础资料与坐标信息更新成功！')
+    ElMessage.success('资料信息更新成功！')
     localStorage.setItem('username', profileForm.username)
     stats.value.username = profileForm.username
   } catch (e) { console.error(e) }
@@ -457,6 +474,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* 样式 100% 完整保留 */
 .main-content { flex: 1; display: flex; flex-direction: column; position: relative; padding: 40px; background: #f1f5f9; overflow-y: auto; height: 100vh; box-sizing: border-box; }
 .top-status { position: absolute; top: 20px; right: 30px; z-index: 100; background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); padding: 8px 16px; border-radius: 20px; font-size: 0.75rem; color: #64748b; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05); }
 .pulse-dot { width: 8px; height: 8px; background: #8b5cf6; border-radius: 50%; box-shadow: 0 0 8px #8b5cf6; animation: pulse-purple 2s infinite; }

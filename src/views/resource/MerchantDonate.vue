@@ -52,7 +52,7 @@
           </div>
           <div class="form-item flex-1">
             <label>过期/临期警戒线</label>
-            <input v-model="form.expirationDate" type="date" />
+            <input v-model="form.expirationDate" type="datetime-local" class="datetime-input" />
           </div>
         </div>
 
@@ -143,13 +143,19 @@ const fetchStations = async (lon = null, lat = null) => {
 const handleDonate = async () => {
   loading.value = true
   try {
-    // 🚨 核心组装：把单位拼接到名字里，避免改后端数据库！
     const finalGoodsName = `${form.goodsName} (单位:${form.unit})`
+
+    // 🚨 核心修复：处理 datetime-local 带的 "T" 字符，并补齐秒数发给后端
+    let formattedDate = form.expirationDate
+    if (formattedDate.includes('T')) {
+      formattedDate = formattedDate.replace('T', ' ')
+      if (formattedDate.length === 16) formattedDate += ':00' // 补齐秒
+    }
 
     const submitData = {
       ...form,
-      goodsName: finalGoodsName, // 发送拼接后的名字
-      expirationDate: form.expirationDate + ' 23:59:59'
+      goodsName: finalGoodsName,
+      expirationDate: formattedDate
     }
     await donateGoods(submitData)
 

@@ -94,6 +94,17 @@ const routes: Array<RouteRecordRaw> = [
         component: () => import('@/views/admin/StationManage.vue'),
         meta: { requiresAuth: true, roles: [4] } // 🚨 仅限管理员
     },
+    // 在你的 routes 数组中找到合适的位置（比如在 admin 的 children 里，或者一级路由下）
+    {
+        path: '/admin/exception-monitor',
+        name: 'ExceptionMonitor',
+        component: () => import('@/views/admin/ExceptionMonitor.vue'), // 指向你新建的文件
+        meta: {
+            title: '异常预警大屏',
+            requiresAuth: true,
+            roles: [4] // 仅限管理员/指挥中心访问
+        }
+    },
     {
         path: '/:pathMatch(.*)*',
         name: 'NotFound',
