@@ -24,3 +24,19 @@ export function getVolunteerRank() {
 export function getDispatchConfig() {
     return request({ url: '/dispatch/config', method: 'get' })
 }
+
+// 🚨 触发周边商铺定向紧急募捐广播 (LBS 范围圈选)
+export function triggerEmergencyBroadcast(orderId) {
+    return request({
+        url: `/dispatch/emergency/broadcast/${orderId}`,
+        method: 'post'
+    })
+}
+
+// 🚨 商家端短轮询：监听指挥中心发给我的紧急广播
+export function checkMyEmergencyBroadcast() {
+    return request({
+        url: `/dispatch/emergency/my-broadcast`,
+        method: 'get'
+    })
+}

@@ -53,3 +53,29 @@ export function getAllStations() {
 export function getRecommendStations(params) {
     return request({ url: '/resource/station/recommend', method: 'get', params })
 }
+
+// 管理员编辑/更新物理据点配置 (包含 LBS 坐标变更)
+export function updateStation(data) {
+    return request({
+        url: '/resource/station/update',
+        method: 'put',
+        data
+    })
+}
+
+// 获取指定驿站的物资库存明细
+export function getStationGoods(stationId) {
+    return request({
+        url: `/resource/goods/station/${stationId}`,
+        method: 'get'
+    })
+}
+
+// 线下手工出入库/损耗校准
+export function adjustGoodsStock(data) {
+    return request({
+        url: '/resource/goods/adjust',
+        method: 'post',
+        data // 包含 goodsId, adjustType, diffCount, reason
+    })
+}

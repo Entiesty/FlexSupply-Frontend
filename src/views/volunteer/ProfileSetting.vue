@@ -103,15 +103,51 @@
           </div>
         </div>
 
-        <div class="setting-card alert-card">
+        <div class="setting-card auth-card">
+          <div class="card-header">
+            <h3>📜 平台入驻资质认证</h3>
+          </div>
+          <div class="card-body">
+            <div class="auth-status-box" :class="stats.isVerified === 1 ? 'status-pass' : 'status-pending'">
+              <div class="auth-icon">{{ stats.isVerified === 1 ? '✅' : '⏳' }}</div>
+              <div class="auth-text">
+                <h4>{{ stats.isVerified === 1 ? '资质已核验通过' : '平台审核中 / 未提交' }}</h4>
+                <p>{{ stats.isVerified === 1 ? '您已获得城市护航网络的完整调度权限' : '请上传相关凭证，指挥中心将尽快为您办理' }}</p>
+              </div>
+            </div>
+
+            <div class="info-row">
+              <label>
+                {{ stats.role === 1 ? '上传凭证 (身份证/低保证/残疾证/老年证)' :
+                  stats.role === 2 ? '上传凭证 (企业营业执照/食品经营许可证)' :
+                      '上传凭证 (身份证/学生证/驾驶证)' }}
+              </label>
+
+              <div class="proof-upload-area" @click="triggerProofUpload">
+                <img v-if="profileForm.identityProofUrl" :src="profileForm.identityProofUrl" class="proof-img" />
+                <div v-else class="upload-placeholder">
+                  <span class="upload-icon">📄</span>
+                  <span>点击拍摄或上传您的资质文件</span>
+                </div>
+                <input type="file" ref="proofInput" hidden @change="handleProofChange" accept="image/*" />
+              </div>
+            </div>
+
+            <button type="button" class="save-btn auth-btn" @click="handleUpdateProfile" :disabled="stats.isVerified === 1">
+              {{ stats.isVerified === 1 ? '已通过，无需修改' : '🚀 提交更新审核' }}
+            </button>
+          </div>
+        </div>
+
+        <div class="setting-card alert-card" style="grid-column: 1 / -1;">
           <div class="card-header">
             <h3>🔒 安全密钥设置</h3>
           </div>
-          <div class="card-body">
-            <div class="info-row"><label>当前使用的旧密码</label><input type="password" v-model="pwdForm.oldPassword" placeholder="请输入原密码" class="input-normal" /></div>
-            <div class="info-row"><label>启用新密码</label><input type="password" v-model="pwdForm.newPassword" placeholder="请输入新密码 (至少6位)" class="input-normal" /></div>
-            <div class="info-row"><label>二次确认新密码</label><input type="password" v-model="pwdForm.confirmPassword" placeholder="请再次输入新密码" class="input-normal" /></div>
-            <button type="button" class="save-btn warning-btn" @click="handleUpdatePassword">🛡️ 确认修改密码</button>
+          <div class="card-body" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; align-items: end;">
+            <div class="info-row" style="margin-bottom:0;"><label>当前使用的旧密码</label><input type="password" v-model="pwdForm.oldPassword" placeholder="请输入原密码" class="input-normal" /></div>
+            <div class="info-row" style="margin-bottom:0;"><label>启用新密码</label><input type="password" v-model="pwdForm.newPassword" placeholder="请输入新密码 (至少6位)" class="input-normal" /></div>
+            <div class="info-row" style="margin-bottom:0;"><label>二次确认新密码</label><input type="password" v-model="pwdForm.confirmPassword" placeholder="请再次输入新密码" class="input-normal" /></div>
+            <button type="button" class="save-btn warning-btn" @click="handleUpdatePassword" style="grid-column: 1 / -1;">🛡️ 确认修改密码</button>
           </div>
         </div>
       </div>
@@ -166,7 +202,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import * as echarts from 'echarts' // 🚨 恢复 Echarts 引擎
+import * as echarts from 'echarts'
 import AMapLoader from '@amap/amap-jsapi-loader'
 import { getUserProfile, updateUserProfile, updatePassword, getDashboardStats, updateAvatar } from '@/api/user'
 import { uploadFile } from '@/api/common'
@@ -185,9 +221,16 @@ const roleThemeClass = computed(() => {
   return map[stats.value.role] || 'theme-volunteer'
 })
 
-// 包含了老人的门牌号和备注
-const profileForm = reactive({ username: '', currentLon: '', currentLat: '', addressName: '', doorNumber: '', emergencyPhone: '', healthRemark: '' })
+// 🚨 核心改造：增加了 identityProofUrl 字段
+const profileForm = reactive({
+  username: '', currentLon: '', currentLat: '', addressName: '',
+  doorNumber: '', emergencyPhone: '', healthRemark: '',
+  identityProofUrl: ''
+})
 const pwdForm = reactive({ oldPassword: '', newPassword: '', confirmPassword: '' })
+
+// 🚨 凭证上传引用
+const proofInput = ref(null)
 
 // ================= 高德地图核心逻辑 =================
 const mapVisible = ref(false)
@@ -292,42 +335,61 @@ const initMap = () => {
   AMapLoader.load({
     key: import.meta.env.VITE_AMAP_KEY,
     version: "2.0",
-    plugins: ['AMap.Geocoder', 'AMap.AutoComplete']
+    plugins: ['AMap.Geocoder', 'AMap.AutoComplete', 'AMap.Geolocation']
   }).then((AMap) => {
-    const centerPoint = (tempLoc.lng && tempLoc.lat)
-        ? [tempLoc.lng, tempLoc.lat]
-        : [118.833400, 24.980600]
+    const hasSavedLocation = tempLoc.lng && tempLoc.lat;
+    const centerPoint = hasSavedLocation ? [tempLoc.lng, tempLoc.lat] : [118.833400, 24.980600];
 
     mapInstance = new AMap.Map("amap-container", {
       viewMode: "2D",
       zoom: 15,
       center: centerPoint
-    })
+    });
 
-    geocoderInstance = new AMap.Geocoder({ radius: 1000, extensions: "all" })
-    autoCompleteInstance = new AMap.AutoComplete({})
+    geocoderInstance = new AMap.Geocoder({ radius: 1000, extensions: "all" });
+    autoCompleteInstance = new AMap.AutoComplete({});
 
-    if (tempLoc.lng) {
-      markerInstance = new AMap.Marker({ position: centerPoint })
-      mapInstance.add(markerInstance)
+    if (hasSavedLocation) {
+      markerInstance = new AMap.Marker({ position: centerPoint });
+      mapInstance.add(markerInstance);
+    } else {
+      const geolocation = new AMap.Geolocation({
+        enableHighAccuracy: true, timeout: 5000, buttonPosition: 'RB', buttonOffset: new AMap.Pixel(10, 20), zoomToAccuracy: true
+      });
+
+      mapInstance.addControl(geolocation);
+      geolocation.getCurrentPosition((status, result) => {
+        if(status === 'complete'){
+          ElMessage.success('📍 已为您自动吸附至当前真实物理位置！');
+          geocoderInstance.getAddress([result.position.lng, result.position.lat], (geoStatus, geoRes) => {
+            let addr = '已获取卫星坐标';
+            if (geoStatus === 'complete' && geoRes.info === 'OK') {
+              addr = geoRes.regeocode.formattedAddress;
+            }
+            updateMapByLocation(result.position.lng, result.position.lat, addr);
+          });
+        } else {
+          ElMessage.warning('未能获取真实 GPS，请手动在地图上点击选择位置');
+        }
+      });
     }
 
     mapInstance.on('click', (e) => {
-      const lng = e.lnglat.getLng()
-      const lat = e.lnglat.getLat()
+      const lng = e.lnglat.getLng();
+      const lat = e.lnglat.getLat();
 
       geocoderInstance.getAddress([lng, lat], (status, result) => {
-        let addr = '该区域暂无详细街道信息'
+        let addr = '该区域暂无详细街道信息';
         if (status === 'complete' && result.info === 'OK') {
-          addr = result.regeocode.formattedAddress
+          addr = result.regeocode.formattedAddress;
         }
-        updateMapByLocation(lng, lat, addr)
-      })
-    })
+        updateMapByLocation(lng, lat, addr);
+      });
+    });
   }).catch(e => {
-    console.error('高德地图加载失败', e)
-    ElMessage.error('地图引擎初始化失败，请检查高德Key配置')
-  })
+    console.error('高德地图加载失败', e);
+    ElMessage.error('地图引擎初始化失败，请检查高德Key配置');
+  });
 }
 
 const confirmLocation = () => {
@@ -354,10 +416,12 @@ const fetchAllData = async () => {
     profileForm.currentLon = profileRes.data.currentLon || ''
     profileForm.currentLat = profileRes.data.currentLat || ''
 
-    // 兼容加载长者数据
     profileForm.doorNumber = profileRes.data.doorNumber || ''
     profileForm.emergencyPhone = profileRes.data.emergencyPhone || ''
     profileForm.healthRemark = profileRes.data.healthRemark || ''
+
+    // 🚨 回显凭证图片
+    profileForm.identityProofUrl = profileRes.data.identityProofUrl || ''
 
     if (profileForm.currentLon && profileForm.currentLat) {
       profileForm.addressName = '正在解析卫星定位...'
@@ -376,7 +440,6 @@ const fetchAllData = async () => {
   }
 }
 
-// 🚨 恢复：完整无损的志愿者雷达图逻辑
 const initRadarChart = () => {
   if (!radarChartRef.value) return
   if (!myRadarChart) myRadarChart = echarts.init(radarChartRef.value)
@@ -432,9 +495,38 @@ const handleAvatarChange = async (e) => {
   }
 }
 
+// 🚨 核心改造：资质凭证上传逻辑
+const triggerProofUpload = () => {
+  if (stats.value.isVerified === 1) {
+    return ElMessage.info('您的资质已审核通过，如需变更请联系指挥中心人工处理。')
+  }
+  if (proofInput.value) proofInput.value.click()
+}
+
+const handleProofChange = async (e) => {
+  const file = e.target.files[0]
+  if (!file) return
+  loading.value = true
+  try {
+    const uploadRes = await uploadFile(file)
+    profileForm.identityProofUrl = uploadRes.data // 填入 URL
+    ElMessage.success('凭证照片上传成功！请点击下方按钮保存更新。')
+  } catch (error) {
+    ElMessage.error('凭证上传失败')
+  } finally {
+    loading.value = false
+    e.target.value = ''
+  }
+}
+
 const handleUpdateProfile = async () => {
   if (!profileForm.username.trim()) return ElMessage.warning('姓名不能为空')
-  const payload = { username: profileForm.username }
+
+  // 🚨 核心改造：组装 Payload 时带上凭证
+  const payload = {
+    username: profileForm.username,
+    identityProofUrl: profileForm.identityProofUrl
+  }
 
   if ([1, 2, 3].includes(stats.value.role)) {
     if (!profileForm.currentLon) return ElMessage.warning('请通过地图设置您的精准坐标')
@@ -451,9 +543,11 @@ const handleUpdateProfile = async () => {
 
   try {
     await updateUserProfile(payload)
-    ElMessage.success('资料信息更新成功！')
+    ElMessage.success('资料信息更新成功！如果您修改了凭证，指挥中心将尽快核验。')
     localStorage.setItem('username', profileForm.username)
     stats.value.username = profileForm.username
+    // 重新拉取状态看是否重新触发了待审核
+    fetchAllData()
   } catch (e) { console.error(e) }
 }
 
@@ -559,7 +653,6 @@ onMounted(() => {
 .selected-address-bar { background: #f1f5f9; padding: 12px 15px; border-radius: 8px; margin-bottom: 15px; color: #1e293b; font-size: 0.95rem; border-left: 4px solid #3b82f6;}
 .amap-box { width: 100%; height: 380px; border-radius: 12px; overflow: hidden; border: 2px solid #e2e8f0; }
 
-/* 自定义下拉联想列表的质感 UI */
 .custom-poi-item { line-height: 1.4; padding: 5px 0; }
 .poi-name { font-weight: bold; color: #1e293b; font-size: 0.95rem; text-overflow: ellipsis; overflow: hidden; }
 .poi-address { font-size: 0.75rem; color: #94a3b8; text-overflow: ellipsis; overflow: hidden; margin-top: 2px; }
@@ -567,4 +660,25 @@ onMounted(() => {
 :deep(.map-dialog) { border-radius: 20px; overflow: hidden; }
 :deep(.map-dialog .el-dialog__header) { background: #f8fafc; font-weight: 900; border-bottom: 1px solid #f1f5f9; padding: 20px 25px; margin: 0;}
 :deep(.map-dialog .el-dialog__body) { padding: 25px; }
+
+/* ================= 🚨 新增：资质认证舱专享 UI ================= */
+.auth-card { border: 2px dashed #cbd5e1; background: #f8fafc; }
+.auth-status-box { display: flex; align-items: center; gap: 15px; padding: 18px; border-radius: 16px; margin-bottom: 25px; }
+.status-pending { background: #fff7ed; border: 1px solid #fdba74; }
+.status-pending .auth-icon { background: #ffedd5; text-shadow: 0 2px 4px rgba(249, 115, 22, 0.3); }
+.status-pending h4 { color: #ea580c; }
+.status-pass { background: #ecfdf5; border: 1px solid #6ee7b7; }
+.status-pass .auth-icon { background: #d1fae5; text-shadow: 0 2px 4px rgba(16, 185, 129, 0.3); }
+.status-pass h4 { color: #059669; }
+
+.auth-icon { font-size: 2rem; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.auth-text h4 { margin: 0 0 5px 0; font-size: 1.1rem; font-weight: 900; }
+.auth-text p { margin: 0; font-size: 0.85rem; color: #64748b; font-weight: bold; line-height: 1.4; }
+
+.proof-upload-area { border: 2px dashed #cbd5e1; border-radius: 16px; height: 160px; display: flex; align-items: center; justify-content: center; background: #fff; cursor: pointer; overflow: hidden; transition: 0.3s; position: relative; }
+.proof-upload-area:hover { border-color: #3b82f6; background: #eff6ff; }
+.proof-img { width: 100%; height: 100%; object-fit: contain; background: #f1f5f9; }
+.upload-placeholder { display: flex; flex-direction: column; align-items: center; color: #94a3b8; font-weight: bold; }
+.upload-icon { font-size: 2.5rem; margin-bottom: 10px; opacity: 0.8; }
+.auth-btn:disabled { background: #cbd5e1; cursor: not-allowed; box-shadow: none; color: #fff; }
 </style>

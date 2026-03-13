@@ -28,3 +28,11 @@ export function updateAvatar(avatarUrl) {
         params: { avatarUrl }
     })
 }
+
+// 获取可作为据点负责人的用户列表 (role = 3 志愿者, 或 role = 4 管理员)
+export function getEligibleManagers() {
+    return request({
+        url: '/system/user/managers',
+        method: 'get'
+    })
+}

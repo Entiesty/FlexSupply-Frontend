@@ -34,10 +34,13 @@ export function getMyTasks(params) {
     return request({ url: '/trade/task/my-list', method: 'get', params })
 }
 
-// 确认送达并核销任务
-export function checkOutTask(taskId) {
-    // 🚨 路径由 /checkout 修改为后端的 /complete
-    return request({ url: '/trade/task/complete', method: 'post', params: { taskId } })
+// 确认送达并核销任务 (支持多参数扁平化)
+export function checkOutTask(data) {
+    return request({
+        url: '/trade/task/complete',
+        method: 'post',
+        params: { taskId: data.taskId, proofImage: data.proofImage }
+    })
 }
 
 // 🚨 运力熔断：一键转自提
@@ -78,5 +81,14 @@ export function getExceptionMonitorList() {
     return request({
         url: '/trade/order/exception-monitor',
         method: 'get'
+    })
+}
+
+// 受赠方确认收货并评价
+export function confirmReceiptOrder(data) {
+    return request({
+        url: '/trade/order/confirm-receipt',
+        method: 'post',
+        params: data // 包含 orderId, rating, comment
     })
 }

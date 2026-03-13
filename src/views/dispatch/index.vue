@@ -87,7 +87,6 @@ const sysMode = ref('NORMAL')
 const map = shallowRef(null)
 let AMap = null
 
-// 🚨 新增：资质审核状态标志位
 const isVerified = ref(0)
 
 // ================= 调度核心状态 =================
@@ -119,38 +118,79 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
   return R * c
 }
 
-// 🚨 生命周期改造：必须先拿权限，再决定是否渲染大屏
+// 🚨 核心重构：大屏级混合定位策略与初始化流程分离
 onMounted(async () => {
+  let dbLon = null, dbLat = null;
+
   try {
     const userRes = await getUserProfile()
     if (userRes?.data) {
-      // 获取后端的审核状态
       isVerified.value = userRes.data.isVerified !== undefined ? userRes.data.isVerified : 1
-      if (userRes.data.currentLon && userRes.data.currentLat) {
-        userLocation.value = [userRes.data.currentLon, userRes.data.currentLat]
-      }
+      dbLon = userRes.data.currentLon;
+      dbLat = userRes.data.currentLat;
     }
   } catch (e) {
     console.warn('获取资料失败，可能未登录')
   }
 
-  // 🚨 核心拦截逻辑：只有管理员，或者已审核通过的用户，才允许初始化地图和雷达！
+  // 权限拦截：审核通过或是管理员，才允许看大屏
   if (currentUserRole.value === 4 || isVerified.value === 1) {
-    initMap()
 
-    try {
-      const configRes = await getDispatchConfig()
-      if (configRes?.data) dynamicThreshold.value = configRes.data
-    } catch (e) {}
+    // 🌍 核心交互：如果是志愿者 (Role 3)，一进大屏立刻弹窗请求真实 GPS
+    if (currentUserRole.value === 3 && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            // 🚨 加上这三行打印代码，直接扒开浏览器的底裤！
+            console.log("📍 【底层探针】浏览器抓取到的完整 GPS 数据对象:", pos);
+            console.log(`🌍 经度: ${pos.coords.longitude}, 纬度: ${pos.coords.latitude}`);
+            console.log(`🎯 定位精度: ${pos.coords.accuracy} 米`);
 
-    await fetchMapOrders()
-    pollingTimer = setInterval(() => {
-      if (!pendingOrder.value && !isMissionActive.value) {
-        fetchMapOrders()
-      }
-    }, 5000)
+            let realLon = pos.coords.longitude
+            let realLat = pos.coords.latitude
+
+            // 答辩沙盘防漂移保护 (只在厦门集美区有效)
+            if (Math.abs(realLon - 118.1) > 1 || Math.abs(realLat - 24.6) > 1) {
+              console.warn('大屏检测到异地登录，开启沙盘保护，降级使用档案坐标');
+              userLocation.value = [dbLon || 118.065200, dbLat || 24.615500];
+              ElMessage.warning('GPS异地，大屏已锁定至测试沙盘区域');
+            } else {
+              userLocation.value = [realLon, realLat];
+              ElMessage.success('📍 大屏已接入实时 GPS 信号');
+            }
+            proceedInit(); // 拿到坐标后再初始化大盘
+          },
+          (err) => {
+            console.warn('大屏 GPS 被拒或超时，使用静态坐标');
+            userLocation.value = [dbLon || 118.065200, dbLat || 24.615500];
+            proceedInit();
+          },
+          { timeout: 5000, enableHighAccuracy: true }
+      )
+    }
+    // 🏢 如果是指挥中心 (Role 4) 或不支持 GPS，直接用静态中心点
+    else {
+      userLocation.value = [dbLon || 118.092000, dbLat || 24.623500];
+      proceedInit();
+    }
   }
 })
+
+// 💡 抽离出的初始化执行管线 (等待坐标就绪后执行)
+const proceedInit = () => {
+  initMap()
+
+  getDispatchConfig().then(res => {
+    if (res?.data) dynamicThreshold.value = res.data
+  }).catch(e => {})
+
+  fetchMapOrders()
+
+  pollingTimer = setInterval(() => {
+    if (!pendingOrder.value && !isMissionActive.value) {
+      fetchMapOrders()
+    }
+  }, 5000)
+}
 
 onUnmounted(() => {
   if (map.value) map.value.destroy()
@@ -171,16 +211,14 @@ const fetchMapOrders = async () => {
       const mainOrder = res.data[0]
       pendingOrder.value = mainOrder
 
-      // 安全提取主单坐标 (防 null)
       const mainSrcLat = mainOrder.sourceLat || userLocation.value[1]
       const mainSrcLon = mainOrder.sourceLon || userLocation.value[0]
       const mainTgtLat = mainOrder.targetLat || userLocation.value[1]
       const mainTgtLon = mainOrder.targetLon || userLocation.value[0]
 
       const isDonation = mainOrder.orderSn?.startsWith('DON')
-
       const pbArr = []
-      // 🚀 核心升级：遍历其余订单，执行“同源同向”智能打包
+
       for (let i = 1; i < res.data.length; i++) {
         const subOrder = res.data[i]
         if (subOrder.status !== 0) continue
@@ -191,19 +229,15 @@ const fetchMapOrders = async () => {
         const subTgtLat = subOrder.targetLat || userLocation.value[1]
         const subTgtLon = subOrder.targetLon || userLocation.value[0]
 
-        // 策略 A：捐赠单 (DON) 的打包逻辑
-        // 条件：起点（商家）距离小于 1km，且终点（驿站）是同一个
         if (isDonation && isSubDonation) {
           const srcDist = calculateDistance(mainSrcLat, mainSrcLon, subSrcLat, subSrcLon)
           const tgtDist = calculateDistance(mainTgtLat, mainTgtLon, subTgtLat, subTgtLon)
 
           if (srcDist < 1.0 && tgtDist < 0.5) {
-            subOrder.relativeDistance = '同网点集货' // UI文案优化
+            subOrder.relativeDistance = '同网点集货'
             pbArr.push(subOrder)
           }
         }
-            // 策略 B：求助单 (SOS) 的打包逻辑
-        // 条件：起点（驿站）是同一个，且终点（受赠市民）距离小于 2.5km
         else if (!isDonation && !isSubDonation) {
           const srcDist = calculateDistance(mainSrcLat, mainSrcLon, subSrcLat, subSrcLon)
           const tgtDist = calculateDistance(mainTgtLat, mainTgtLon, subTgtLat, subTgtLon)
@@ -216,11 +250,8 @@ const fetchMapOrders = async () => {
       }
 
       piggybackOrders.value = pbArr
-
-      // 绘制地图 Markers
       drawMarker(isDonation, [mainTgtLon, mainTgtLat], pbArr)
 
-      // 自动触发派单面板 (如果符合条件)
       if (currentUserRole.value === 3
           && pendingOrder.value.deliveryMethod === 1
           && !result.value
@@ -288,13 +319,12 @@ const handleDispatchAction = async () => {
 const handleDonationDispatch = (targetPos) => {
   loading.value = true
   setTimeout(() => {
-    // 🚨 彻底移除 + 0.008 的假偏移！获取真实的商家起点坐标
     const srcLng = pendingOrder.value.sourceLon || userLocation.value[0]
     const srcLat = pendingOrder.value.sourceLat || userLocation.value[1]
 
     result.value = {
       station: {
-        longitude: targetPos[0], // 终点就是准确无误的驿站坐标
+        longitude: targetPos[0],
         latitude: targetPos[1],
         stationName: pendingOrder.value.targetName || '社区接收驿站'
       },
@@ -303,8 +333,6 @@ const handleDonationDispatch = (targetPos) => {
       urgencyLevel: 1
     }
 
-    // 🚨 drawRoute(订单数据, 起点坐标, 是否捐赠单)
-    // 这里的传参必须把商家的 srcLng/Lat 当作起点传进去！
     drawRoute(result.value, [srcLng, srcLat], true)
     loading.value = false
     ElMessage.success('✅ 识别到定向捐赠，已免测算直接生成回收路线！')
@@ -344,35 +372,82 @@ const handleSmartDispatch = async (targetPos) => {
   }
 }
 
-const drawRoute = (data, targetPos, isDonation) => {
+// 🚀 核心升级：大屏支持区分角色，志愿者展示三点接驾线，并自带防跨海降级
+// 🚀 架构师重构版：导航级平滑路径渲染引擎 (带流向箭头、智能降级与 Z-Index 视觉层级控制)
+const drawRoute = async (data, targetPos, isDonation) => {
   if (!AMap || !map.value) return
-  const stationLoc = [data?.station?.longitude || userLocation.value[0], data?.station?.latitude || userLocation.value[1]]
 
+  const stationLoc = [data?.station?.longitude || userLocation.value[0], data?.station?.latitude || userLocation.value[1]]
   map.value.clearMap()
 
-  if (isDonation) {
-    new AMap.Marker({ map: map.value, position: targetPos, content: '<div class="don-pulse-marker"></div>', offset: new AMap.Pixel(-8, -8) })
-    new AMap.Marker({ map: map.value, position: stationLoc, content: '<div class="station-mini-marker">🏥</div>', offset: new AMap.Pixel(-14, -14) })
-  } else {
-    new AMap.Marker({ map: map.value, position: stationLoc, content: '<div class="station-mini-marker">🏥</div>', offset: new AMap.Pixel(-14, -14) })
-    new AMap.Marker({ map: map.value, position: targetPos, content: '<div class="sos-pulse-marker"></div>', offset: new AMap.Pixel(-8, -8) })
+  // 1. 定义三个关键物理坐标点
+  const ptA = new AMap.LngLat(userLocation.value[0], userLocation.value[1]) // A: 志愿者位置
+  const pickupPos = isDonation ? targetPos : stationLoc
+  const ptB = new AMap.LngLat(pickupPos[0], pickupPos[1]) // B: 取货点
+  const dropoffPos = isDonation ? stationLoc : targetPos
+  const ptC = new AMap.LngLat(dropoffPos[0], dropoffPos[1]) // C: 送达点
 
-    piggybackOrders.value.forEach(po => {
-      const lon = po.targetLon || userLocation.value[0]
-      const lat = po.targetLat || userLocation.value[1]
-      new AMap.Marker({
-        map: map.value, position: [lon, lat], content: `<div class="pb-mini-marker"></div>`, offset: new AMap.Pixel(-5, -5)
+  // 2. 绘制高质感的点位 Marker
+  new AMap.Marker({ map: map.value, position: ptA, content: '<div class="pb-mini-marker" style="background:#3b82f6; width:18px; height:18px; border:3px solid #fff; box-shadow:0 0 15px rgba(59,130,246,0.6)"></div>', offset: new AMap.Pixel(-9, -9), title: '骑士当前位置', zIndex: 110 })
+  new AMap.Marker({ map: map.value, position: ptB, content: '<div class="don-pulse-marker" style="background:#f97316;"></div>', offset: new AMap.Pixel(-8, -8), title: '取货点', zIndex: 100 })
+  new AMap.Marker({ map: map.value, position: ptC, content: '<div class="station-mini-marker">🏥</div>', offset: new AMap.Pixel(-14, -14), title: '送达点', zIndex: 100 })
+
+  // 3. 初始化极其纯净的骑行引擎 (不绑定 map，完全手动接管渲染)
+  const riding = new AMap.Riding({ policy: 0 })
+
+  // 💡 核心：带 Z-Index 层级控制的 Promise 路线解析器
+  const searchAndDraw = (startLoc, endLoc, routeColor, layerZIndex) => {
+    return new Promise((resolve) => {
+      riding.search(startLoc, endLoc, (status, result) => {
+        if (status === 'complete' && result.routes && result.routes.length > 0) {
+          let path = []
+          result.routes[0].rides.forEach(ride => {
+            path = path.concat(ride.path)
+          })
+
+          new AMap.Polyline({
+            map: map.value,
+            path: path,
+            strokeColor: routeColor,
+            strokeWeight: 7,
+            strokeOpacity: 0.9,
+            lineJoin: 'round',
+            lineCap: 'round',
+            showDir: true,
+            dirColor: '#ffffff',
+            isOutline: true,
+            outlineColor: '#ffffff',
+            borderWeight: 2,
+            zIndex: layerZIndex // 🚨 动态接收传入的 Z轴层级
+          })
+          resolve(true)
+        } else {
+          console.warn('该路段暂无合规骑行路径，已降级为直线测算映射')
+          new AMap.Polyline({
+            map: map.value,
+            path: [startLoc, endLoc],
+            strokeColor: routeColor,
+            strokeWeight: 5,
+            strokeStyle: 'dashed',
+            strokeDasharray: [15, 10],
+            lineJoin: 'round',
+            zIndex: layerZIndex // 🚨 虚线也保持层级
+          })
+          resolve(false)
+        }
       })
     })
   }
 
-  const startPoint = isDonation ? targetPos : stationLoc
-  const endPoint = isDonation ? stationLoc : targetPos
+  // 4. 严格建立视觉层级 (Visual Hierarchy)
+  // 👉 先画第二段：履约段 (B -> C)，分配较低的 zIndex: 50
+  await searchAndDraw(ptB, ptC, '#10b981', 50)
 
-  const riding = new AMap.Riding({ map: map.value, hideMarkers: true, autoFitView: true })
-  riding.search(startPoint, endPoint, (status) => {
-    if(status !== 'complete') console.warn('路线规划受限')
-  })
+  // 👉 再画第一段：接驾段 (A -> B)，分配最高的 zIndex: 60，强行压在绿线上方！
+  await searchAndDraw(ptA, ptB, '#3b82f6', 60)
+
+  // 5. 动画级视野自适应：四周留出 80px 的优美 Padding
+  map.value.setFitView(null, false, [80, 80, 80, 80])
 }
 
 const startFallbackTimer = () => {
@@ -437,7 +512,6 @@ const handleBatchGrab = async (batchIds) => {
         duration: 4000,
         offset: 80
       })
-      // 🚨 核心修改点：带上 tab=progress 参数跳转
       router.push({ path: '/my-tasks', query: { tab: 'progress' } })
     }
   } finally {

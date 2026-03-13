@@ -1,7 +1,7 @@
 <template>
   <main class="main-content">
     <div class="top-status">
-      <span class="pulse-dot" :class="{'locating': locationText.includes('正在获取')}"></span>
+      <span class="pulse-dot" :class="{'error': !userInfo.currentLon || userInfo.isVerified === 0}"></span>
       📍 {{ locationText }}
     </div>
 
@@ -20,7 +20,10 @@
             <span v-else class="avatar">👴</span>
           </div>
           <div class="greeting">
-            <h3>{{ userInfo.username || '加载中...' }}，您好！</h3>
+            <h3>
+              {{ userInfo.username || '加载中...' }}，您好！
+              <span v-if="userInfo.isVerified === 0" class="unverified-tag">身份待核验</span>
+            </h3>
             <p>请选择您今天需要的帮助类型</p>
           </div>
         </div>
@@ -83,8 +86,14 @@
           </div>
 
           <div class="action-btns">
-            <button class="refresh-btn" @click="fetchActiveOrder">刷新最新进度</button>
-            <button class="cancel-btn" @click="handleCancel" v-if="activeOrder.status === 0">撤销求助</button>
+            <button v-if="activeOrder.status === 2" class="confirm-btn pulse-glow" @click="openRatingDrawer">
+              📦 物资已送达，点击确认收货
+            </button>
+
+            <template v-else>
+              <button class="refresh-btn" @click="fetchActiveOrder">刷新最新进度</button>
+              <button class="cancel-btn" @click="handleCancel" v-if="activeOrder.status === 0">撤销求助</button>
+            </template>
           </div>
         </div>
       </div>
@@ -116,17 +125,46 @@
         </div>
       </div>
     </el-drawer>
+
+    <el-drawer v-model="ratingDrawerVisible" direction="btt" size="65%" :with-header="false" custom-class="sos-drawer">
+      <div class="drawer-content rating-content">
+        <h3 class="drawer-title">您对本次援助满意吗？</h3>
+        <p class="rating-sub">您的评价将直接影响志愿者的信誉星级</p>
+
+        <div class="stars-container">
+          <span v-for="star in 5" :key="star" class="huge-star" :class="{ 'is-active': ratingForm.rating >= star }" @click="ratingForm.rating = star">
+            ★
+          </span>
+        </div>
+        <div class="rating-text-desc" :class="'color-' + ratingForm.rating">
+          {{ ratingTextMap[ratingForm.rating] || '请点击星星打分' }}
+        </div>
+
+        <div class="quick-tags" v-if="ratingForm.rating > 0">
+          <span class="q-tag" v-for="tag in currentTags" :key="tag" :class="{'active': ratingForm.comment.includes(tag)}" @click="toggleTag(tag)">
+            {{ tag }}
+          </span>
+        </div>
+
+        <div class="confirm-zone">
+          <button class="long-press-btn ready" @click="submitRating" :disabled="ratingForm.rating === 0">
+            <span class="btn-text">提交评价并完成订单</span>
+          </button>
+        </div>
+      </div>
+    </el-drawer>
   </main>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElNotification, ElMessageBox } from 'element-plus'
-import { publishDemand, getMyActiveSos, cancelDemand } from '@/api/trade'
+import { publishDemand, getMyActiveSos, cancelDemand, confirmReceiptOrder } from '@/api/trade'
 import { getUserProfile } from '@/api/user'
 
 const route = useRoute()
+const router = useRouter() // 🚨 引入 router 以便跳转
 const loading = ref(false)
 const activeOrder = ref(null)
 const userInfo = ref({})
@@ -134,7 +172,7 @@ let timer = null
 
 const currentLon = ref(null)
 const currentLat = ref(null)
-const locationText = ref('正在初始化定位系统...')
+const locationText = ref('正在校验身份与地址...')
 
 const drawerVisible = ref(false)
 const currentSubCategories = ref([])
@@ -145,18 +183,27 @@ const selectedSub = ref('')
 const pressProgress = ref(0)
 let pressTimer = null
 
-// 提取真实的短描述（过滤掉后面拼接的门牌号）
+const ratingDrawerVisible = ref(false)
+const ratingForm = reactive({ rating: 0, comment: '' })
+const ratingTextMap = { 1: '😡 极度不满', 2: '😞 体验不佳', 3: '😐 普普通通', 4: '😊 比较满意', 5: '😍 非常感谢！' }
+
+const currentTags = computed(() => {
+  if (ratingForm.rating >= 4) return ['速度很快', '态度热情', '物资完好', '非常贴心']
+  if (ratingForm.rating === 3) return ['中规中矩', '基本满足需求']
+  if (ratingForm.rating > 0) return ['送太慢了', '态度不好', '物资有破损', '找不到人']
+  return []
+})
+
 const getShortDesc = (desc) => {
   if (!desc) return ''
   return desc.split(' | ')[0]
 }
 
-// 语音播报 API
 const playVoiceFeedback = (text) => {
   if ('speechSynthesis' in window) {
     const utterance = new SpeechSynthesisUtterance(text)
     utterance.lang = 'zh-CN'
-    utterance.rate = 0.9 // 语速调慢，适合老人
+    utterance.rate = 0.9
     utterance.pitch = 1.0
     window.speechSynthesis.speak(utterance)
   }
@@ -176,31 +223,23 @@ const fetchActiveOrder = async () => {
   } catch (e) {}
 }
 
-const initRealLocation = () => {
-  locationText.value = '正在获取物理定位...'
-  if (!navigator.geolocation) { useFallbackLocation('设备不支持定位'); return }
-  navigator.geolocation.getCurrentPosition(
-      (position) => { currentLon.value = position.coords.longitude; currentLat.value = position.coords.latitude; locationText.value = '已获取高精度定位' },
-      (error) => { useFallbackLocation('信号弱或未授权') },
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
-  )
-}
-
-const useFallbackLocation = (reason) => {
+// 🚨 核心改造 1：彻底废弃浏览器 GPS，改用强校验逻辑
+const initLocation = () => {
   if (userInfo.value.currentLon && userInfo.value.currentLat) {
-    currentLon.value = userInfo.value.currentLon; currentLat.value = userInfo.value.currentLat; locationText.value = `常住地址定位 (${reason})`
+    currentLon.value = userInfo.value.currentLon
+    currentLat.value = userInfo.value.currentLat
+    locationText.value = '已绑定并锁定家庭住址定位'
   } else {
-    currentLon.value = 118.092000; currentLat.value = 24.485000; locationText.value = `系统默认定位 (${reason})`
+    locationText.value = '⚠️ 未设置家庭住址，无法呼救'
   }
 }
 
 onMounted(async () => {
   await fetchUserInfo()
-  initRealLocation()
+  initLocation() // 🚨 等待拿到用户档案后，再初始化位置
   await fetchActiveOrder()
   timer = setInterval(fetchActiveOrder, 5000)
 
-  // 监听“再来一单”传过来的参数
   if (route.query.reorder && route.query.cat) {
     openDrawer(route.query.cat, [route.query.reorder], 5)
     selectedSub.value = route.query.reorder
@@ -209,8 +248,38 @@ onMounted(async () => {
 
 onUnmounted(() => { if (timer) clearInterval(timer) })
 
+// 🚨 核心改造 2：业务风控强力拦截
 const openDrawer = (mainCat, subs, urgency) => {
-  if (!currentLon.value || !currentLat.value) { ElMessage.warning('正在努力获取您的位置，请稍候一秒再试...'); return }
+
+  // 防线 1：资质审核拦截
+  if (userInfo.value.isVerified === 0) {
+    ElMessageBox.alert(
+        '您的受赠身份仍在社区审核中，为防止恶意占用医疗物资通道，暂无法发起求助。<br/><br/>如有极其紧急情况，请直接致电居委会！',
+        '⚠️ 平台权限受限',
+        { dangerouslyUseHTMLString: true, confirmButtonText: '我知道了', type: 'warning', customClass: 'elderly-msg-box' }
+    )
+    return
+  }
+
+  // 防线 2：真实物理坐标拦截
+  if (!userInfo.value.currentLon || !userInfo.value.currentLat) {
+    ElMessageBox.alert(
+        '系统检测到您<b>尚未填写家庭住址与门牌号</b>。<br/>为了让志愿者能精准将物资送到您家中，请先前往个人中心进行设置！',
+        '📍 缺少地址信息',
+        {
+          dangerouslyUseHTMLString: true,
+          confirmButtonText: '去设置地址',
+          type: 'error',
+          customClass: 'elderly-msg-box',
+          callback: () => {
+            router.push('/profile') // 🚨 直接带他去填地址
+          }
+        }
+    )
+    return
+  }
+
+  // 校验通过，允许发单
   currentMainCat.value = mainCat; currentSubCategories.value = subs; currentUrgency.value = urgency; selectedSub.value = ''; pressProgress.value = 0; drawerVisible.value = true
 }
 
@@ -223,26 +292,50 @@ const startPress = (e) => {
 }
 const cancelPress = () => { if (pressTimer) clearInterval(pressTimer); pressProgress.value = 0 }
 
+
+const generateImplicitTags = (subCat, remark) => {
+  let tags = []
+  if (subCat === '感冒发烧') tags.push('感冒发烧')
+  if (subCat === '降压/心脏药') tags.push('高血压', '心脏病')
+  if (subCat === '外伤处理') tags.push('外伤')
+  if (subCat === '营养补品') tags.push('肠胃', '营养品')
+  if (subCat === '热乎盒饭') tags.push('主食', '速食', '饱腹')
+  if (subCat === '米面粮油') tags.push('主食', '饱腹')
+  if (subCat === '方便食品') tags.push('速食', '饱腹')
+  if (subCat === '生鲜水果') tags.push('生鲜', '高维生素')
+  if (subCat === '防寒衣物' || subCat === '棉被毯子' || subCat === '暖贴/取暖') tags.push('保暖')
+  if (subCat === '生活用品') tags.push('日用')
+
+  if (remark) {
+    if (remark.includes('糖')) tags.push('无糖', '低糖', '糖尿病')
+    if (remark.includes('压') || remark.includes('心')) tags.push('高血压', '心脏病')
+    if (remark.includes('牙') || remark.includes('老') || remark.includes('嚼')) tags.push('易咀嚼')
+    if (remark.includes('冷') || remark.includes('冰')) tags.push('常温')
+  }
+  return [...new Set(tags)]
+}
+
 const handleFinalSubmit = async () => {
   drawerVisible.value = false
   loading.value = true
 
-  // 将老人的详细门牌号和健康备注，硬拼接到描述里发给骑手！
   const doorStr = userInfo.value.doorNumber ? ` | 门牌: ${userInfo.value.doorNumber}` : ' | 门牌: 未填'
   const remarkStr = userInfo.value.healthRemark ? ` | 备注: ${userInfo.value.healthRemark}` : ''
   const fullDescription = `${selectedSub.value}${doorStr}${remarkStr}`
 
+  const derivedTags = generateImplicitTags(selectedSub.value, userInfo.value.healthRemark)
+
   const demandData = {
     requiredCategory: currentMainCat.value,
-    urgencyLevel: currentUrgency.value, // 🚨 这里把 10, 7, 3 传给了后端！
+    urgencyLevel: currentUrgency.value,
     targetLon: currentLon.value,
     targetLat: currentLat.value,
-    description: fullDescription
+    description: fullDescription,
+    requiredTags: derivedTags
   }
 
   try {
     await publishDemand(demandData)
-    // 触发语音播报安抚长者
     playVoiceFeedback(`求救已发出，请安心等待，爱心志愿者马上就来。`)
 
     ElNotification({
@@ -266,15 +359,52 @@ const handleCancel = () => {
     try { loading.value = true; await cancelDemand(activeOrder.value.orderId); ElMessage.success('求助已成功撤销！'); activeOrder.value = null } catch (error) {} finally { loading.value = false }
   }).catch(() => {})
 }
+
+const openRatingDrawer = () => {
+  ratingForm.rating = 0
+  ratingForm.comment = ''
+  ratingDrawerVisible.value = true
+}
+
+const toggleTag = (tag) => {
+  if (ratingForm.comment.includes(tag)) {
+    ratingForm.comment = ratingForm.comment.replace(tag, '').trim()
+  } else {
+    ratingForm.comment = (ratingForm.comment + ' ' + tag).trim()
+  }
+}
+
+const submitRating = async () => {
+  if (ratingForm.rating === 0) return ElMessage.warning('请至少点亮一颗星星哦')
+  loading.value = true
+  try {
+    await confirmReceiptOrder({
+      orderId: activeOrder.value.orderId,
+      rating: ratingForm.rating,
+      comment: ratingForm.comment
+    })
+    ratingDrawerVisible.value = false
+    activeOrder.value = null
+    playVoiceFeedback('评价成功，感谢您的反馈，祝您生活愉快！')
+    ElNotification({ title: '爱心送达', message: '本次援助已圆满结束，感谢您的评价！', type: 'success' })
+  } catch (e) {
+    ElMessage.error('提交失败，请重试')
+  } finally {
+    loading.value = false
+  }
+}
 </script>
 
 <style scoped>
 .main-content { flex: 1; display: flex; flex-direction: column; position: relative; padding: 40px; background: #f1f5f9; min-height: 100vh; overflow-y: auto;}
 .top-status { position: absolute; top: 20px; right: 30px; z-index: 100; background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); padding: 8px 16px; border-radius: 20px; font-size: 0.85rem; color: #64748b; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05); font-weight: bold;}
+
+/* 🚨 状态指示灯颜色动态切换 */
 .pulse-dot { width: 10px; height: 10px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; animation: pulse-green 2s infinite; }
-.pulse-dot.locating { background: #f97316; box-shadow: 0 0 8px #f97316; animation: pulse-orange 1.5s infinite; }
+.pulse-dot.error { background: #ef4444; box-shadow: 0 0 8px #ef4444; animation: pulse-red 1.5s infinite; }
+
 @keyframes pulse-green { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); } 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
-@keyframes pulse-orange { 0% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(249, 115, 22, 0); } 100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0); } }
+@keyframes pulse-red { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
 
 .sos-wrapper { max-width: 900px; margin: 0 auto; width: 100%; padding-bottom: 50px;}
 .page-header h2 { color: #ef4444; font-size: 2.2rem; margin: 0 0 8px 0; font-weight: 900; letter-spacing: 1px; }
@@ -286,8 +416,11 @@ const handleCancel = () => {
 .avatar-wrap { background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); padding: 4px; border-radius: 50%; box-shadow: 0 4px 10px rgba(249, 115, 22, 0.3); display: flex; align-items: center; justify-content: center;}
 .avatar { display: block; font-size: 2.5rem; background: #fff; border-radius: 50%; width: 55px; height: 55px; line-height: 55px; text-align: center; }
 .avatar-img { width: 55px; height: 55px; border-radius: 50%; border: 2px solid #fff; object-fit: cover; }
-.greeting h3 { margin: 0 0 5px; font-size: 1.5rem; color: #1e293b; font-weight: 900; }
+.greeting h3 { margin: 0 0 5px; font-size: 1.5rem; color: #1e293b; font-weight: 900; display: flex; align-items: center; }
 .greeting p { margin: 0; font-size: 1.05rem; color: #64748b; font-weight: bold;}
+
+/* 🚨 新增：未审核标签样式 */
+.unverified-tag { font-size: 0.85rem; background: #fee2e2; color: #ef4444; padding: 4px 10px; border-radius: 12px; margin-left: 12px; font-weight: bold; border: 1px solid #fca5a5; box-shadow: 0 2px 5px rgba(239,68,68,0.1); }
 
 .divider { height: 1px; background: #f1f5f9; margin: 25px 0; }
 
@@ -324,7 +457,6 @@ const handleCancel = () => {
 .timeline-item h4 { margin: 0 0 8px; font-size: 1.4rem; color: #1e293b; font-weight: 900; }
 .timeline-item p { margin: 0; font-size: 1.1rem; color: #64748b; font-weight: bold; }
 
-/* 骑手电话框 */
 .rider-contact-box { margin-top: 15px; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 12px; padding: 15px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 10px rgba(16, 185, 129, 0.1);}
 .rc-info { display: flex; align-items: center; gap: 10px; }
 .rc-avatar { font-size: 1.8rem; background: #fff; border-radius: 50%; width: 40px; height: 40px; text-align: center; line-height: 40px;}
@@ -338,18 +470,36 @@ const handleCancel = () => {
 .cancel-btn { flex: 1; background: #f8fafc; border: 2px solid #e2e8f0; padding: 18px; border-radius: 16px; font-size: 1.1rem; color: #64748b; font-weight: bold; cursor: pointer; transition: 0.2s;}
 .cancel-btn:hover { background: #f1f5f9; color: #ef4444; border-color: #fca5a5; }
 
+.confirm-btn { width: 100%; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; padding: 20px; border-radius: 16px; font-size: 1.4rem; font-weight: 900; cursor: pointer; transition: 0.3s; }
+.pulse-glow { animation: btn-pulse 2s infinite; box-shadow: 0 0 20px rgba(16, 185, 129, 0.6); }
+@keyframes btn-pulse { 0% { transform: scale(1); } 50% { transform: scale(1.02); } 100% { transform: scale(1); } }
+
+.rating-content { align-items: center; }
+.rating-sub { color: #94a3b8; margin-bottom: 20px; font-size: 1.1rem; }
+.stars-container { display: flex; gap: 15px; margin-bottom: 15px; justify-content: center; }
+.huge-star { font-size: 4rem; color: #e2e8f0; cursor: pointer; transition: 0.2s; user-select: none; text-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+.huge-star.is-active { color: #fbbf24; text-shadow: 0 4px 15px rgba(251, 191, 36, 0.4); transform: scale(1.1); }
+.rating-text-desc { font-size: 1.5rem; font-weight: 900; margin-bottom: 25px; transition: 0.3s; }
+.color-1 { color: #ef4444; } .color-2 { color: #f97316; } .color-3 { color: #eab308; } .color-4 { color: #84cc16; } .color-5 { color: #10b981; }
+
+.quick-tags { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-bottom: 30px; }
+.q-tag { padding: 12px 20px; background: #f1f5f9; color: #475569; border-radius: 12px; font-size: 1.1rem; font-weight: bold; cursor: pointer; border: 2px solid transparent; transition: 0.2s; }
+.q-tag.active { background: #eff6ff; color: #3b82f6; border-color: #93c5fd; }
+
 .drawer-content { padding: 30px; height: 100%; display: flex; flex-direction: column; max-width: 800px; margin: 0 auto;}
 .drawer-title { font-size: 1.8rem; font-weight: 900; margin: 0 0 25px 0; color: #1e293b; text-align: center; }
 .sub-category-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: auto; }
 .sub-item { padding: 25px 15px; border-radius: 16px; border: 2px solid #f1f5f9; background: #f8fafc; font-size: 1.3rem; font-weight: bold; color: #475569; transition: 0.2s; cursor: pointer;}
 .sub-item.active { border-color: #f97316; background: #fff7ed; color: #ea580c; box-shadow: 0 6px 15px rgba(249,115,22,0.15); transform: scale(1.02);}
 
-.confirm-zone { margin-top: 30px; text-align: center; padding-bottom: 20px;}
+.confirm-zone { margin-top: 30px; text-align: center; padding-bottom: 20px; width: 100%;}
 .selected-status { font-size: 1.2rem; color: #94a3b8; margin-bottom: 20px; font-weight: bold; min-height: 28px;}
 .selected-status.is-selected { color: #ea580c; font-size: 1.4rem;}
 
 .long-press-btn { width: 100%; height: 85px; border-radius: 20px; border: none; background: #cbd5e1; position: relative; overflow: hidden; font-size: 1.6rem; font-weight: 900; color: #fff; cursor: pointer; user-select: none; -webkit-user-select: none; touch-action: manipulation; box-shadow: 0 10px 25px rgba(0,0,0,0.1);}
 .long-press-btn:not(.disabled) { background: #94a3b8; }
+.long-press-btn.ready { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+.long-press-btn.ready:disabled { background: #cbd5e1; cursor: not-allowed; }
 .press-progress { position: absolute; left: 0; top: 0; height: 100%; background: linear-gradient(90deg, #f97316, #ea580c); transition: width 0.1s linear; z-index: 1; }
 .btn-text { position: relative; z-index: 2; letter-spacing: 2px;}
 .press-tip { font-size: 1rem; color: #94a3b8; margin-top: 15px; font-weight: bold;}
@@ -357,4 +507,8 @@ const handleCancel = () => {
 <style>
 .sos-drawer .el-drawer__body { padding: 0; background: #fff; }
 .sos-drawer { border-radius: 30px 30px 0 0 !important; box-shadow: 0 -10px 40px rgba(0,0,0,0.1) !important;}
+/* 🚨 覆盖 Element Plus 弹出框文字样式 */
+.elderly-msg-box { border-radius: 20px !important; }
+.elderly-msg-box .el-message-box__title { font-weight: 900; font-size: 1.2rem; }
+.elderly-msg-box .el-message-box__content { font-size: 1.1rem; line-height: 1.5; color: #334155; }
 </style>

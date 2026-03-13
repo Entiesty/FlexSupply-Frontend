@@ -58,6 +58,17 @@
           </select>
         </label>
 
+        <label v-if="isRegister && form.role === 2" class="field">
+          <span class="field-icon">🏢</span>
+          <select v-model="form.industryType" class="dynamic-select" :class="{ 'placeholder-color': !form.industryType }">
+            <option value="" disabled>请选择您的行业经营范围</option>
+            <option :value="1">餐饮生鲜 (饭店/烘焙/菜市场)</option>
+            <option :value="2">商超便利 (超市/便利店)</option>
+            <option :value="3">医药器械 (药房/医疗器械店)</option>
+            <option :value="4">服饰百货 (服装店/日用五金店)</option>
+          </select>
+        </label>
+
         <div v-if="isRegister && (form.role === 2 || form.role === 3)" class="upload-wrapper">
           <p class="upload-hint">{{ form.role === 2 ? '必须上传营业执照以供审核' : '请上传学生证/身份证等有效证件' }}</p>
           <div class="upload-box" @click="triggerUpload" :class="{'has-img': form.identityProofUrl}">
@@ -131,7 +142,7 @@
 import { reactive, ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { login, register, sendSmsCode, resetPassword } from '@/api/auth.js'
-import { uploadFile } from '@/api/common.js' // 引入文件上传 API
+import { uploadFile } from '@/api/common.js'
 import { ElMessage, ElNotification } from "element-plus"
 
 const router = useRouter()
@@ -144,7 +155,6 @@ const captchaCanvas = ref(null)
 const generatedCaptcha = ref('')
 const fileInput = ref(null)
 
-// 扩充 form 对象，加入 userTag 和 identityProofUrl
 const form = reactive({
   phone: '',
   password: '',
@@ -154,7 +164,8 @@ const form = reactive({
   agree: false,
   captcha: '',
   userTag: 'NORMAL',
-  identityProofUrl: ''
+  identityProofUrl: '',
+  industryType: '' // 🚀 新增字段
 })
 
 const phoneRegex = /^1[3-9]\d{9}$/
@@ -167,7 +178,6 @@ const roleConfig = computed(() => {
   }
 })
 
-// 图形验证码逻辑
 const drawCaptcha = () => {
   if (!captchaCanvas.value) return;
   const ctx = captchaCanvas.value.getContext('2d');
@@ -209,12 +219,12 @@ const drawCaptcha = () => {
   }
 }
 
-// 模式切换，重置表单字段
 const toggleMode = async (mode) => {
   isRegister.value = (mode === 'register' && !isRegister.value);
   isForgot.value = (mode === 'forgot');
   form.phone = ''; form.password = ''; form.username = ''; form.smsCode = '';
   form.role = 3; form.captcha = ''; form.identityProofUrl = ''; form.userTag = 'NORMAL';
+  form.industryType = ''; // 🚀 切换模式时清空新增字段
   countdown.value = 0;
 
   if (!isRegister.value && !isForgot.value) {
@@ -223,7 +233,6 @@ const toggleMode = async (mode) => {
   }
 }
 
-// 获取短信验证码
 const handleSendCode = async () => {
   if (!phoneRegex.test(form.phone)) return ElMessage.warning('请输入正确的 11 位手机号码')
   try {
@@ -246,12 +255,10 @@ const handleSendCode = async () => {
   }
 }
 
-// 触发文件上传
 const triggerUpload = () => {
   if (fileInput.value) fileInput.value.click()
 }
 
-// 处理 MinIO 图片上传
 const handleFileChange = async (e) => {
   const file = e.target.files[0]
   if (!file) return
@@ -269,7 +276,6 @@ const handleFileChange = async (e) => {
   }
 }
 
-// 统一提交
 const handleSubmit = async () => {
   if (isRegister.value && !form.agree) return ElMessage.warning('请先勾选同意服务协议')
   if (!phoneRegex.test(form.phone)) return ElMessage.warning('手机号码格式不正确')
@@ -277,9 +283,10 @@ const handleSubmit = async () => {
   if ((isRegister.value || isForgot.value) && !form.smsCode) return ElMessage.warning('请输入短信验证码')
   if (isRegister.value && !form.username) return ElMessage.warning('请将名称填写完整')
 
-  // 🚀 核心拦截：商家资质
-  if (isRegister.value && form.role === 2 && !form.identityProofUrl) {
-    return ElMessage.warning('爱心商家入驻必须上传营业执照')
+  // 🚀 核心拦截：商家资质验证
+  if (isRegister.value && form.role === 2) {
+    if (!form.industryType) return ElMessage.warning('请选择您的行业经营范围')
+    if (!form.identityProofUrl) return ElMessage.warning('爱心商家入驻必须上传营业执照')
   }
 
   if (!isRegister.value && !isForgot.value) {
@@ -298,7 +305,7 @@ const handleSubmit = async () => {
       ElMessage.success('密码重置成功，请登录！')
       toggleMode('login')
     } else if (isRegister.value) {
-      // 🚀 核心装载：传递额外资质属性
+      // 🚀 核心装载：将 industryType 传给后端
       await register({
         phone: form.phone,
         password: form.password,
@@ -306,7 +313,8 @@ const handleSubmit = async () => {
         role: form.role,
         smsCode: form.smsCode,
         userTag: form.role === 1 ? form.userTag : 'NORMAL',
-        identityProofUrl: form.identityProofUrl
+        identityProofUrl: form.identityProofUrl,
+        industryType: form.role === 2 ? form.industryType : null
       })
       ElMessage.success(form.role === 2 ? '注册成功！请等待管理员审核资质' : '注册成功！请登录')
       toggleMode('login')
@@ -317,7 +325,6 @@ const handleSubmit = async () => {
       localStorage.setItem('username', res.data.username)
       ElMessage.success('登录成功，欢迎回来')
 
-      // 智能路由跳转
       if (res.data.role === 1) await router.push('/sos')
       else if (res.data.role === 2) await router.push('/merchant/donate')
       else if (res.data.role === 3) await router.push('/map')
@@ -380,6 +387,7 @@ onMounted(() => {
 
 /* 🌟 动态表单新增样式 */
 .dynamic-select { flex: 1; border: none; outline: none; background: transparent; color: #431407; font-size: 1rem; cursor: pointer; padding: 12px 0; }
+.dynamic-select.placeholder-color { color: #9ca3af; }
 
 .upload-wrapper { margin-bottom: 5px; text-align: left; }
 .upload-hint { font-size: 0.75rem; color: #ea580c; margin-bottom: 6px; font-weight: bold; margin-left: 5px; }

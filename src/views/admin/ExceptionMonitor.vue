@@ -32,12 +32,12 @@
             </div>
 
             <div class="card-body">
-              <h3 class="goods-name">{{ order.goodsName }}</h3>
+              <h3 class="goods-name">{{ order.goodsName || order.requiredCategory }}</h3>
               <p class="order-sn">追溯单号：{{ order.orderSn }}</p>
 
               <div class="reason-box">
                 <span class="reason-label">⚠️ 引擎拦截死因：</span>
-                <span class="reason-text">{{ order.exceptionReason }}</span>
+                <span class="reason-text">{{ order.exceptionReason || '系统暂无库存或无人接单' }}</span>
               </div>
             </div>
 
@@ -65,6 +65,8 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
 import { cancelDemand, getExceptionMonitorList } from '@/api/trade'
+// 🚨 引入我们在 dispatch.js 里写好的真实 LBS 广播接口
+import { triggerEmergencyBroadcast } from '@/api/dispatch'
 
 const loading = ref(false)
 const exceptionList = ref([])
@@ -86,13 +88,43 @@ const calculateElapsedMinutes = (createTimeStr) => {
   return Math.floor((now - createTime) / 1000 / 60)
 }
 
+// 🚀 核心升级：接入真实的 LBS 广播闭环，并支持【降级策略展示与终极熔断 Fail-Fast】
 const handleCallMerchant = (order) => {
   ElMessageBox.confirm(
       `系统将向订单坐标方圆 3 公里内的爱心商铺发送全屏紧急弹窗，请求定向捐赠【${order.requiredCategory}】。是否执行？`,
       '📢 触发定向紧急募捐',
       { confirmButtonText: '授权发布警报', cancelButtonText: '取消', type: 'warning', customClass: 'dopamine-msg-box' }
-  ).then(() => {
-    ElNotification.success({ title: '广播已发送', message: '已成功向周边 12 家商铺发送紧急求捐指令！' })
+  ).then(async () => {
+    try {
+      loading.value = true
+
+      // 发起真实后端请求，触发 LBS 空间检索与广播！
+      const res = await triggerEmergencyBroadcast(order.orderId)
+
+      // 🛡️ 核心亮点：捕获并展示降级状态
+      if (res.data.isDegraded) {
+        ElNotification.warning({
+          title: '⚠️ 触发 LBS 扩圈降级机制',
+          message: `<div style="font-size: 1.05rem; margin-top:5px;">方圆 3 公里内无响应商铺。<br/>系统已自动启动降级预案，将波纹范围扩大至 <b>${res.data.radius} 公里</b>，成功锁定 <b>${res.data.notifiedCount}</b> 家备用商铺！</div>`,
+          dangerouslyUseHTMLString: true,
+          duration: 10000
+        })
+      } else {
+        // 正常最优解展示
+        ElNotification.success({
+          title: '✅ 广播精准送达',
+          message: `<div style="font-size: 1.1rem; margin-top:5px;">已成功向周边方圆 3 公里内的 <b>${res.data.notifiedCount}</b> 家商铺发送紧急求捐指令！</div>`,
+          dangerouslyUseHTMLString: true,
+          duration: 6000
+        })
+      }
+
+    } catch (e) {
+      // 🚨 终极熔断：10公里依然无商家，触碰物理边界，Fail-Fast 报错！
+      ElMessage.error({ message: e.response?.data?.message || '终极熔断：周边暂无入网商铺', duration: 5000 })
+    } finally {
+      loading.value = false
+    }
   }).catch(() => {})
 }
 
@@ -131,7 +163,6 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
 </script>
 
 <style scoped>
-/* 继承你全局通用框架的美化方案 */
 .main-content { flex: 1; display: flex; flex-direction: column; position: relative; padding: 40px; background: #f1f5f9; min-height: 100vh; overflow-y: auto;}
 .top-status { position: absolute; top: 20px; right: 30px; z-index: 100; background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); padding: 8px 16px; border-radius: 20px; font-size: 0.8rem; color: #ef4444; font-weight: bold; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05); }
 .pulse-dot { width: 8px; height: 8px; background: #ef4444; border-radius: 50%; box-shadow: 0 0 8px #ef4444; animation: pulse-red 2s infinite; }
@@ -155,10 +186,9 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
 .exception-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 25px; }
 .exception-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 20px; overflow: hidden; position: relative; transition: 0.3s; box-shadow: 0 8px 20px rgba(0,0,0,0.03);}
 .exception-card:hover { transform: translateY(-5px); border-color: #fca5a5; box-shadow: 0 15px 35px rgba(239, 68, 68, 0.1);}
-/* 卡片顶部的刺眼红线 */
 .exception-card::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 5px; background: linear-gradient(90deg, #ef4444, #f97316); }
 
-.card-header { display: flex; justify-content: space-between; padding: 18px 22px; background: #f8fafc; border-bottom: 1px solid #f1f5f9;}
+.card-header { display: flex; justify-content: space-between; padding: 18px 22px; background: #f8fafc; border-bottom: 1px dashed #f1f5f9;}
 .urgency-badge { padding: 4px 12px; border-radius: 12px; font-size: 0.85rem; font-weight: 900; }
 .urgency-badge.high { background: #fee2e2; color: #ef4444; animation: blink 2s infinite; }
 .urgency-badge.normal { background: #fff7ed; color: #ea580c; }
