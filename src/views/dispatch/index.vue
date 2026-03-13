@@ -345,12 +345,24 @@ const handleSmartDispatch = async (targetPos) => {
   result.value = null
 
   const safeCategory = pendingOrder.value.requiredCategory || '应急物资'
+
+  // 🚨 核心修复：前端数据清洗转换 (String -> Array)
+  // 如果数据库里没有标签 (null)，就给后端传空数组 []
+  // 如果有标签 (如 "高血压,无糖")，就按逗号切成数组 ["高血压", "无糖"]
+  let parsedTags = []
+  if (pendingOrder.value.requiredTags) {
+    parsedTags = pendingOrder.value.requiredTags.split(',')
+  }
+
   try {
     const res = await smartMatch({
       targetLon: targetPos[0],
       targetLat: targetPos[1],
       requiredCategory: safeCategory,
-      urgencyLevel: pendingOrder.value.urgencyLevel || 5
+      urgencyLevel: pendingOrder.value.urgencyLevel || 5,
+      // 👇 传入清洗好的标准数组格式，完美适配后端的 List<String>
+      requiredTags: parsedTags,
+      deliveryMethod: pendingOrder.value.deliveryMethod || 1
     })
 
     if (res?.data && res.data.length > 0) {
@@ -363,7 +375,7 @@ const handleSmartDispatch = async (targetPos) => {
 
       if (currentUserRole.value === 4 && pendingOrder.value.deliveryMethod === 1) startFallbackTimer()
     } else {
-      ElMessage.info(`测算完毕：附近 5 公里暂无 [${safeCategory}]`)
+      ElMessage.info(`测算完毕：附近 5 公里暂无满足 [${safeCategory}] 及其特殊标签的物资`)
     }
   } catch (e) {
     ElMessage.error(`调度失败: ${e.response?.data?.message || '引擎异常'}`)

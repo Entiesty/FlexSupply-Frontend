@@ -56,12 +56,14 @@
             <h3 class="status-title">您的求助正在处理中</h3>
           </div>
           <div class="active-detail">
-            <p class="detail-label">求助内容：</p>
+            <p class="detail-label">
+              {{ activeOrder.deliveryMethod === 2 ? '🚶 驿站自提订单' : '🚚 护航配送订单' }}
+            </p>
             <p class="detail-value">{{ getShortDesc(activeOrder.description) || activeOrder.requiredCategory }}</p>
             <p class="order-sn">系统单号: {{ activeOrder.orderSn }}</p>
           </div>
 
-          <div class="timeline">
+          <div class="timeline" v-if="activeOrder.deliveryMethod === 1">
             <div class="timeline-item" :class="{ active: activeOrder.status >= 0 }">
               <div class="dot"></div><div class="content"><h4>1. 社区已收到</h4><p>正在为您寻找距离最近的物资与志愿者</p></div>
             </div>
@@ -70,12 +72,8 @@
               <div class="content">
                 <h4>2. 志愿者在路上</h4>
                 <p>爱心使者已出发，正飞奔向您</p>
-
                 <div v-if="activeOrder.status >= 1" class="rider-contact-box">
-                  <div class="rc-info">
-                    <span class="rc-avatar">🚴</span>
-                    <span class="rc-name">爱心志愿者为您服务</span>
-                  </div>
+                  <div class="rc-info"><span class="rc-avatar">🚴</span><span class="rc-name">爱心志愿者为您服务</span></div>
                   <a :href="'tel:' + (activeOrder.volunteerPhone || '13800138000')" class="rc-call-btn">📞 一键拨号</a>
                 </div>
               </div>
@@ -85,11 +83,26 @@
             </div>
           </div>
 
+          <div class="timeline" v-else>
+            <div class="timeline-item" :class="{ active: activeOrder.status >= 0 }">
+              <div class="dot"></div><div class="content"><h4>1. 系统已接单</h4><p>指挥中心正在为您锁定附近驿站的物资</p></div>
+            </div>
+            <div class="timeline-item" :class="{ active: activeOrder.status >= 1 }">
+              <div class="dot"></div>
+              <div class="content">
+                <h4 style="color: #10b981;">2. 备货已完成，请前往自提</h4>
+                <p>物资已在社区驿站为您预留，请凭本界面前往领取。</p>
+              </div>
+            </div>
+            <div class="timeline-item" :class="{ active: activeOrder.status >= 2 }">
+              <div class="dot"></div><div class="content"><h4>3. 履约完成</h4><p>您已成功核销提取物资，祝您生活愉快！</p></div>
+            </div>
+          </div>
+
           <div class="action-btns">
             <button v-if="activeOrder.status === 2" class="confirm-btn pulse-glow" @click="openRatingDrawer">
-              📦 物资已送达，点击确认收货
+              📦 {{ activeOrder.deliveryMethod === 2 ? '已成功自提，评价一下' : '物资已送达，点击确认收货' }}
             </button>
-
             <template v-else>
               <button class="refresh-btn" @click="fetchActiveOrder">刷新最新进度</button>
               <button class="cancel-btn" @click="handleCancel" v-if="activeOrder.status === 0">撤销求助</button>
@@ -99,7 +112,7 @@
       </div>
     </div>
 
-    <el-drawer v-model="drawerVisible" direction="btt" size="70%" :with-header="false" custom-class="sos-drawer">
+    <el-drawer v-model="drawerVisible" direction="btt" size="75%" :with-header="false" custom-class="sos-drawer">
       <div class="drawer-content">
         <h3 class="drawer-title">具体需要哪种物资？</h3>
         <div class="sub-category-grid">
@@ -107,6 +120,31 @@
             {{ sub }}
           </button>
         </div>
+
+        <transition name="fade">
+          <div class="delivery-methods" v-if="selectedSub">
+            <h4 class="method-title">您希望如何获取物资？</h4>
+            <div class="method-grid">
+              <div class="method-card" :class="{ active: currentDeliveryMethod === 1 }" @click="currentDeliveryMethod = 1">
+                <div class="m-icon">🛵</div>
+                <div class="m-info">
+                  <h5>送货上门</h5>
+                  <p>腿脚不便，志愿者送</p>
+                </div>
+                <div class="m-check"></div>
+              </div>
+              <div class="method-card" :class="{ active: currentDeliveryMethod === 2 }" @click="currentDeliveryMethod = 2">
+                <div class="m-icon">🚶</div>
+                <div class="m-info">
+                  <h5>去驿站自提</h5>
+                  <p>行动方便，当散散步</p>
+                </div>
+                <div class="m-check"></div>
+              </div>
+            </div>
+          </div>
+        </transition>
+
         <div class="confirm-zone">
           <div class="selected-status" :class="{'is-selected': selectedSub}">
             {{ selectedSub ? `确认需要：${selectedSub}` : '请先点击上方的一项' }}
@@ -130,22 +168,17 @@
       <div class="drawer-content rating-content">
         <h3 class="drawer-title">您对本次援助满意吗？</h3>
         <p class="rating-sub">您的评价将直接影响志愿者的信誉星级</p>
-
         <div class="stars-container">
-          <span v-for="star in 5" :key="star" class="huge-star" :class="{ 'is-active': ratingForm.rating >= star }" @click="ratingForm.rating = star">
-            ★
-          </span>
+          <span v-for="star in 5" :key="star" class="huge-star" :class="{ 'is-active': ratingForm.rating >= star }" @click="ratingForm.rating = star">★</span>
         </div>
         <div class="rating-text-desc" :class="'color-' + ratingForm.rating">
           {{ ratingTextMap[ratingForm.rating] || '请点击星星打分' }}
         </div>
-
         <div class="quick-tags" v-if="ratingForm.rating > 0">
           <span class="q-tag" v-for="tag in currentTags" :key="tag" :class="{'active': ratingForm.comment.includes(tag)}" @click="toggleTag(tag)">
             {{ tag }}
           </span>
         </div>
-
         <div class="confirm-zone">
           <button class="long-press-btn ready" @click="submitRating" :disabled="ratingForm.rating === 0">
             <span class="btn-text">提交评价并完成订单</span>
@@ -164,7 +197,7 @@ import { publishDemand, getMyActiveSos, cancelDemand, confirmReceiptOrder } from
 import { getUserProfile } from '@/api/user'
 
 const route = useRoute()
-const router = useRouter() // 🚨 引入 router 以便跳转
+const router = useRouter()
 const loading = ref(false)
 const activeOrder = ref(null)
 const userInfo = ref({})
@@ -179,6 +212,9 @@ const currentSubCategories = ref([])
 const currentMainCat = ref('')
 const currentUrgency = ref(1)
 const selectedSub = ref('')
+
+// 🚨 新增：存放用户选择的配送方式，默认 1(配送)
+const currentDeliveryMethod = ref(1)
 
 const pressProgress = ref(0)
 let pressTimer = null
@@ -223,7 +259,6 @@ const fetchActiveOrder = async () => {
   } catch (e) {}
 }
 
-// 🚨 核心改造 1：彻底废弃浏览器 GPS，改用强校验逻辑
 const initLocation = () => {
   if (userInfo.value.currentLon && userInfo.value.currentLat) {
     currentLon.value = userInfo.value.currentLon
@@ -236,7 +271,7 @@ const initLocation = () => {
 
 onMounted(async () => {
   await fetchUserInfo()
-  initLocation() // 🚨 等待拿到用户档案后，再初始化位置
+  initLocation()
   await fetchActiveOrder()
   timer = setInterval(fetchActiveOrder, 5000)
 
@@ -248,10 +283,7 @@ onMounted(async () => {
 
 onUnmounted(() => { if (timer) clearInterval(timer) })
 
-// 🚨 核心改造 2：业务风控强力拦截
 const openDrawer = (mainCat, subs, urgency) => {
-
-  // 防线 1：资质审核拦截
   if (userInfo.value.isVerified === 0) {
     ElMessageBox.alert(
         '您的受赠身份仍在社区审核中，为防止恶意占用医疗物资通道，暂无法发起求助。<br/><br/>如有极其紧急情况，请直接致电居委会！',
@@ -261,7 +293,6 @@ const openDrawer = (mainCat, subs, urgency) => {
     return
   }
 
-  // 防线 2：真实物理坐标拦截
   if (!userInfo.value.currentLon || !userInfo.value.currentLat) {
     ElMessageBox.alert(
         '系统检测到您<b>尚未填写家庭住址与门牌号</b>。<br/>为了让志愿者能精准将物资送到您家中，请先前往个人中心进行设置！',
@@ -271,16 +302,19 @@ const openDrawer = (mainCat, subs, urgency) => {
           confirmButtonText: '去设置地址',
           type: 'error',
           customClass: 'elderly-msg-box',
-          callback: () => {
-            router.push('/profile') // 🚨 直接带他去填地址
-          }
+          callback: () => { router.push('/profile') }
         }
     )
     return
   }
 
-  // 校验通过，允许发单
-  currentMainCat.value = mainCat; currentSubCategories.value = subs; currentUrgency.value = urgency; selectedSub.value = ''; pressProgress.value = 0; drawerVisible.value = true
+  currentMainCat.value = mainCat;
+  currentSubCategories.value = subs;
+  currentUrgency.value = urgency;
+  selectedSub.value = '';
+  currentDeliveryMethod.value = 1; // 每次打开抽屉重置为配送
+  pressProgress.value = 0;
+  drawerVisible.value = true;
 }
 
 const startPress = (e) => {
@@ -331,16 +365,18 @@ const handleFinalSubmit = async () => {
     targetLon: currentLon.value,
     targetLat: currentLat.value,
     description: fullDescription,
-    requiredTags: derivedTags
+    requiredTags: derivedTags,
+    // 🚨 核心：提交发单时，带上配送方式！
+    deliveryMethod: currentDeliveryMethod.value
   }
 
   try {
     await publishDemand(demandData)
-    playVoiceFeedback(`求救已发出，请安心等待，爱心志愿者马上就来。`)
+    playVoiceFeedback(`求救已发出，请安心等待，系统正在为您处理。`)
 
     ElNotification({
-      title: '✅ 呼救成功',
-      message: `<div style="font-size: 1.2rem; margin-top:10px;">您需要的 <b>【${selectedSub.value}】</b> 社区已收到！<br/>请安心等待，志愿者马上就来！</div>`,
+      title: '✅ 请求成功',
+      message: `<div style="font-size: 1.1rem; margin-top:5px;">您需要的 <b>【${selectedSub.value}】</b> 社区已收到！<br/>模式：${currentDeliveryMethod.value === 1 ? '志愿者护航' : '居民自提'}</div>`,
       dangerouslyUseHTMLString: true,
       type: 'success',
       duration: 8000
@@ -355,8 +391,8 @@ const handleFinalSubmit = async () => {
 }
 
 const handleCancel = () => {
-  ElMessageBox.confirm('是否确定撤销本次求助？撤销后志愿者将停止配送。', '温馨提示', { confirmButtonText: '确定撤销', cancelButtonText: '我点错了', type: 'warning', customClass: 'elderly-msg-box' }).then(async () => {
-    try { loading.value = true; await cancelDemand(activeOrder.value.orderId); ElMessage.success('求助已成功撤销！'); activeOrder.value = null } catch (error) {} finally { loading.value = false }
+  ElMessageBox.confirm('是否确定撤销本次求助？撤销后系统将停止锁定物资。', '温馨提示', { confirmButtonText: '确定撤销', cancelButtonText: '我点错了', type: 'warning', customClass: 'elderly-msg-box' }).then(async () => {
+    try { loading.value = true; await cancelDemand(activeOrder.value.orderId); ElMessage.success('订单已成功撤销！'); activeOrder.value = null } catch (error) {} finally { loading.value = false }
   }).catch(() => {})
 }
 
@@ -386,7 +422,7 @@ const submitRating = async () => {
     ratingDrawerVisible.value = false
     activeOrder.value = null
     playVoiceFeedback('评价成功，感谢您的反馈，祝您生活愉快！')
-    ElNotification({ title: '爱心送达', message: '本次援助已圆满结束，感谢您的评价！', type: 'success' })
+    ElNotification({ title: '爱心流转', message: '本次援助已圆满结束，感谢您的评价！', type: 'success' })
   } catch (e) {
     ElMessage.error('提交失败，请重试')
   } finally {
@@ -396,10 +432,10 @@ const submitRating = async () => {
 </script>
 
 <style scoped>
+/* 继承你之前的样式 */
 .main-content { flex: 1; display: flex; flex-direction: column; position: relative; padding: 40px; background: #f1f5f9; min-height: 100vh; overflow-y: auto;}
 .top-status { position: absolute; top: 20px; right: 30px; z-index: 100; background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); padding: 8px 16px; border-radius: 20px; font-size: 0.85rem; color: #64748b; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05); font-weight: bold;}
 
-/* 🚨 状态指示灯颜色动态切换 */
 .pulse-dot { width: 10px; height: 10px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; animation: pulse-green 2s infinite; }
 .pulse-dot.error { background: #ef4444; box-shadow: 0 0 8px #ef4444; animation: pulse-red 1.5s infinite; }
 
@@ -419,7 +455,6 @@ const submitRating = async () => {
 .greeting h3 { margin: 0 0 5px; font-size: 1.5rem; color: #1e293b; font-weight: 900; display: flex; align-items: center; }
 .greeting p { margin: 0; font-size: 1.05rem; color: #64748b; font-weight: bold;}
 
-/* 🚨 新增：未审核标签样式 */
 .unverified-tag { font-size: 0.85rem; background: #fee2e2; color: #ef4444; padding: 4px 10px; border-radius: 12px; margin-left: 12px; font-weight: bold; border: 1px solid #fca5a5; box-shadow: 0 2px 5px rgba(239,68,68,0.1); }
 
 .divider { height: 1px; background: #f1f5f9; margin: 25px 0; }
@@ -455,7 +490,7 @@ const submitRating = async () => {
 .timeline-item .dot { position: absolute; left: -42px; top: 4px; width: 20px; height: 20px; border-radius: 50%; background: #cbd5e1; border: 4px solid #fff; transition: all 0.4s; }
 .timeline-item.active .dot { background: #f97316; box-shadow: 0 0 0 4px #ffedd5; }
 .timeline-item h4 { margin: 0 0 8px; font-size: 1.4rem; color: #1e293b; font-weight: 900; }
-.timeline-item p { margin: 0; font-size: 1.1rem; color: #64748b; font-weight: bold; }
+.timeline-item p { margin: 0; font-size: 1.1rem; color: #64748b; font-weight: bold; line-height: 1.5;}
 
 .rider-contact-box { margin-top: 15px; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 12px; padding: 15px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 10px rgba(16, 185, 129, 0.1);}
 .rc-info { display: flex; align-items: center; gap: 10px; }
@@ -474,6 +509,40 @@ const submitRating = async () => {
 .pulse-glow { animation: btn-pulse 2s infinite; box-shadow: 0 0 20px rgba(16, 185, 129, 0.6); }
 @keyframes btn-pulse { 0% { transform: scale(1); } 50% { transform: scale(1.02); } 100% { transform: scale(1); } }
 
+/* 🚨 新增：取货方式双卡片UI */
+.delivery-methods { margin-top: 15px; margin-bottom: 25px; }
+.method-title { font-size: 1.15rem; color: #64748b; margin: 0 0 15px 0; text-align: center; font-weight: bold; }
+.method-grid { display: flex; gap: 15px; }
+.method-card { flex: 1; border: 2px solid #e2e8f0; border-radius: 16px; padding: 18px 15px; display: flex; align-items: center; gap: 12px; cursor: pointer; transition: all 0.2s; background: #f8fafc; }
+.method-card:hover { border-color: #cbd5e1; transform: translateY(-2px); }
+.method-card.active { border-color: #f97316; background: #fff7ed; box-shadow: 0 8px 20px rgba(249, 115, 22, 0.1); }
+.m-icon { font-size: 2.2rem; line-height: 1; }
+.m-info h5 { margin: 0 0 4px 0; font-size: 1.1rem; color: #1e293b; font-weight: 900; }
+.m-info p { margin: 0; font-size: 0.85rem; color: #64748b; font-weight: bold; }
+.m-check { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #cbd5e1; margin-left: auto; transition: 0.2s; box-sizing: border-box; }
+.method-card.active .m-check { border-color: #f97316; background: #f97316; box-shadow: inset 0 0 0 4px #fff; }
+
+.fade-enter-active, .fade-leave-active { transition: opacity 0.3s, transform 0.3s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; transform: translateY(-10px); }
+
+.drawer-content { padding: 30px; height: 100%; display: flex; flex-direction: column; max-width: 800px; margin: 0 auto;}
+.drawer-title { font-size: 1.8rem; font-weight: 900; margin: 0 0 25px 0; color: #1e293b; text-align: center; }
+.sub-category-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 15px; }
+.sub-item { padding: 25px 15px; border-radius: 16px; border: 2px solid #f1f5f9; background: #f8fafc; font-size: 1.3rem; font-weight: bold; color: #475569; transition: 0.2s; cursor: pointer;}
+.sub-item.active { border-color: #f97316; background: #fff7ed; color: #ea580c; box-shadow: 0 6px 15px rgba(249,115,22,0.15); transform: scale(1.02);}
+
+.confirm-zone { margin-top: auto; text-align: center; padding-bottom: 20px; width: 100%;}
+.selected-status { font-size: 1.2rem; color: #94a3b8; margin-bottom: 20px; font-weight: bold; min-height: 28px;}
+.selected-status.is-selected { color: #ea580c; font-size: 1.4rem;}
+
+.long-press-btn { width: 100%; height: 85px; border-radius: 20px; border: none; background: #cbd5e1; position: relative; overflow: hidden; font-size: 1.6rem; font-weight: 900; color: #fff; cursor: pointer; user-select: none; -webkit-user-select: none; touch-action: manipulation; box-shadow: 0 10px 25px rgba(0,0,0,0.1);}
+.long-press-btn:not(.disabled) { background: #94a3b8; }
+.long-press-btn.ready { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+.long-press-btn.ready:disabled { background: #cbd5e1; cursor: not-allowed; }
+.press-progress { position: absolute; left: 0; top: 0; height: 100%; background: linear-gradient(90deg, #f97316, #ea580c); transition: width 0.1s linear; z-index: 1; }
+.btn-text { position: relative; z-index: 2; letter-spacing: 2px;}
+.press-tip { font-size: 1rem; color: #94a3b8; margin-top: 15px; font-weight: bold;}
+
 .rating-content { align-items: center; }
 .rating-sub { color: #94a3b8; margin-bottom: 20px; font-size: 1.1rem; }
 .stars-container { display: flex; gap: 15px; margin-bottom: 15px; justify-content: center; }
@@ -485,29 +554,10 @@ const submitRating = async () => {
 .quick-tags { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-bottom: 30px; }
 .q-tag { padding: 12px 20px; background: #f1f5f9; color: #475569; border-radius: 12px; font-size: 1.1rem; font-weight: bold; cursor: pointer; border: 2px solid transparent; transition: 0.2s; }
 .q-tag.active { background: #eff6ff; color: #3b82f6; border-color: #93c5fd; }
-
-.drawer-content { padding: 30px; height: 100%; display: flex; flex-direction: column; max-width: 800px; margin: 0 auto;}
-.drawer-title { font-size: 1.8rem; font-weight: 900; margin: 0 0 25px 0; color: #1e293b; text-align: center; }
-.sub-category-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: auto; }
-.sub-item { padding: 25px 15px; border-radius: 16px; border: 2px solid #f1f5f9; background: #f8fafc; font-size: 1.3rem; font-weight: bold; color: #475569; transition: 0.2s; cursor: pointer;}
-.sub-item.active { border-color: #f97316; background: #fff7ed; color: #ea580c; box-shadow: 0 6px 15px rgba(249,115,22,0.15); transform: scale(1.02);}
-
-.confirm-zone { margin-top: 30px; text-align: center; padding-bottom: 20px; width: 100%;}
-.selected-status { font-size: 1.2rem; color: #94a3b8; margin-bottom: 20px; font-weight: bold; min-height: 28px;}
-.selected-status.is-selected { color: #ea580c; font-size: 1.4rem;}
-
-.long-press-btn { width: 100%; height: 85px; border-radius: 20px; border: none; background: #cbd5e1; position: relative; overflow: hidden; font-size: 1.6rem; font-weight: 900; color: #fff; cursor: pointer; user-select: none; -webkit-user-select: none; touch-action: manipulation; box-shadow: 0 10px 25px rgba(0,0,0,0.1);}
-.long-press-btn:not(.disabled) { background: #94a3b8; }
-.long-press-btn.ready { background: linear-gradient(135deg, #3b82f6, #2563eb); }
-.long-press-btn.ready:disabled { background: #cbd5e1; cursor: not-allowed; }
-.press-progress { position: absolute; left: 0; top: 0; height: 100%; background: linear-gradient(90deg, #f97316, #ea580c); transition: width 0.1s linear; z-index: 1; }
-.btn-text { position: relative; z-index: 2; letter-spacing: 2px;}
-.press-tip { font-size: 1rem; color: #94a3b8; margin-top: 15px; font-weight: bold;}
 </style>
 <style>
 .sos-drawer .el-drawer__body { padding: 0; background: #fff; }
 .sos-drawer { border-radius: 30px 30px 0 0 !important; box-shadow: 0 -10px 40px rgba(0,0,0,0.1) !important;}
-/* 🚨 覆盖 Element Plus 弹出框文字样式 */
 .elderly-msg-box { border-radius: 20px !important; }
 .elderly-msg-box .el-message-box__title { font-weight: 900; font-size: 1.2rem; }
 .elderly-msg-box .el-message-box__content { font-size: 1.1rem; line-height: 1.5; color: #334155; }
