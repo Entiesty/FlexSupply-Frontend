@@ -39,7 +39,7 @@
           </label>
         </div>
 
-        <div v-if="isRegister" class="dynamic-tip" :class="{ 'warning-tip': form.role === 2 }">
+        <div v-if="isRegister" class="dynamic-tip" :class="{ 'warning-tip': form.role === 2 || form.role === 3 }">
           {{ roleConfig.tip }}
         </div>
 
@@ -68,21 +68,6 @@
             <option :value="4">服饰百货 (服装店/日用五金店)</option>
           </select>
         </label>
-
-        <div v-if="isRegister && (form.role === 2 || form.role === 3)" class="upload-wrapper">
-          <p class="upload-hint">{{ form.role === 2 ? '必须上传营业执照以供审核' : '请上传学生证/身份证等有效证件' }}</p>
-          <div class="upload-box" @click="triggerUpload" :class="{'has-img': form.identityProofUrl}">
-            <template v-if="!form.identityProofUrl">
-              <span class="upload-plus">+</span>
-              <span class="upload-text">点击上传图片</span>
-            </template>
-            <template v-else>
-              <img :src="form.identityProofUrl" class="upload-preview" />
-              <div class="upload-mask">点击重新上传</div>
-            </template>
-            <input type="file" ref="fileInput" hidden @change="handleFileChange" accept="image/*" />
-          </div>
-        </div>
 
         <label class="field">
           <span class="field-icon">📱</span>
@@ -142,8 +127,8 @@
 import { reactive, ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { login, register, sendSmsCode, resetPassword } from '@/api/auth.js'
-import { uploadFile } from '@/api/common.js'
 import { ElMessage, ElNotification } from "element-plus"
+import { getUserProfile } from '@/api/user.js'
 
 const router = useRouter()
 const loading = ref(false)
@@ -153,7 +138,6 @@ const countdown = ref(0)
 
 const captchaCanvas = ref(null)
 const generatedCaptcha = ref('')
-const fileInput = ref(null)
 
 const form = reactive({
   phone: '',
@@ -164,17 +148,17 @@ const form = reactive({
   agree: false,
   captcha: '',
   userTag: 'NORMAL',
-  identityProofUrl: '',
-  industryType: '' // 🚀 新增字段
+  industryType: ''
+  // 🚨 已移除 identityProofUrl
 })
 
 const phoneRegex = /^1[3-9]\d{9}$/
 
 const roleConfig = computed(() => {
   switch (form.role) {
-    case 1: return { icon: '👴', placeholder: '请输入您的称呼 (如: 张大爷)', tip: '注册后即可一键发布紧急物资求助' };
-    case 2: return { icon: '🏪', placeholder: '请输入营业执照上的店铺/企业名称', tip: '⚠️ 商家账号注册后，需等待管理员审核资质后使用' };
-    case 3: default: return { icon: '🚴', placeholder: '请输入您的真实姓名 (配送核验用)', tip: '注册即刻成为爱心骑手，参与城市物资配送' };
+    case 1: return { icon: '👴', placeholder: '请输入您的称呼 (如: 张大爷)', tip: '注册极速通道，登录后可一键发布紧急物资求助' };
+    case 2: return { icon: '🏪', placeholder: '请输入营业执照上的店铺/企业名称', tip: '⚠️ 注册成功后，请前往【个人中心】上传执照供人工核验' };
+    case 3: default: return { icon: '🚴', placeholder: '请输入您的真实姓名 (配送核验用)', tip: '⚠️ 注册成功后，请前往【个人中心】完善载具与实名认证' };
   }
 })
 
@@ -223,8 +207,7 @@ const toggleMode = async (mode) => {
   isRegister.value = (mode === 'register' && !isRegister.value);
   isForgot.value = (mode === 'forgot');
   form.phone = ''; form.password = ''; form.username = ''; form.smsCode = '';
-  form.role = 3; form.captcha = ''; form.identityProofUrl = ''; form.userTag = 'NORMAL';
-  form.industryType = ''; // 🚀 切换模式时清空新增字段
+  form.role = 3; form.captcha = ''; form.userTag = 'NORMAL'; form.industryType = '';
   countdown.value = 0;
 
   if (!isRegister.value && !isForgot.value) {
@@ -255,27 +238,6 @@ const handleSendCode = async () => {
   }
 }
 
-const triggerUpload = () => {
-  if (fileInput.value) fileInput.value.click()
-}
-
-const handleFileChange = async (e) => {
-  const file = e.target.files[0]
-  if (!file) return
-  if (file.size > 5 * 1024 * 1024) return ElMessage.warning('图片大小不能超过 5MB')
-
-  try {
-    loading.value = true
-    const res = await uploadFile(file)
-    form.identityProofUrl = res.data
-    ElMessage.success('证明材料上传成功')
-  } catch (error) {
-    console.error('上传失败', error)
-  } finally {
-    loading.value = false
-  }
-}
-
 const handleSubmit = async () => {
   if (isRegister.value && !form.agree) return ElMessage.warning('请先勾选同意服务协议')
   if (!phoneRegex.test(form.phone)) return ElMessage.warning('手机号码格式不正确')
@@ -283,10 +245,9 @@ const handleSubmit = async () => {
   if ((isRegister.value || isForgot.value) && !form.smsCode) return ElMessage.warning('请输入短信验证码')
   if (isRegister.value && !form.username) return ElMessage.warning('请将名称填写完整')
 
-  // 🚀 核心拦截：商家资质验证
   if (isRegister.value && form.role === 2) {
     if (!form.industryType) return ElMessage.warning('请选择您的行业经营范围')
-    if (!form.identityProofUrl) return ElMessage.warning('爱心商家入驻必须上传营业执照')
+    // 🚨 这里去掉了对 identityProofUrl 的拦截判断，因为被迁移到个人中心了
   }
 
   if (!isRegister.value && !isForgot.value) {
@@ -305,7 +266,6 @@ const handleSubmit = async () => {
       ElMessage.success('密码重置成功，请登录！')
       toggleMode('login')
     } else if (isRegister.value) {
-      // 🚀 核心装载：将 industryType 传给后端
       await register({
         phone: form.phone,
         password: form.password,
@@ -313,23 +273,36 @@ const handleSubmit = async () => {
         role: form.role,
         smsCode: form.smsCode,
         userTag: form.role === 1 ? form.userTag : 'NORMAL',
-        identityProofUrl: form.identityProofUrl,
         industryType: form.role === 2 ? form.industryType : null
+        // 🚨 接口请求中不再传递 identityProofUrl
       })
-      ElMessage.success(form.role === 2 ? '注册成功！请等待管理员审核资质' : '注册成功！请登录')
+      ElMessage.success('注册成功！登录后请前往个人中心完善资料。')
       toggleMode('login')
     } else {
       const res = await login(form.phone, form.password)
+
+      // 1. 登录成功，第一时间将 Token 写入本地，此时后续的请求就有了身份！
       localStorage.setItem('ACCESS_TOKEN', res.data.token)
       localStorage.setItem('userRole', res.data.role.toString())
       localStorage.setItem('username', res.data.username)
-      ElMessage.success('登录成功，欢迎回来')
+      localStorage.setItem('userId', res.data.userId || '')
 
-      if (res.data.role === 1) await router.push('/sos')
-      else if (res.data.role === 2) await router.push('/merchant/donate')
-      else if (res.data.role === 3) await router.push('/map')
-      else if (res.data.role === 4) await router.push('/map')
-      else await router.push('/map')
+      // 🚨 核心修复：手动拉取一次完整的个人档案，获取真实的 isVerified
+      const profileRes = await getUserProfile()
+      const realIsVerified = profileRes.data.isVerified
+
+      // 🚨 用真实的 realIsVerified 进行权限漏斗重定向
+      if (res.data.role !== 4 && realIsVerified === 0) {
+        ElMessage.success('登录成功！请先完善个人档案与资质以解锁系统。')
+        await router.push('/volunteer/profile')
+      } else {
+        ElMessage.success('登录成功，欢迎回来！')
+        if (res.data.role === 1) await router.push('/sos')
+        else if (res.data.role === 2) await router.push('/merchant/donate')
+        else if (res.data.role === 3) await router.push('/map')
+        else if (res.data.role === 4) await router.push('/map')
+        else await router.push('/map')
+      }
     }
   } catch (e) {
     console.error('操作失败', e)
@@ -344,7 +317,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* =========== 基础卡片样式 =========== */
+/* 保持你的优美 CSS 原封不动，仅删除了 upload-box 等无用样式 */
 .login-wrapper { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #fff8f0; overflow: auto; }
 .bg-layer { position: absolute; inset: 0; }
 .blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.5; }
@@ -363,7 +336,6 @@ onMounted(() => {
 .rule { display: flex; align-items: center; gap: 10px; margin: 20px 0; opacity: 0.3; }
 .rule span { flex: 1; height: 1px; background: #9a3412; }
 
-/* =========== 表单与控件样式 =========== */
 .form { display: flex; flex-direction: column; gap: 12px; }
 
 .field { display: flex; align-items: center; gap: 12px; background: #fff; border: 1.5px solid rgba(124, 45, 18, 0.15); border-radius: 16px; padding: 4px 16px; transition: all 0.3s; }
@@ -385,19 +357,8 @@ onMounted(() => {
 .captcha-canvas-inline { border-radius: 8px; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.05); transition: transform 0.2s; margin-right: -4px; }
 .captcha-canvas-inline:hover { transform: scale(1.05); }
 
-/* 🌟 动态表单新增样式 */
 .dynamic-select { flex: 1; border: none; outline: none; background: transparent; color: #431407; font-size: 1rem; cursor: pointer; padding: 12px 0; }
 .dynamic-select.placeholder-color { color: #9ca3af; }
-
-.upload-wrapper { margin-bottom: 5px; text-align: left; }
-.upload-hint { font-size: 0.75rem; color: #ea580c; margin-bottom: 6px; font-weight: bold; margin-left: 5px; }
-.upload-box { height: 110px; border: 2px dashed rgba(124, 45, 18, 0.2); border-radius: 16px; background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: all 0.3s; position: relative; overflow: hidden; }
-.upload-box:hover { border-color: #ea580c; background: #fff7ed; }
-.upload-plus { font-size: 2rem; color: #f97316; font-weight: 300; line-height: 1; }
-.upload-text { font-size: 0.8rem; color: #9a3412; opacity: 0.7; margin-top: 5px; }
-.upload-preview { width: 100%; height: 100%; object-fit: cover; }
-.upload-mask { position: absolute; inset: 0; background: rgba(0,0,0,0.5); color: #fff; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; opacity: 0; transition: 0.3s; backdrop-filter: blur(2px); }
-.upload-box.has-img:hover .upload-mask { opacity: 1; }
 
 .agreement { text-align: left; margin: 5px 0 5px 5px; }
 .checkbox-container { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.75rem; color: #64748b; }

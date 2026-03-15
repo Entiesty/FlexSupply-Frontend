@@ -507,6 +507,7 @@ const handleBatchGrab = async (batchIds) => {
 
   loading.value = true
   let successCount = 0
+  let failCount = 0
 
   try {
     for (const id of ids) {
@@ -514,17 +515,33 @@ const handleBatchGrab = async (batchIds) => {
         await grabTask(id)
         successCount++
       } catch (innerE) {
-        console.warn(`订单 ${id} 抢单被拦截，原因已由全局拦截器提示`);
+        // 捕获到后端抛出的“CVRP装载爆仓/距离超限”拦截
+        failCount++
+        console.warn(`订单 ${id} 抢单被底层物理引擎拦截`);
       }
     }
 
     if (successCount > 0) {
-      ElMessage.success({
-        message: `⚡ 运力集约成功！已为您打包派发 ${successCount} 个护航行程！`,
-        duration: 4000,
-        offset: 80
+      // 🚨 高级反馈：部分成功，部分被熔断
+      ElNotification.success({
+        title: '⚡ 运力集约编排完成',
+        message: `
+          <div style="font-size: 1.05rem; line-height: 1.6; margin-top: 5px;">
+            ✅ 成功锁定路线: <strong>${successCount}</strong> 单<br/>
+            ${failCount > 0 ? `<span style="color:#ef4444; font-weight: bold;">🚨 物理熔断拦截: ${failCount} 单 (防超载/超距保护已触发)</span>` : ''}
+          </div>
+        `,
+        dangerouslyUseHTMLString: true,
+        duration: 8000
       })
       router.push({ path: '/my-tasks', query: { tab: 'progress' } })
+    } else if (failCount > 0) {
+      // 🚨 高级反馈：全军覆没
+      ElNotification.error({
+        title: '⛔ 运单分配已被系统驳回',
+        message: '顺路订单已超出您当前载具的【最大物理承重极限】或【跨区续航极限】，引擎已切断派发！请更换机动载具或只接单件。',
+        duration: 6000
+      })
     }
   } finally {
     loading.value = false

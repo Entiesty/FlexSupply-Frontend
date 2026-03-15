@@ -191,13 +191,14 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="dialogVisible" :title="isEditMode ? '⚙️ 编辑据点配置' : '设立新物理据点'" width="600px" custom-class="admin-dialog">
+    <el-dialog v-model="dialogVisible" :title="isEditMode ? '⚙️ 编辑据点配置' : '设立新物理据点'" width="680px" custom-class="admin-dialog ui-upgraded-dialog" destroy-on-close>
       <el-form :model="form" label-width="110px" @submit.prevent class="modern-form">
+
+        <div class="form-section-title">📍 基础与物理定位</div>
         <el-form-item label="据点名称" required>
           <el-input v-model="form.stationName" placeholder="例如：阳光社区爱心总站" clearable></el-input>
         </el-form-item>
 
-        <div class="inner-divider"></div>
         <el-form-item label="坐标与地址" required>
           <div class="location-picker-box">
             <div class="loc-display" :class="{'has-val': form.longitude}">
@@ -211,23 +212,49 @@
             </button>
           </div>
         </el-form-item>
-        <p class="form-tip">注意：一旦修改坐标，后台将自动覆盖 Redis Geo 缓存，引发调度权重变更。</p>
-        <div class="inner-divider"></div>
+        <p class="form-tip friendly-tip">💡 温馨提示：修改坐标将立即生效，系统会自动按新位置为骑士重新测算派单距离。</p>
+
+        <div class="form-section-title" style="margin-top: 25px;">⚡ 硬件与调度能力</div>
 
         <el-form-item label="平急两用属性">
-          <el-radio-group v-model="form.isEmergencyHub">
-            <el-radio :label="0">普通社区网点 (平时)</el-radio>
-            <el-radio :label="1">核心应急枢纽 (灾时特保)</el-radio>
-          </el-radio-group>
+          <div class="card-radio-group">
+            <div class="radio-card" :class="{ active: form.isEmergencyHub === 0 }" @click="form.isEmergencyHub = 0">
+              <div class="rc-icon">🏘️</div>
+              <div class="rc-content">
+                <h4>普通社区网点</h4>
+                <p>日常互助物资流转</p>
+              </div>
+            </div>
+            <div class="radio-card theme-red" :class="{ active: form.isEmergencyHub === 1 }" @click="form.isEmergencyHub = 1">
+              <div class="rc-icon">🚨</div>
+              <div class="rc-content">
+                <h4>核心应急枢纽</h4>
+                <p>灾时提供特保避难</p>
+              </div>
+            </div>
+          </div>
         </el-form-item>
 
         <el-form-item label="冷链储藏能力">
-          <el-radio-group v-model="form.hasFreezer">
-            <el-radio :label="0">无冷链 (仅干货)</el-radio>
-            <el-radio :label="1">有冷柜 (支持生鲜/速冻)</el-radio>
-          </el-radio-group>
+          <div class="card-radio-group">
+            <div class="radio-card" :class="{ active: form.hasFreezer === 0 }" @click="form.hasFreezer = 0">
+              <div class="rc-icon">📦</div>
+              <div class="rc-content">
+                <h4>无冷链 (常温)</h4>
+                <p>仅支持普通干货</p>
+              </div>
+            </div>
+            <div class="radio-card theme-blue" :class="{ active: form.hasFreezer === 1 }" @click="form.hasFreezer = 1">
+              <div class="rc-icon">🧊</div>
+              <div class="rc-content">
+                <h4>冷链储藏级</h4>
+                <p>配有冰柜支持生鲜</p>
+              </div>
+            </div>
+          </div>
         </el-form-item>
 
+        <div class="form-section-title" style="margin-top: 25px;">👨‍💼 人事与管理权</div>
         <el-form-item label="指定负责人">
           <el-select v-model="form.managerId" filterable placeholder="请搜索并选择站长 (可输入姓名/手机号)" style="width: 100%">
             <el-option v-for="user in managerOptions" :key="user.userId" :label="user.username + ' (' + user.phone + ')'" :value="user.userId">
@@ -241,8 +268,8 @@
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="dialogVisible = false" round>取消</el-button>
-          <el-button type="primary" @click="submitAdd" :loading="submitting" round class="custom-search-btn" style="border: none;">
-            {{ isEditMode ? '保存配置修改' : '确认设立并入网' }}
+          <el-button type="primary" @click="submitAdd" :loading="submitting" round class="custom-search-btn" style="border: none; padding: 0 25px; font-size: 1.05rem;">
+            {{ isEditMode ? '💾 保存配置修改' : '🚀 确认设立并入网' }}
           </el-button>
         </span>
       </template>
@@ -275,7 +302,6 @@ import { Search, OfficeBuilding, Plus, Location, User, Setting, MapLocation, War
 import { ElMessage } from 'element-plus'
 import AMapLoader from '@amap/amap-jsapi-loader'
 
-// 🚨 假设你已经在 api/resource.js 中新增了 getStationGoods 和 adjustGoodsStock 这两个接口
 import { getStationPage, addStation, updateStation, getStationGoods, adjustGoodsStock } from '@/api/resource'
 import { getEligibleManagers } from '@/api/user'
 
@@ -301,12 +327,10 @@ const adjustDialogVisible = ref(false)
 const currentAdjustGoods = ref(null)
 const adjustForm = reactive({ type: 2, diffCount: 1, reason: '' })
 
-// 临期检测引擎
 const isWarning = (dateStr) => {
   if (!dateStr) return false
   const expDate = new Date(dateStr).getTime()
   const now = new Date().getTime()
-  // 小于 72 小时 (3天) 则爆红预警
   return (expDate - now) < 72 * 60 * 60 * 1000
 }
 
@@ -314,9 +338,9 @@ const getExpirationClass = (dateStr) => {
   if (!dateStr) return 'exp-safe'
   const expDate = new Date(dateStr).getTime()
   const now = new Date().getTime()
-  if (expDate < now) return 'exp-danger' // 已过期
-  if (expDate - now < 72 * 60 * 60 * 1000) return 'exp-warning' // 临期
-  return 'exp-safe' // 安全
+  if (expDate < now) return 'exp-danger'
+  if (expDate - now < 72 * 60 * 60 * 1000) return 'exp-warning'
+  return 'exp-safe'
 }
 
 const getExpirationText = (dateStr) => {
@@ -329,14 +353,12 @@ const getExpirationText = (dateStr) => {
   return `✅ 健康 (剩 ${diffDays}天)`
 }
 
-// 打开库存抽屉
 const openInventoryDrawer = async (row) => {
   currentStation.value = row
   inventoryDrawerVisible.value = true
   fetchInventory(row.stationId)
 }
 
-// 拉取物资数据
 const fetchInventory = async (stationId) => {
   inventoryLoading.value = true
   try {
@@ -349,20 +371,16 @@ const fetchInventory = async (stationId) => {
   }
 }
 
-// 打开手工干预弹窗
 const openAdjustDialog = (goods) => {
   currentAdjustGoods.value = goods
-  adjustForm.type = 2 // 默认扣减报废
+  adjustForm.type = 2
   adjustForm.diffCount = 1
   adjustForm.reason = ''
   adjustDialogVisible.value = true
 }
 
-// 提交平账数据
 const submitAdjust = async () => {
   if (!adjustForm.reason.trim()) return ElMessage.warning('必须填写干预理由备查！')
-
-  // 如果是扣减，数量不能大于当前库存
   if (adjustForm.type === 2 && adjustForm.diffCount > currentAdjustGoods.value.stock) {
     return ElMessage.error('扣减数量不能大于当前实际库存！')
   }
@@ -371,13 +389,12 @@ const submitAdjust = async () => {
   try {
     await adjustGoodsStock({
       goodsId: currentAdjustGoods.value.goodsId,
-      adjustType: adjustForm.type, // 1: 增加, 2: 减少
+      adjustType: adjustForm.type,
       diffCount: adjustForm.diffCount,
       reason: adjustForm.reason
     })
     ElMessage.success('大仓数据手工平账成功！')
     adjustDialogVisible.value = false
-    // 重新拉取当前抽屉的库存
     fetchInventory(currentStation.value.stationId)
   } catch (error) {
     ElMessage.error('操作失败')
@@ -542,11 +559,38 @@ const confirmLocation = () => { form.longitude = tempLoc.lng; form.latitude = te
 .text-green { color: #10b981; font-weight: bold; }
 .text-red { color: #ef4444; font-weight: bold; }
 
-/* =========== 弹窗及地图样式 (原封不动) =========== */
-.form-tip { font-size: 0.8rem; color: #94a3b8; padding-left: 110px; margin-top: -12px; margin-bottom: 18px; font-style: italic; }
-.inner-divider { height: 1px; background: #e2e8f0; margin: 15px 0 25px 0; }
+/* =========== 🚨 弹窗及重构样式 =========== */
 :deep(.admin-dialog), :deep(.map-dialog) { border-radius: 20px; overflow: hidden; }
 :deep(.el-dialog__header) { background: #f8fafc; padding: 20px 25px; margin-right: 0; border-bottom: 1px solid #f1f5f9; font-weight: 900; color: #0f172a;}
+
+/* 视觉区块分组标题 */
+.form-section-title { font-size: 1.05rem; font-weight: 900; color: #1e293b; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px dashed #e2e8f0; display: flex; align-items: center; gap: 8px;}
+
+/* 交互卡片样式 */
+.card-radio-group { display: flex; gap: 15px; width: 100%; }
+.radio-card { flex: 1; display: flex; align-items: center; gap: 12px; padding: 15px; border-radius: 12px; border: 2px solid #e2e8f0; background: #fff; cursor: pointer; transition: all 0.3s; box-shadow: 0 2px 10px rgba(0,0,0,0.02); }
+.radio-card:hover { border-color: #cbd5e1; transform: translateY(-2px); }
+.rc-icon { font-size: 2rem; background: #f1f5f9; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border-radius: 10px; transition: 0.3s;}
+.rc-content h4 { margin: 0 0 4px 0; font-size: 0.95rem; font-weight: 900; color: #334155; }
+.rc-content p { margin: 0; font-size: 0.75rem; color: #94a3b8; font-weight: bold; }
+
+/* 卡片激活状态 - 普通与泛用 */
+.radio-card.active { border-color: #3b82f6; background: #eff6ff; box-shadow: 0 6px 15px rgba(59, 130, 246, 0.15); }
+.radio-card.active .rc-icon { background: #dbeafe; color: #2563eb; }
+.radio-card.active .rc-content h4 { color: #1e40af; }
+
+/* 卡片激活状态 - 红色应急警示 */
+.radio-card.theme-red.active { border-color: #ef4444; background: #fef2f2; box-shadow: 0 6px 15px rgba(239, 68, 68, 0.15); }
+.radio-card.theme-red.active .rc-icon { background: #fee2e2; color: #dc2626; }
+.radio-card.theme-red.active .rc-content h4 { color: #991b1b; }
+
+/* 卡片激活状态 - 蓝色冷链冰霜 */
+.radio-card.theme-blue.active { border-color: #0ea5e9; background: #f0f9ff; box-shadow: 0 6px 15px rgba(14, 165, 233, 0.15); }
+.radio-card.theme-blue.active .rc-icon { background: #e0f2fe; color: #0284c7; }
+.radio-card.theme-blue.active .rc-content h4 { color: #075985; }
+
+/* 友好的文案提示 */
+.friendly-tip { font-size: 0.8rem; color: #059669; padding: 8px 15px; margin-top: 5px; margin-bottom: 20px; font-weight: bold; background: #ecfdf5; border-radius: 8px; margin-left: 110px; display: inline-block; border: 1px dashed #a7f3d0;}
 
 .location-picker-box { display: flex; align-items: stretch; gap: 15px; width: 100%;}
 .loc-display { flex: 1; background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 10px 15px; display: flex; flex-direction: column; justify-content: center; transition: 0.3s;}
