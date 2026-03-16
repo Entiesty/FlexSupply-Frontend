@@ -63,11 +63,20 @@ export function updateStation(data) {
     })
 }
 
-// 获取指定驿站的物资库存明细
+// 获取特定据点/驿站内部的可用物资列表 (供日常食物银行大厅展示)
 export function getStationGoods(stationId) {
+    // 方案 A: 如果你后端有专门的 Restful 接口，用这个：
+    // return request({ url: `/resource/goods/station/${stationId}`, method: 'get' })
+
+    // 方案 B: 直接复用你已有的 list 接口，通过 params 过滤 (推荐，改动最小)
     return request({
-        url: `/resource/goods/station/${stationId}`,
-        method: 'get'
+        url: '/resource/goods/list',
+        method: 'get',
+        params: {
+            stationId: stationId,
+            status: 2, // 只查在库可用的物资
+            pageSize: 50
+        }
     })
 }
 

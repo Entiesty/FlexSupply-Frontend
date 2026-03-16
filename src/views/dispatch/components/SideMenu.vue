@@ -25,20 +25,18 @@
     </nav>
 
     <div class="user-profile">
-      <div class="avatar">👨‍✈️</div>
+      <div class="avatar-dynamic">
+        <img v-if="currentUser.avatar && currentUser.avatar.startsWith('http')"
+             :src="currentUser.avatar" class="avatar-img" alt="avatar" />
+        <span v-else class="avatar-emoji">{{ currentUser.avatar || '👤' }}</span>
+      </div>
       <div class="u-info">
         <div class="u-name">{{ currentUser.username }}</div>
         <div class="u-role" :style="{ color: currentUser.isVerified === 1 ? '#10b981' : '#f59e0b' }">
-          {{ roleName }} · {{ currentUser.isVerified === 1 ? '已认证' : '待核验' }}
+          {{ roleName }}
+          <span v-if="currentUser.isVerified === 0" style="font-size:12px">(审核中)</span>
         </div>
       </div>
-      <button class="logout-btn" @click="handleLogout" title="退出登录">
-        <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-          <polyline points="16 17 21 12 16 7"></polyline>
-          <line x1="21" y1="12" x2="9" y2="12"></line>
-        </svg>
-      </button>
     </div>
   </aside>
 </template>
@@ -64,7 +62,6 @@ const currentUser = ref({
 const roleMap = { 1: '受赠长者', 2: '爱心商家', 3: '城市护航骑士', 4: '指挥中心' }
 const roleName = computed(() => roleMap[currentUser.value.role] || '未知角色')
 
-// 🚨 给每个菜单加上 requiresAuth 标识，只有“个人账号设置”不需要权限
 const allMenus = [
   { name: '实时调度大屏', icon: '🗺️', path: '/map', roles: [3, 4], requiresAuth: true },
   { name: '异常预警监控', icon: '🚨', path: '/admin/exception-monitor', roles: [4], requiresAuth: true },
@@ -77,9 +74,13 @@ const allMenus = [
   { name: '我的信誉档案', icon: '🏆', path: '/volunteer/credit', roles: [3], requiresAuth: true },
   { name: '物资捐赠大厅', icon: '💝', path: '/merchant/donate', roles: [2], requiresAuth: true },
   { name: '我的捐赠记录', icon: '📦', path: '/merchant/history', roles: [2], requiresAuth: true },
-  { name: '紧急呼救大舱', icon: '🚨', path: '/sos', roles: [1], requiresAuth: false }, // 老人呼救特殊开绿灯
+
+  // 🚨 核心修复：把“日常食物银行”加进 Role = 1 的可见菜单中
+  { name: '日常食物银行', icon: '🏪', path: '/market', roles: [1], requiresAuth: true },
+  { name: '紧急呼救大舱', icon: '🚨', path: '/sos', roles: [1], requiresAuth: false },
   { name: '我的受赠档案', icon: '📜', path: '/recipient/history', roles: [1], requiresAuth: true },
-  { name: '个人账号设置', icon: '👤', path: '/volunteer/profile', roles: [1, 2, 3, 4], requiresAuth: false } // 任何时候都能进
+
+  { name: '个人账号设置', icon: '👤', path: '/volunteer/profile', roles: [1, 2, 3, 4], requiresAuth: false }
 ]
 
 const visibleMenus = computed(() => allMenus.filter(menu => menu.roles.includes(currentUser.value.role)))
@@ -164,4 +165,8 @@ const handleLogout = () => {
 
 .logout-btn { background: none; border: none; color: #94a3b8; cursor: pointer; padding: 8px; border-radius: 8px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
 .logout-btn:hover { background: #fee2e2; color: #ef4444; }
+
+.avatar-dynamic { width: 45px; height: 45px; border-radius: 50%; overflow: hidden; background: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+.avatar-img { width: 100%; height: 100%; object-fit: cover; }
+.avatar-emoji { font-size: 1.8rem; line-height: 1; }
 </style>

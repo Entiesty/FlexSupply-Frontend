@@ -18,6 +18,7 @@
           <div class="tab-item" :class="{ active: currentRole === 1 }" @click="switchRole(1)">👴 受赠关怀名录</div>
           <div class="tab-item" :class="{ active: currentRole === 2 }" @click="switchRole(2)">🏪 合作商家矩阵</div>
           <div class="tab-item" :class="{ active: currentRole === 3 }" @click="switchRole(3)">🚴 骑士运力大盘</div>
+          <div class="tab-item" :class="{ active: currentRole === 4 }" @click="switchRole(4)">🛡️ 指挥中心节点</div>
         </div>
 
         <div class="toolbar">
@@ -25,7 +26,8 @@
           <button class="search-btn" @click="fetchData">检索档案</button>
         </div>
 
-        <el-table :data="userList" style="width: 100%" class="dopamine-table" v-loading="loading" :empty-text="'✨ 暂无相关档案，快去邀请用户入驻吧！'">          <el-table-column prop="userId" label="档案号" min-width="100" align="center">
+        <el-table :data="userList" style="width: 100%" class="custom-table" v-loading="loading" :empty-text="'✨ 暂无相关档案，快去邀请用户入驻吧！'">
+          <el-table-column prop="userId" label="档案号" min-width="100" align="center">
             <template #default="scope"><span class="id-badge">#{{ scope.row.userId }}</span></template>
           </el-table-column>
 
@@ -73,11 +75,17 @@
           <el-table-column label="风控干预指令" min-width="240" align="center" fixed="right">
             <template #default="scope">
               <button v-if="currentRole === 1" class="action-btn btn-edit" @click="handleEditTag(scope.row)">🏷️ 修改标签</button>
+
               <button v-if="currentRole === 2 && scope.row.status !== 0" class="action-btn btn-reject" @click="handleRejectMerchant(scope.row.userId)">🚫 强制清退</button>
               <span v-else-if="currentRole === 2 && scope.row.status === 0" class="banned-mark">⚠️ 资产已熔断</span>
+
               <template v-if="currentRole === 3">
                 <button class="action-btn btn-edit" @click="handleCredit(scope.row.userId, 10)">🎖️ 奖励</button>
                 <button class="action-btn btn-reject" @click="handleCredit(scope.row.userId, -20)">⚔️ 处罚</button>
+              </template>
+
+              <template v-if="currentRole === 4">
+                <span style="color: #94a3b8; font-size: 0.85rem; font-weight: bold;">🛡️ 底座节点不可干预</span>
               </template>
             </template>
           </el-table-column>
@@ -90,7 +98,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getUserList, updateUserTag, updateUserCredit, evictUser } from '@/api/admin' // 确保你的 api/admin.js 有 getUserList
+import { getUserList, updateUserTag, updateUserCredit, evictUser } from '@/api/admin'
 
 const loading = ref(false)
 const userList = ref([])
@@ -106,27 +114,24 @@ const switchRole = (role) => {
 const fetchData = async () => {
   loading.value = true
   try {
-    // 默认请求 isVerified=1 的，只有进了台账的才是正式人员
     const res = await getUserList({ role: currentRole.value, keyword: keyword.value, pageNum: 1, pageSize: 50, isVerified: 1 })
     userList.value = res.data.records || []
   } catch (e) {} finally { loading.value = false }
 }
 
-// 1. 修改人群标签
 const handleEditTag = (row) => {
   ElMessageBox.prompt('重塑该受赠方的系统画像标签 (决定了多因子匹配的权重)：', '🏷️ 修改人群标签', {
     confirmButtonText: '确定保存', cancelButtonText: '取消', inputValue: row.userTag, customClass: 'dopamine-msg-box'
   }).then(async ({ value }) => {
     if (!value) return
     try {
-      await updateUserTag(row.userId, value, 1) // 直接写新标签
+      await updateUserTag(row.userId, value, 1)
       ElMessage.success('画像标签修正完成，调度引擎将按新标签算力执行！')
       fetchData()
     } catch (e) {}
   }).catch(() => {})
 }
 
-// 2. 信誉资金盘干预
 const handleCredit = (userId, scoreChange) => {
   const actionName = scoreChange > 0 ? `奖励 ${scoreChange} 分` : `处罚扣除 ${Math.abs(scoreChange)} 分`
   ElMessageBox.prompt(`正在对运力进行信誉干预 [${actionName}]，请输入记账事由：`, '🏆 信誉资产清算', {
@@ -136,19 +141,18 @@ const handleCredit = (userId, scoreChange) => {
   }).then(async ({ value }) => {
     try {
       await updateUserCredit(userId, scoreChange, value)
-      ElMessage.success(`干预指令生效：流水已计入区块链/系统账本！`)
+      ElMessage.success(`干预指令生效：流水已计入系统账本！`)
       fetchData()
     } catch (e) {}
   }).catch(() => {})
 }
 
-// 3. 熔断清退商家
 const handleRejectMerchant = (userId) => {
   ElMessageBox.confirm('极其危险！清退商家将瞬间冻结其名下未接单库存，并撤销其相关派发工单！', '☢️ 物理熔断与网络隔离', {
     confirmButtonText: '强制清退', cancelButtonText: '取消', type: 'error', customClass: 'dopamine-msg-box'
   }).then(async () => {
     try {
-      await evictUser(userId) // 调用底层熔断接口
+      await evictUser(userId)
       ElMessage.success('清退完毕！该节点及附属资产已被彻底熔断。')
       fetchData()
     } catch (e) {}
@@ -172,13 +176,11 @@ onMounted(() => fetchData())
 
 .glass-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(20px); border-radius: 24px; padding: 30px; box-shadow: 0 20px 40px rgba(0,0,0,0.04); border: 1px solid #fff; }
 
-/* 动态 Tab 优化 (类似苹果控制中心) */
-.role-tabs { display: flex; gap: 10px; margin-bottom: 25px; background: #f1f5f9; padding: 6px; border-radius: 16px; width: fit-content; }
+.role-tabs { display: flex; gap: 10px; margin-bottom: 25px; background: #f1f5f9; padding: 6px; border-radius: 16px; width: fit-content; flex-wrap: wrap;}
 .tab-item { padding: 10px 25px; font-size: 1.05rem; font-weight: 900; color: #64748b; cursor: pointer; transition: 0.3s; border-radius: 12px; user-select: none; }
 .tab-item:hover { color: #1e293b; }
 .tab-item.active { background: #fff; color: #ea580c; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
 
-/* 搜索栏 */
 .toolbar { display: flex; gap: 15px; margin-bottom: 20px; }
 .search-input { flex: 1; max-width: 400px; padding: 14px 18px; border: 2px solid #e2e8f0; border-radius: 14px; outline: none; transition: 0.3s; font-size: 1rem; font-weight: bold; background: #f8fafc; color: #1e293b; }
 .search-input:focus { border-color: #f97316; background: #fff; box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.1); }
@@ -186,16 +188,15 @@ onMounted(() => fetchData())
 .search-btn:hover { background: #0f172a; transform: translateY(-2px); box-shadow: 0 6px 15px rgba(15, 23, 42, 0.2); }
 
 /* 表格深度美化 */
-:deep(.dopamine-table) { border-radius: 16px; overflow: hidden; --el-table-border-color: transparent; }
-:deep(.dopamine-table th.el-table__cell) { background-color: #f8fafc; color: #475569; font-weight: 900; font-size: 0.95rem; padding: 18px 0; }
-:deep(.dopamine-table td.el-table__cell) { padding: 12px 0; border-bottom: 1px dashed #e2e8f0; color: #334155; }
+:deep(.custom-table) { border-radius: 16px; overflow: hidden; --el-table-border-color: transparent; }
+:deep(.custom-table th.el-table__cell) { background-color: #f8fafc; color: #475569; font-weight: 900; font-size: 0.95rem; padding: 18px 0; text-align: center !important; }
+:deep(.custom-table td.el-table__cell) { padding: 12px 0; border-bottom: 1px dashed #e2e8f0; color: #334155; text-align: center !important; }
 :deep(.el-table__inner-wrapper::before) { display: none; }
 
 .id-badge { background: #f1f5f9; padding: 6px 12px; border-radius: 8px; font-weight: 900; color: #64748b; font-size: 0.9rem; font-family: monospace;}
 .company-name { font-weight: 900; font-size: 1.05rem; color: #0f172a; }
 .phone-text { font-family: monospace; font-size: 1rem; color: #64748b; font-weight: bold; }
 
-/* 状态与标签 */
 .status-dot-wrap { display: flex; align-items: center; justify-content: center; gap: 8px; background: #f8fafc; padding: 4px 10px; border-radius: 20px; width: fit-content; margin: 0 auto; }
 .status-dot { width: 8px; height: 8px; border-radius: 50%; }
 .dot-active { background: #10b981; box-shadow: 0 0 8px rgba(16, 185, 129, 0.5); }
@@ -207,17 +208,9 @@ onMounted(() => fetchData())
 .credit-text { font-family: monospace; font-size: 1.2rem; color: #ea580c; font-weight: 900; }
 .banned-mark { font-weight: 900; color: #ef4444; font-size: 0.9rem; background: #fef2f2; padding: 6px 12px; border-radius: 8px; border: 1px solid #fecaca;}
 
-/* 操作按钮 */
 .action-btn { border: none; padding: 8px 16px; border-radius: 10px; font-weight: 900; cursor: pointer; transition: all 0.2s; font-size: 0.85rem; margin: 0 4px; }
 .btn-edit { background: #f1f5f9; color: #3b82f6; }
 .btn-edit:hover { background: #eff6ff; color: #2563eb; transform: translateY(-2px); box-shadow: 0 4px 10px rgba(59, 130, 246, 0.15); }
 .btn-reject { background: #fff; color: #ef4444; border: 2px solid #fecaca; }
 .btn-reject:hover { background: #fef2f2; border-color: #ef4444; transform: translateY(-2px); box-shadow: 0 4px 10px rgba(239, 68, 68, 0.15); }
-
-/* 表格深度美化 */
-:deep(.dopamine-table) { border-radius: 16px; overflow: hidden; --el-table-border-color: transparent; }
-/* 🚨 增加强制居中 text-align: center !important; */
-:deep(.dopamine-table th.el-table__cell) { background-color: #f8fafc; color: #475569; font-weight: 900; font-size: 0.95rem; padding: 18px 0; text-align: center !important; }
-:deep(.dopamine-table td.el-table__cell) { padding: 12px 0; border-bottom: 1px dashed #e2e8f0; color: #334155; text-align: center !important; }
-:deep(.el-table__inner-wrapper::before) { display: none; }
 </style>

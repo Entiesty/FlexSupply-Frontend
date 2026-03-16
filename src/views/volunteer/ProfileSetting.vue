@@ -139,7 +139,7 @@
       </div>
     </div>
 
-    <el-dialog v-model="mapVisible" title="定位常驻服务网格" width="750px" @opened="initMap" destroy-on-close custom-class="map-dialog">
+    <el-dialog v-model="mapVisible" title="定位常驻服务网格" width="95%" style="max-width: 750px;" @opened="initMap" destroy-on-close custom-class="map-dialog">
       <div class="map-search-bar">
         <el-autocomplete v-model="searchKeyword" :fetch-suggestions="querySearchAsync" placeholder="请输入详细地址" @select="handleSelectPoi" class="map-search-input-wrap" value-key="name" :trigger-on-focus="false" clearable @keyup.enter="handleSearchAddress">
           <template #default="{ item }"><div class="custom-poi-item"><div class="poi-name">{{ item.name }}</div><div class="poi-address">{{ item.district }}{{ item.address }}</div></div></template>
@@ -173,7 +173,7 @@ const roleThemeClass = computed(() => { const map = { 1: 'theme-recipient', 2: '
 const profileForm = reactive({ username: '', currentLon: '', currentLat: '', addressName: '', doorNumber: '', emergencyPhone: '', healthRemark: '', identityProofUrl: '', vehicleType: 1 })
 const pwdForm = reactive({ oldPassword: '', newPassword: '', confirmPassword: '' })
 
-// 高德地图变量及方法 (压缩保持)
+// 高德地图变量及方法
 const mapVisible = ref(false); let mapInstance = null, markerInstance = null, geocoderInstance = null, autoCompleteInstance = null; const searchKeyword = ref(''); const tempLoc = reactive({ lng: '', lat: '', address: '' })
 const openMapDialog = () => { tempLoc.lng = profileForm.currentLon; tempLoc.lat = profileForm.currentLat; tempLoc.address = profileForm.addressName; searchKeyword.value = ''; mapVisible.value = true }
 const querySearchAsync = (q, cb) => { if(!q||!autoCompleteInstance){cb([]);return} autoCompleteInstance.search(q, (s, r) => { cb(s==='complete'&&r.tips?r.tips.filter(i=>i.location):[]) }) }
@@ -193,7 +193,6 @@ const fetchAllData = async () => {
     const [profileRes, statsRes] = await Promise.all([ getUserProfile(), getDashboardStats() ])
     profile.value = profileRes.data;
 
-    // 🚨 核心修复 1：将基础数据(profile)和统计数据(stats)深度合并，防止 isVerified 变成 undefined
     stats.value = { ...profileRes.data, ...(statsRes.data || {}) }
 
     profileForm.username = profileRes.data.username || ''
@@ -214,16 +213,12 @@ const handleAvatarChange = async(e) => { const f=e.target.files[0]; if(!f)return
 const triggerProofUpload = () => { if(stats.value.isVerified===1) return ElMessage.info('资质已通过，无需重复上传'); if(proofInput.value) proofInput.value.click() }
 const handleProofChange = async(e) => { const f=e.target.files[0]; if(!f)return; loading.value=true; try{ const r=await uploadFile(f); profileForm.identityProofUrl=r.data; ElMessage.success('凭证照片暂存成功！请点击下方按钮提交。') }catch(err){}finally{loading.value=false;e.target.value=''} }
 
-// ================= 🚨 核心改造：四大金刚拦截器 =================
-
 const handleUpdateProfile = async (isSubmitAudit = false) => {
   const payload = {
     username: profileForm.username,
     vehicleType: profileForm.vehicleType
   }
 
-  // 🚨 核心修复 2：只有当用户真正上传了【新】照片时，才将其包含在请求体中
-  // 否则一旦发给后端，后端风控机制会误以为换了证件，强行将你的状态打回 0 (未审核)！
   if (profileForm.identityProofUrl && profileForm.identityProofUrl !== profile.value.identityProofUrl) {
     payload.identityProofUrl = profileForm.identityProofUrl
   }
@@ -236,7 +231,7 @@ const handleUpdateProfile = async (isSubmitAudit = false) => {
     localStorage.setItem('username', profileForm.username)
     stats.value.username = profileForm.username
     if (!isSubmitAudit) ElMessage.success('基础资料更新成功！')
-    fetchAllData() // 刷新状态
+    fetchAllData()
     return true
   } catch (e) { return false }
 }
@@ -261,31 +256,16 @@ const handleSubmitAudit = async () => {
   }
 }
 
-// 💡 注意：把 userInfo 换成你真实使用的变量名！如果是 reactive 对象则不需要加 .value
 const unverifiedTip = computed(() => {
-  // 假设你的用户数据存放在 userInfo 这个 ref 中：
   const currentRole = userInfo.value?.role;
-
   if (currentRole === 1) {
-    return {
-      title: "【求助与关怀档案】尚未激活",
-      desc: "请向下滚动完善健康备注与门牌号，以便算法为您精准匹配合适的援助物资！"
-    };
+    return { title: "【求助与关怀档案】尚未激活", desc: "请向下滚动完善健康备注与门牌号，以便算法为您精准匹配合适的援助物资！" };
   } else if (currentRole === 2) {
-    return {
-      title: "【爱心商铺入驻资质】处于受限状态",
-      desc: "请向下滚动补充商铺定位与资质，解锁全量物资捐赠与调度网络！"
-    };
+    return { title: "【爱心商铺入驻资质】处于受限状态", desc: "请向下滚动补充商铺定位与资质，解锁全量物资捐赠与调度网络！" };
   } else if (currentRole === 3) {
-    return {
-      title: "【城市护航者接单权限】处于受限状态",
-      desc: "请向下滚动上传身份证明与载具信息，解锁完整的调度大盘与实况抢单！"
-    };
+    return { title: "【城市护航者接单权限】处于受限状态", desc: "请向下滚动上传身份证明与载具信息，解锁完整的调度大盘与实况抢单！" };
   }
-  return {
-    title: "【系统权限】受限",
-    desc: "请向下滚动完善基础资料并上传资质凭证。"
-  };
+  return { title: "【系统权限】受限", desc: "请向下滚动完善基础资料并上传资质凭证。" };
 })
 
 const handleUpdatePassword = async () => { if (!pwdForm.oldPassword || !pwdForm.newPassword) return ElMessage.warning('密码填写不完整'); if (pwdForm.newPassword !== pwdForm.confirmPassword) return ElMessage.warning('两次新密码不一致'); try { await updatePassword({ oldPassword: pwdForm.oldPassword, newPassword: pwdForm.newPassword }); ElMessage.success('密码修改成功！'); pwdForm.oldPassword = ''; pwdForm.newPassword = ''; pwdForm.confirmPassword = ''; } catch (e) { } }
@@ -294,17 +274,14 @@ onMounted(() => { fetchAllData(); window.addEventListener('resize', () => { if(m
 </script>
 
 <style scoped>
-/* 继承你原先优美的 CSS */
 .main-content { flex: 1; display: flex; flex-direction: column; position: relative; padding: 40px; background: #f1f5f9; overflow-y: auto; height: 100vh; box-sizing: border-box; }
 .top-status { position: absolute; top: 20px; right: 30px; z-index: 100; background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); padding: 8px 16px; border-radius: 20px; font-size: 0.75rem; color: #64748b; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05); }
 .pulse-dot { width: 8px; height: 8px; background: #8b5cf6; border-radius: 50%; box-shadow: 0 0 8px #8b5cf6; animation: pulse-purple 2s infinite; }
 @keyframes pulse-purple { 0% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(139, 92, 246, 0); } 100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); } }
 
-/* 🚨 全局警告黄条 */
 .global-alert-banner { background: #fffbeb; border: 1px solid #fde68a; color: #d97706; padding: 15px 20px; border-radius: 16px; margin-bottom: 25px; font-size: 0.95rem; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.1); line-height: 1.5; }
 .global-alert-banner strong { color: #b45309; }
 
-/* 🚨 未审核锁定面板 */
 .locked-dashboard { position: relative; z-index: 10; background: rgba(0,0,0,0.2); backdrop-filter: blur(5px); border: 2px dashed rgba(255,255,255,0.4); border-radius: 20px; padding: 30px; text-align: center; color: white; margin-top: 10px; }
 .lock-huge { font-size: 3rem; margin-bottom: 10px; opacity: 0.9; animation: float 3s ease-in-out infinite; }
 @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
@@ -388,7 +365,6 @@ onMounted(() => { fetchAllData(); window.addEventListener('resize', () => { if(m
 .auth-btn:hover { box-shadow: 0 12px 25px rgba(59, 130, 246, 0.3); }
 .auth-btn:disabled { background: #cbd5e1; cursor: not-allowed; box-shadow: none; color: #fff; }
 
-/* 地图搜索组件保留原样 */
 .inner-divider { height: 1px; background: #e2e8f0; margin: 10px 0 25px 0; }
 .location-picker-box { display: flex; align-items: stretch; gap: 15px; margin-top: 5px; }
 .loc-display { flex: 1; background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 14px; padding: 12px 18px; display: flex; flex-direction: column; justify-content: center; transition: 0.3s;}
@@ -410,7 +386,14 @@ onMounted(() => { fetchAllData(); window.addEventListener('resize', () => { if(m
 .custom-poi-item { line-height: 1.4; padding: 5px 0; }
 .poi-name { font-weight: bold; color: #1e293b; font-size: 0.95rem; text-overflow: ellipsis; overflow: hidden; }
 .poi-address { font-size: 0.75rem; color: #94a3b8; text-overflow: ellipsis; overflow: hidden; margin-top: 2px; }
+
 :deep(.map-dialog) { border-radius: 20px; overflow: hidden; }
 :deep(.map-dialog .el-dialog__header) { background: #f8fafc; font-weight: 900; border-bottom: 1px solid #f1f5f9; padding: 20px 25px; margin: 0;}
 :deep(.map-dialog .el-dialog__body) { padding: 25px; }
+
+/* 🚨 移动端地图弹窗适配 */
+@media screen and (max-width: 768px) {
+  .amap-box { height: 350px !important; }
+  :deep(.map-dialog .el-dialog__body) { padding: 10px !important; }
+}
 </style>

@@ -163,7 +163,7 @@ import { ElMessage, ElNotification } from 'element-plus'
 import { Monitor, Right, MapLocation, UploadFilled, Compass, Location } from '@element-plus/icons-vue'
 import { getAvailableOrders, grabTask, getMyTasks, checkOutTask } from '@/api/trade'
 import { getUserProfile } from '@/api/user'
-import { uploadFile } from '@/api/common' // 🚨 引入真实的通用文件上传接口
+import { uploadFile } from '@/api/common'
 import { useRoute } from 'vue-router'
 import AMapLoader from '@amap/amap-jsapi-loader'
 
@@ -173,7 +173,7 @@ const activeTab = ref(route.query.tab || 'available')
 const currentCredit = ref(0)
 const loading = ref(false)
 const taskList = ref([])
-let pollingTimer = null // 🚨 轮询定时器
+let pollingTimer = null
 
 const locStatus = reactive({ type: 'none', label: '引擎雷达搜索中...', color: '#94a3b8' })
 const currentLocation = reactive({ lon: null, lat: null })
@@ -193,7 +193,6 @@ const uploadRef = ref(null)
 const isDonation = (sn) => sn?.startsWith('DON-')
 const isValidCoordinate = (lon, lat) => lon && lat && !isNaN(lon) && !isNaN(lat) && lon > 0 && lat > 0
 
-// ================= UI 格式化工具 =================
 const formatUrgency = (level) => {
   const map = { 1: '🔥 特急(1级)', 2: '🔴 紧急(2级)', 3: '🟠 较高(3级)', 4: '🟡 常规(4级)', 5: '🟢 宽松(5级)' }
   return map[level] || '🟡 常规(5级)'
@@ -219,7 +218,6 @@ const calculateStraightDistance = (lon1, lat1, lon2, lat2) => {
   return (R * c).toFixed(1);
 }
 
-// ================= 核心混合定位引擎 =================
 const initLocationStrategy = async () => {
   let dbLon = null, dbLat = null;
   try {
@@ -264,7 +262,6 @@ const applyFallbackCoords = (lon, lat) => {
   }
 }
 
-// ================= 生命周期与轮询引擎 =================
 const startLifecycle = () => {
   loadData();
   managePolling();
@@ -272,10 +269,9 @@ const startLifecycle = () => {
 
 const managePolling = () => {
   if (pollingTimer) clearInterval(pollingTimer)
-  // 🚨 只有在抢单大厅才开启心跳轮询
   if (activeTab.value === 'available') {
     pollingTimer = setInterval(() => {
-      loadData(true) // 静默加载，不展示全屏 loading
+      loadData(true)
     }, 6000)
   }
 }
@@ -283,7 +279,7 @@ const managePolling = () => {
 const switchTab = async (tab) => {
   if (activeTab.value === tab) return
   activeTab.value = tab
-  managePolling() // 切换 Tab 时管理轮询
+  managePolling()
   await loadData()
 }
 
@@ -292,8 +288,6 @@ const loadData = async (isSilent = false) => {
   try {
     let res;
     if (activeTab.value === 'available') {
-      // 🚨 核心修复：把硬件级真实 GPS 喂给后端的多因子算法！
-      // (字段名 currentLon/currentLat 请确保与你后端 Controller 接收的实体类参数名一致)
       const params = {}
       if (currentLocation.lon && currentLocation.lat) {
         params.currentLon = currentLocation.lon
@@ -314,15 +308,14 @@ const loadData = async (isSilent = false) => {
 }
 
 onUnmounted(() => {
-  if (pollingTimer) clearInterval(pollingTimer) // 防止内存泄漏
+  if (pollingTimer) clearInterval(pollingTimer)
 })
 
-// ================= 业务操作 =================
 const handleGrab = async (item) => {
   try {
     await grabTask(item.orderId)
     ElNotification({ title: '护航指令已确认', message: `单号 ${item.orderSn} 已接入履约序列，请立即启程。`, type: 'success' })
-    switchTab('progress') // 抢单成功，自动跳到护送页
+    switchTab('progress')
   } catch (err) {}
 }
 
@@ -331,7 +324,6 @@ const openMapPreview = (item) => {
   routeEstimate.distance = 0; routeEstimate.time = 0;
 }
 
-// ================= 📸 硬核闭环：物理世界核销 =================
 const openCheckoutDialog = (item) => { currentCheckoutOrder.value = item; selectedPhoto.value = null; if (uploadRef.value) uploadRef.value.clearFiles(); checkoutVisible.value = true }
 const handlePhotoSelect = (file) => selectedPhoto.value = file
 
@@ -339,20 +331,17 @@ const submitCheckout = async () => {
   if (!selectedPhoto.value) return ElMessage.warning('需要上传现场影像留档，才能完成核销！')
   submitLoading.value = true
   try {
-    // 1. 真实上传图片
     const uploadRes = await uploadFile(selectedPhoto.value.raw)
     const realImageUrl = uploadRes.data
 
-    // 2. 带着图片URL去核销
     await checkOutTask({
       taskId: currentCheckoutOrder.value.taskId || currentCheckoutOrder.value.orderId,
-      proofImage: realImageUrl // 后端在此归档闭环
+      proofImage: realImageUrl
     })
 
     checkoutVisible.value = false
     ElMessage.success('核销闭环完成，现场照片已归档，信誉分已发放！')
 
-    // 刷新数据与状态
     const userRes = await getUserProfile()
     if(userRes?.data) currentCredit.value = userRes.data.creditScore || 0
     loadData()
@@ -360,7 +349,6 @@ const submitCheckout = async () => {
   finally { submitLoading.value = false }
 }
 
-// ================= 🗺️ 导航级三点一线推演引擎 =================
 const initMapRouting = () => {
   isMapLoading.value = true
   nextTick(async () => {
@@ -535,4 +523,21 @@ onMounted(() => { initLocationStrategy() })
 .overlay-item .value { font-size: 24px; font-weight: 900; color: #0f172a; }
 .upload-zone { text-align: center; }
 .upload-tip { color: #64748b; font-size: 14px; margin-bottom: 16px; }
+
+/* 🚨 新增：移动端骑士响应式适配 */
+@media screen and (max-width: 768px) {
+  .workspace-container {
+    padding: 15px 10px !important;
+    min-height: 100vh;
+  }
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 15px;
+  }
+  .header-right { width: 100%; }
+  .credit-badge { width: 100%; justify-content: center; }
+  .segmented-control { width: 100%; flex-wrap: wrap; }
+  .segment-btn { flex: 1; min-width: 40%; text-align: center; justify-content: center;}
+}
 </style>

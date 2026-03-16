@@ -106,6 +106,15 @@ const routes: Array<RouteRecordRaw> = [
         }
     },
     {
+        path: '/market',
+        name: 'FoodBankMarket',
+        component: () => import('@/views/sos/FoodBankMarket.vue'),
+        meta: {
+            requiresAuth: true,
+            roles: [1] // 🚨 核心风控：只有 Role=1 (受赠方) 可以访问这个公益超市
+        }
+    },
+    {
         path: '/:pathMatch(.*)*',
         name: 'NotFound',
         component: () => import('@/views/auth/Auth.vue')

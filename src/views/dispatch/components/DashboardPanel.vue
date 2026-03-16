@@ -38,63 +38,53 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, shallowRef } from 'vue'
 import * as echarts from 'echarts'
 import { getBaseMetrics, getCategoryStock, getVolunteerRank } from '@/api/dispatch'
 
 const metrics = ref({})
 const rankList = ref([])
 const chartRef = ref(null)
-let myChart = null
+
+// 🚨 核心修复：使用 shallowRef 管理 ECharts 实例，避免 Vue 深度代理导致性能爆炸
+const chartInstance = shallowRef(null)
 let refreshTimer = null
 
-// 📦 核心算法：Top N 数据降噪聚合
 const processPieData = (rawData, topN = 4) => {
   if (!rawData || rawData.length === 0) return []
-
-  // 1. 按库存批次降序排列
   const sorted = [...rawData].sort((a, b) => b.totalStock - a.totalStock)
-
   if (sorted.length <= topN) {
     return sorted.map(item => ({ value: item.totalStock, name: item.categoryName }))
   }
-
-  // 2. 截取前 N 名作为核心数据
   const topData = sorted.slice(0, topN).map(item => ({ value: item.totalStock, name: item.categoryName }))
-
-  // 3. 将剩下的所有批次相加，归入“其他”
   const othersValue = sorted.slice(topN).reduce((sum, item) => sum + item.totalStock, 0)
-
   topData.push({
     value: othersValue,
     name: '其他',
     itemStyle: { color: '#cbd5e1' }
   })
-
   return topData
 }
 
-// 初始化图表
 const initChart = (dataList) => {
   if (!chartRef.value) return
-  if (!myChart) myChart = echarts.init(chartRef.value)
+  // 初始化挂载
+  if (!chartInstance.value) {
+    chartInstance.value = echarts.init(chartRef.value)
+  }
 
   const finalData = processPieData(dataList, 4)
-
-  // 🌹 让数据自动升序排列，这样玫瑰图会呈现出漂亮的“螺旋阶梯”变大的视觉效果
   finalData.sort((a, b) => a.value - b.value)
 
   const totalStock = finalData.reduce((sum, item) => sum + item.value, 0)
 
   const option = {
-    // 匹配系统的核心色彩规范
     color: ['#8b5cf6', '#10b981', '#f97316', '#ef4444', '#3b82f6'],
     tooltip: {
       trigger: 'item',
-      backgroundColor: 'rgba(15, 23, 42, 0.9)', // 暗色玻璃态高级感提示框
+      backgroundColor: 'rgba(15, 23, 42, 0.9)',
       borderColor: '#334155',
       textStyle: { color: '#f8fafc', fontSize: 13 },
-      // 动态格式化提示词，明确显示“批次”
       formatter: function (params) {
         return `
           <div style="font-weight:900;margin-bottom:6px;">${params.name}</div>
@@ -112,7 +102,7 @@ const initChart = (dataList) => {
     },
     legend: {
       orient: 'horizontal',
-      top: '68%', // 🚨 给上方张牙舞爪的玫瑰留出充足的空间
+      top: '68%',
       left: 'center',
       itemWidth: 10,
       itemHeight: 10,
@@ -122,7 +112,6 @@ const initChart = (dataList) => {
         const item = finalData.find(i => i.name === name)
         if (!item) return name
         const percent = totalStock > 0 ? ((item.value / totalStock) * 100).toFixed(1) : 0
-        // 🚨 文案全面替换为“批”
         return `{title|${name}} {val|${item.value}批} {pct|(${percent}%)}`
       },
       textStyle: {
@@ -137,30 +126,26 @@ const initChart = (dataList) => {
       {
         name: '储备丰富度',
         type: 'pie',
-        // 🌟 核心开关：开启按半径展示的南丁格尔玫瑰图！
         roseType: 'radius',
-        // 内空外阔，[内圈半径, 外圈最大半径]
         radius: ['15%', '60%'],
-        // 整体位置微调：往上提，给图例让位
         center: ['50%', '35%'],
         avoidLabelOverlap: false,
         itemStyle: {
-          borderRadius: 6,        // 扇形边缘圆滑，拟物化现代感
-          borderColor: '#ffffff', // 强制描白边，切出扇形缝隙
+          borderRadius: 6,
+          borderColor: '#ffffff',
           borderWidth: 2,
-          shadowBlur: 10,         // 加一点泛光阴影
+          shadowBlur: 10,
           shadowColor: 'rgba(0, 0, 0, 0.05)'
         },
-        label: { show: false },   // 为了整洁，直接隐藏外部引线，靠 Hover 和 Legend 看数据
+        label: { show: false },
         labelLine: { show: false },
         data: finalData
       }
     ]
   }
-  myChart.setOption(option)
+  chartInstance.value.setOption(option)
 }
 
-// 抓取全部大屏数据
 const fetchAllData = async () => {
   try {
     const [metricsRes, stockRes, rankRes] = await Promise.all([
@@ -180,18 +165,30 @@ const fetchAllData = async () => {
   }
 }
 
+// 🚨 核心修复：独立的 resize 回调方法
+const handleResize = () => {
+  if (chartInstance.value) {
+    chartInstance.value.resize()
+  }
+}
+
 onMounted(() => {
   fetchAllData()
   refreshTimer = setInterval(fetchAllData, 30000)
 
-  window.addEventListener('resize', () => {
-    if (myChart) myChart.resize()
-  })
+  // 绑定浏览器窗口缩放监听
+  window.addEventListener('resize', handleResize)
 })
 
 onUnmounted(() => {
   if (refreshTimer) clearInterval(refreshTimer)
-  if (myChart) myChart.dispose()
+
+  // 卸载监听和实例，防止内存泄露
+  window.removeEventListener('resize', handleResize)
+  if (chartInstance.value) {
+    chartInstance.value.dispose()
+    chartInstance.value = null
+  }
 })
 </script>
 

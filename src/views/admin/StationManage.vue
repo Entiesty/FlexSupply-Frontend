@@ -363,7 +363,8 @@ const fetchInventory = async (stationId) => {
   inventoryLoading.value = true
   try {
     const res = await getStationGoods(stationId)
-    inventoryList.value = res.data || []
+    // 🚨 核心修复：加上 .records，剥离出真正的数组解构给 el-table
+    inventoryList.value = res.data.records || []
   } catch (error) {
     ElMessage.error('拉取大仓台账失败')
   } finally {
