@@ -92,3 +92,12 @@ export function confirmReceiptOrder(data) {
         params: data // 包含 orderId, rating, comment
     })
 }
+
+// 🎫 线下万能验码核销 (供管理员/商家使用)
+export function verifyPickup(pickupCode) {
+    return request({
+        url: '/trade/order/verify-pickup',
+        method: 'post',
+        params: { pickupCode }
+    })
+}

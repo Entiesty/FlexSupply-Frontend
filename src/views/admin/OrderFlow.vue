@@ -120,8 +120,19 @@
             <el-table-column prop="status" label="实时状态" min-width="120" align="center">
               <template #default="scope">
                 <el-tag v-if="scope.row.status === 0" type="danger" effect="light">🟡 待匹配 (未接单)</el-tag>
-                <el-tag v-else-if="scope.row.status === 1" type="primary" effect="light">🔵 调度流转中</el-tag>
+
+                <el-tag v-else-if="scope.row.status === 1" type="primary" effect="light">
+                  {{ scope.row.deliveryMethod === 2 ? '🔵 待线下提货' : '🔵 调度流转中' }}
+                </el-tag>
+
                 <el-tag v-else-if="scope.row.status === 2" type="success" effect="light">🟢 履约已完结</el-tag>
+
+                <el-tag v-else-if="scope.row.status === 3 && scope.row.deliveryMethod === 2" type="success" effect="dark" style="background-color: #10b981; border-color: #10b981;">
+                  🟢 验码已核销
+                </el-tag>
+
+                <el-tag v-else-if="scope.row.status === 4" type="info" effect="dark">⚫ 超时已释放</el-tag>
+
                 <el-tag v-else type="info" effect="light">⚫ 已强制取消</el-tag>
               </template>
             </el-table-column>

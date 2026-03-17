@@ -22,6 +22,13 @@
         </div>
         <span v-if="item.requiresAuth && currentUser.isVerified === 0" class="lock-icon">🔒</span>
       </div>
+
+      <div class="menu-item verify-btn" v-if="[2, 4].includes(currentUser.role)" @click="triggerVerifyPickup">
+        <div class="menu-content">
+          <span class="m-icon">🎫</span>
+          <span class="m-name">线下扫码 / 验码核销</span>
+        </div>
+      </div>
     </nav>
 
     <div class="user-profile">
@@ -47,6 +54,29 @@ import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { logout } from '@/api/auth'
 import { getUserProfile } from '@/api/user' // 🚨 引入获取个人信息的 API
+import { verifyPickup } from '@/api/trade' // 引入刚才加的接口
+
+// 🚨 触发线下核销的全局弹窗逻辑
+const triggerVerifyPickup = () => {
+  ElMessageBox.prompt(
+      '居民到达线下物理据点后，请输入其出示的 6 位数字取件码进行物资交接与核销：',
+      '🎫 线下实物验码核销',
+      {
+        confirmButtonText: '确认提取',
+        cancelButtonText: '取消',
+        inputPattern: /^\d{6}$/,
+        inputErrorMessage: '取件码格式错误，必须为 6 位纯数字',
+        customClass: 'dopamine-msg-box'
+      }
+  ).then(async ({ value }) => {
+    try {
+      await verifyPickup(value)
+      ElMessage.success(`核销成功！凭证码 ${value} 对应的物资已物理交接完毕，系统已计入您的信誉账户。`)
+    } catch (error) {
+      // 错误提示由后端的 BusinessException 拦截器自动抛出
+    }
+  }).catch(() => {})
+}
 
 const router = useRouter()
 const route = useRoute()
@@ -169,4 +199,18 @@ const handleLogout = () => {
 .avatar-dynamic { width: 45px; height: 45px; border-radius: 50%; overflow: hidden; background: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
 .avatar-img { width: 100%; height: 100%; object-fit: cover; }
 .avatar-emoji { font-size: 1.8rem; line-height: 1; }
+
+/* 让核销按钮稍微显眼一点 */
+.menu-item.verify-btn {
+  margin-top: 15px;
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px dashed #34d399;
+}
+.menu-item.verify-btn:hover {
+  background: #d1fae5;
+  color: #047857;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(16, 185, 129, 0.2);
+}
 </style>

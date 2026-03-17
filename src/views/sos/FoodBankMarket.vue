@@ -13,6 +13,24 @@
         </div>
       </header>
 
+      <transition name="fade-slide">
+        <div class="active-voucher-card" v-if="activePickupOrder">
+          <div class="voucher-left">
+            <div class="v-icon pulse-glow-green">🎫</div>
+            <div class="v-info">
+              <h3>您有一个待提取的物资</h3>
+              <p><strong>物资：</strong>{{ activePickupOrder.goodsName }} (x{{ activePickupOrder.goodsCount }})</p>
+              <p><strong>门店：</strong>{{ activePickupOrder.sourceName || '社区指定驿站' }}</p>
+              <p class="warning-text">⚠️ 请在超时释放前尽快前往提取</p>
+            </div>
+          </div>
+          <div class="voucher-right">
+            <span class="v-label">取件码</span>
+            <span class="v-code">{{ activePickupOrder.pickupCode }}</span>
+          </div>
+        </div>
+      </transition>
+
       <div class="glass-panel" v-loading="loading">
         <div class="user-info-bar">
           <div class="avatar-wrap green-gradient">
@@ -52,7 +70,9 @@
                     <span class="g-cat">{{ goods.category }}</span>
                   </div>
                 </div>
-                <button class="reserve-btn" @click="handleReserve(station, goods)">预约</button>
+                <button class="reserve-btn" :disabled="activePickupOrder != null" @click="handleReserve(station, goods)">
+                  {{ activePickupOrder ? '已有预约' : '预约' }}
+                </button>
               </div>
               <div v-if="!station.goodsList || station.goodsList.length === 0" class="no-goods-tip">
                 该驿站当前暂无库存
@@ -112,7 +132,7 @@ import { OfficeBuilding } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { getUserProfile } from '@/api/user'
 import { getStationPage, getStationGoods } from '@/api/resource'
-import { publishDemand } from '@/api/trade'
+import { publishDemand, getMyHistoryOrders } from '@/api/trade' // 引入历史订单查询接口
 
 const loading = ref(false)
 const locationText = ref('定位中...')
@@ -124,6 +144,9 @@ const currentSelectStation = ref(null)
 const currentSelectGoods = ref(null)
 const submitting = ref(false)
 const pickupResult = ref(null)
+
+// 🚨 新增：常驻活跃自提单凭证
+const activePickupOrder = ref(null)
 
 const getCategoryIcon = (cat) => {
   const map = { '粮油副食': '🍚', '米面粮油': '🌾', '生鲜水果': '🍎', '速食品': '🍜', '烘焙糕点': '🍞' }
@@ -139,6 +162,7 @@ const calculateDistance = (lon1, lat1, lon2, lat2) => {
 const fetchData = async () => {
   loading.value = true
   try {
+    // 1. 获取个人定位
     const userRes = await getUserProfile()
     if (userRes.data?.currentLon) {
       userLoc.value = [userRes.data.currentLon, userRes.data.currentLat]
@@ -147,19 +171,26 @@ const fetchData = async () => {
       locationText.value = '未设置家庭定位，使用默认坐标'
     }
 
+    // 2. 🚨 静默查询：是否有正在进行的自提单，防止遗忘
+    try {
+      const historyRes = await getMyHistoryOrders({ pageNum: 1, pageSize: 20 })
+      const orders = historyRes.data.records || []
+      // 寻找状态=1(待取货) 且 履约方式=2(自提) 的存活订单
+      activePickupOrder.value = orders.find(o => o.status === 1 && o.deliveryMethod === 2 && o.pickupCode) || null
+    } catch (e) {
+      console.warn('防遗忘溯源失败', e)
+    }
+
+    // 3. 获取大仓列表及库存
     const stRes = await getStationPage({ pageNum: 1, pageSize: 10 })
     let stations = stRes.data.records || []
 
-// 找到 fetchData 方法里的这个 for 循环，修改里面的一行：
     for (let st of stations) {
       st.distance = calculateDistance(userLoc.value[0], userLoc.value[1], st.longitude, st.latitude)
       try {
         const gRes = await getStationGoods(st.stationId)
-        // 🚨 核心修复：同样加上 .records
-        st.goodsList = gRes.data.records || []
-      } catch (e) {
-        st.goodsList = []
-      }
+        st.goodsList = gRes.data.records || [] // 注意这里加了 .records 以防万一
+      } catch (e) { st.goodsList = [] }
     }
 
     stationList.value = stations.filter(s => s.goodsList.length > 0).sort((a, b) => a.distance - b.distance)
@@ -171,6 +202,9 @@ const fetchData = async () => {
 }
 
 const handleReserve = (station, goods) => {
+  if (activePickupOrder.value) {
+    return ElMessage.warning('您当前已有一笔待提取的物资，请先核销后再预约，把资源留给更多人！')
+  }
   currentSelectStation.value = station
   currentSelectGoods.value = goods
   pickupResult.value = null
@@ -180,20 +214,17 @@ const handleReserve = (station, goods) => {
 const confirmSubmit = async () => {
   submitting.value = true
   try {
-    // 🚨 触发精准自提预扣库存机制
     const res = await publishDemand({
-      goodsId: currentSelectGoods.value.goodsId,      // 精准锁定物资 ID
-      sourceId: currentSelectStation.value.stationId, // 精准锁定据点 ID
+      goodsId: currentSelectGoods.value.goodsId,
+      sourceId: currentSelectStation.value.stationId,
       requiredCategory: currentSelectGoods.value.category,
       urgencyLevel: 1,
       targetLon: userLoc.value[0],
       targetLat: userLoc.value[1],
       description: currentSelectGoods.value.goodsName,
-      deliveryMethod: 2 // 自提模式
+      deliveryMethod: 2
     })
 
-    // 如果你在后端的 publishDemand 里把 pickupCode 塞到了 Result 的 data 里，可以直接取；
-    // 如果没塞，这里为了演示闭环先生成一个随机的，生产环境建议接口返回。
     const code = res.data?.pickupCode || String(Math.floor(Math.random() * 900000) + 100000)
     pickupResult.value = { pickupCode: code }
 
@@ -206,23 +237,39 @@ const confirmSubmit = async () => {
 
 const closeAndRefresh = () => {
   drawerVisible.value = false
-  fetchData()
+  fetchData() // 刷新后，页面顶部会立刻挂载凭证悬浮舱
 }
 
 onMounted(() => fetchData())
 </script>
 
 <style scoped>
-/* =========== 移动端 UI 规范 =========== */
-.main-content { flex: 1; display: flex; flex-direction: column; position: relative; padding: 40px 20px; background: #f1f5f9; min-height: 100vh; overflow-y: auto;}
+.main-content { flex: 1; display: flex; flex-direction: column; position: relative; padding: 40px 30px; background: #f1f5f9; min-height: 100vh; overflow-y: auto;}
 .top-status { position: absolute; top: 20px; right: 30px; z-index: 100; background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); padding: 8px 16px; border-radius: 20px; font-size: 0.85rem; color: #10b981; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05); font-weight: bold;}
 .pulse-dot.green { width: 10px; height: 10px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; animation: pulse-green 2s infinite; }
 @keyframes pulse-green { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); } 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
 
-.market-wrapper { max-width: 480px; margin: 0 auto; width: 100%; padding-bottom: 50px;}
+/* 🚨 核心改动：解除宽度限制，最大 1400px，让宽屏也能看爽 */
+.market-wrapper { max-width: 1400px; margin: 0 auto; width: 100%; padding-bottom: 50px;}
+
 .page-header h2.theme-green { color: #10b981; font-size: 2.2rem; margin: 0 0 8px 0; font-weight: 900; letter-spacing: 1px; }
 .page-header p { color: #64748b; font-size: 1.1rem; margin: 0 0 25px 0; }
-.glass-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-radius: 24px; padding: 30px 25px; box-shadow: 0 15px 35px rgba(0,0,0,0.06); border: 1px solid #fff; }
+
+/* 🚨 凭证悬浮卡片样式 */
+.active-voucher-card { display: flex; justify-content: space-between; align-items: center; background: linear-gradient(135deg, #ecfdf5, #d1fae5); border: 2px dashed #34d399; border-radius: 20px; padding: 25px 30px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(16, 185, 129, 0.15); }
+.voucher-left { display: flex; align-items: flex-start; gap: 20px; }
+.v-icon { font-size: 2.5rem; background: #fff; width: 60px; height: 60px; display: flex; justify-content: center; align-items: center; border-radius: 50%; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.2); }
+.v-info h3 { margin: 0 0 8px 0; color: #065f46; font-size: 1.4rem; font-weight: 900; }
+.v-info p { margin: 0 0 4px 0; color: #047857; font-size: 0.95rem; }
+.v-info .warning-text { color: #ef4444; font-weight: bold; margin-top: 8px; font-size: 0.85rem; }
+.voucher-right { text-align: center; background: #fff; padding: 15px 30px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+.v-label { display: block; color: #10b981; font-size: 0.9rem; font-weight: bold; margin-bottom: 5px; }
+.v-code { font-family: 'Courier New', Courier, monospace; font-size: 2.5rem; font-weight: 900; color: #059669; letter-spacing: 4px; }
+
+.fade-slide-enter-active, .fade-slide-leave-active { transition: all 0.5s ease; }
+.fade-slide-enter-from, .fade-slide-leave-to { opacity: 0; transform: translateY(-20px); }
+
+.glass-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-radius: 24px; padding: 30px 40px; box-shadow: 0 15px 35px rgba(0,0,0,0.06); border: 1px solid #fff; }
 
 .user-info-bar { display: flex; align-items: center; gap: 15px; }
 .avatar-wrap.green-gradient { background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 4px; border-radius: 50%; box-shadow: 0 4px 10px rgba(16, 185, 129, 0.3); display: flex; align-items: center; justify-content: center;}
@@ -231,32 +278,38 @@ onMounted(() => fetchData())
 .greeting p { margin: 0; font-size: 0.95rem; color: #64748b; font-weight: bold;}
 .divider { height: 1px; background: #f1f5f9; margin: 20px 0; }
 
-.empty-state { text-align: center; padding: 40px 0; }
-.empty-icon { font-size: 4rem; margin-bottom: 10px; opacity: 0.8;}
-.empty-state h3 { color: #475569; margin: 0 0 5px;}
-.empty-state p { color: #94a3b8; font-size: 0.9rem;}
+.empty-state { text-align: center; padding: 60px 0; }
+.empty-icon { font-size: 5rem; margin-bottom: 15px; opacity: 0.8;}
+.empty-state h3 { color: #475569; margin: 0 0 8px; font-size: 1.2rem;}
+.empty-state p { color: #94a3b8; font-size: 1rem;}
 
-.station-list { display: flex; flex-direction: column; gap: 20px; }
-.station-card { background: #f8fafc; border-radius: 20px; border: 1px solid #e2e8f0; overflow: hidden; }
-.station-header { padding: 15px 20px; background: #fff; border-bottom: 1px dashed #e2e8f0; }
-.s-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
-.s-title h4 { margin: 0; font-size: 1.1rem; color: #1e293b; font-weight: 900; display: flex; align-items: center; gap: 6px;}
-.s-dist { font-size: 0.85rem; background: #ecfdf5; color: #10b981; padding: 3px 8px; border-radius: 8px; font-weight: bold; border: 1px solid #a7f3d0;}
+/* 🚨 核心改动：PC端瀑布流 Grid，手机端自动单列 */
+.station-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 25px; }
+
+.station-card { background: #f8fafc; border-radius: 20px; border: 1px solid #e2e8f0; overflow: hidden; display: flex; flex-direction: column; transition: 0.3s; }
+.station-card:hover { transform: translateY(-4px); box-shadow: 0 12px 25px rgba(0,0,0,0.05); border-color: #cbd5e1; }
+.station-header { padding: 18px 20px; background: #fff; border-bottom: 1px dashed #e2e8f0; }
+.s-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.s-title h4 { margin: 0; font-size: 1.15rem; color: #1e293b; font-weight: 900; display: flex; align-items: center; gap: 6px;}
+.s-dist { font-size: 0.85rem; background: #ecfdf5; color: #10b981; padding: 4px 10px; border-radius: 8px; font-weight: bold; border: 1px solid #a7f3d0;}
 .s-addr { margin: 0; font-size: 0.85rem; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
 
-.goods-grid { padding: 15px; display: flex; flex-direction: column; gap: 12px; }
-.goods-item { display: flex; align-items: center; gap: 12px; background: #fff; padding: 12px; border-radius: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.02); border: 1px solid #f1f5f9; transition: 0.2s;}
+.goods-grid { padding: 15px; display: flex; flex-direction: column; gap: 12px; flex: 1;}
+.goods-item { display: flex; align-items: center; gap: 12px; background: #fff; padding: 14px; border-radius: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.02); border: 1px solid #f1f5f9; transition: 0.2s;}
 .goods-item:hover { border-color: #a7f3d0; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.1); }
-.g-icon { font-size: 2rem; background: #f8fafc; width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; border-radius: 12px;}
+.g-icon { font-size: 2rem; background: #f8fafc; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border-radius: 12px;}
 .g-info { flex: 1; min-width: 0;}
-.g-info h5 { margin: 0 0 6px 0; font-size: 1rem; color: #1e293b; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.g-info h5 { margin: 0 0 6px 0; font-size: 1.05rem; color: #1e293b; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .g-tags { display: flex; gap: 8px; }
-.g-stock { font-size: 0.75rem; background: #fef2f2; color: #ef4444; padding: 2px 6px; border-radius: 6px; font-weight: bold;}
-.g-cat { font-size: 0.75rem; background: #f1f5f9; color: #64748b; padding: 2px 6px; border-radius: 6px; font-weight: bold;}
-.reserve-btn { background: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 10px; font-weight: 900; font-size: 0.9rem; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 10px rgba(16, 185, 129, 0.2);}
-.reserve-btn:active { transform: scale(0.95); }
+.g-stock { font-size: 0.75rem; background: #fef2f2; color: #ef4444; padding: 3px 8px; border-radius: 6px; font-weight: bold;}
+.g-cat { font-size: 0.75rem; background: #f1f5f9; color: #64748b; padding: 3px 8px; border-radius: 6px; font-weight: bold;}
+.reserve-btn { background: #10b981; color: white; border: none; padding: 10px 18px; border-radius: 10px; font-weight: 900; font-size: 0.95rem; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 10px rgba(16, 185, 129, 0.2); white-space: nowrap;}
+.reserve-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(16, 185, 129, 0.3); }
+.reserve-btn:disabled { background: #cbd5e1; cursor: not-allowed; box-shadow: none; color: #fff;}
 
-/* =========== 抽屉与取件码样式 =========== */
+.no-goods-tip { text-align: center; color: #94a3b8; padding: 20px 0; font-size: 0.9rem; font-weight: bold; }
+
+/* 抽屉样式保持原样 */
 .drawer-content { padding: 30px; height: 100%; display: flex; flex-direction: column; max-width: 480px; margin: 0 auto;}
 .drawer-title { font-size: 1.6rem; font-weight: 900; margin: 0 0 25px 0; text-align: center; }
 .reserve-confirm-card { background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 16px; padding: 20px; margin-bottom: 30px; text-align: center;}
@@ -280,6 +333,16 @@ onMounted(() => fetchData())
 
 .station-guide { background: #f8fafc; padding: 15px; border-radius: 12px; text-align: left; border: 1px solid #e2e8f0;}
 .station-guide p { margin: 0 0 8px 0; font-size: 0.95rem; color: #475569;}
+
+/* 🚨 针对移动端的降级处理：在窄屏下，凭证卡片变为上下堆叠 */
+@media screen and (max-width: 768px) {
+  .active-voucher-card { flex-direction: column; text-align: center; gap: 15px; padding: 20px; }
+  .voucher-left { flex-direction: column; align-items: center; }
+  .voucher-right { width: 100%; box-sizing: border-box; }
+  .glass-panel { padding: 20px 15px; }
+  .station-list { grid-template-columns: 1fr; }
+  .main-content { padding: 20px 15px; }
+}
 </style>
 <style>
 .sos-drawer .el-drawer__body { padding: 0; background: #fff; }
