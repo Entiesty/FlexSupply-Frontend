@@ -9,17 +9,13 @@
 
     <div class="donate-wrapper">
       <header class="page-header">
-        <div class="header-icon">💝</div>
         <div class="header-text">
-          <h2>爱心商家捐赠大厅</h2>
-          <p>让每一份余量，成为城市的温暖能量</p>
+          <h2>传递城市温度 💝</h2>
+          <p>您捐出的每一份微小余量，都是他人眼里的光。</p>
         </div>
-        <button v-if="sysMode === 'NORMAL'" class="history-import-btn" @click="loadLastRecord">
-          <span class="icon">📜</span> 一键导入昨日发货模板
-        </button>
       </header>
 
-      <div class="donate-board" v-loading="loading">
+      <div class="donate-board" v-loading="loading" element-loading-text="爱心电波发送中...">
 
         <transition name="el-zoom-in-top">
           <div v-if="sysMode === 'EMERGENCY'" class="active-mission-banner">
@@ -39,93 +35,93 @@
           </div>
         </transition>
 
-        <div class="form-card" :class="{'emergency-glow': sysMode === 'EMERGENCY'}">
-          <div class="card-title">📦 01. 物资基础画像</div>
-
-          <div class="goods-base-info">
-            <div class="upload-zone" @click="triggerUpload" :class="{'has-img': form.goodsImageUrl}">
-              <template v-if="!form.goodsImageUrl">
-                <div class="up-icon">📷</div>
-                <div class="up-text">点击拍摄/上传物资实拍图</div>
-                <div class="up-sub">让受赠者更安心</div>
-              </template>
-              <template v-else>
-                <img :src="form.goodsImageUrl" class="uploaded-img" />
-                <div class="up-mask">重新上传</div>
-              </template>
-              <input type="file" ref="fileInput" hidden @change="handleFileChange" accept="image/*" />
+        <div class="hero-upload-card" :class="{'has-img': form.goodsImageUrl, 'emergency-glow': sysMode === 'EMERGENCY'}" @click="triggerUpload">
+          <template v-if="!form.goodsImageUrl">
+            <div class="up-icon">📷</div>
+            <div class="up-title">点击拍摄 / 上传物资实拍图</div>
+            <div class="up-sub">真实的照片能让受赠者更加安心，也是护航骑士核对的凭证</div>
+          </template>
+          <template v-else>
+            <img :src="form.goodsImageUrl" class="hero-img" />
+            <div class="up-mask">
+              <span class="mask-icon">🔄</span>
+              <span>更换实拍图</span>
             </div>
+          </template>
+          <input type="file" ref="fileInput" hidden @change="handleFileChange" accept="image/*" />
+        </div>
 
-            <div class="base-inputs">
-              <div class="form-item">
-                <label><span class="req">*</span> 物资明细名称</label>
-                <input v-model="form.goodsName" type="text" placeholder="例如：某品牌全麦吐司面包 (建议标注规格)"/>
-              </div>
-              <div class="form-item" style="margin-bottom: 0;">
-                <label>
-                  <span><span class="req">*</span> 物资大类归属</span>
-                  <span v-if="sysMode === 'EMERGENCY'" class="lock-tip" style="float: right; margin-top: -2px;">🔒 应急模式下已开启定向锁定</span>
-                </label>
-                <div class="category-matrix" :class="{'is-locked': sysMode === 'EMERGENCY'}">
-                  <template v-if="Object.keys(groupedCategories).length > 0">
-                    <div class="cat-group" v-for="(group, groupName) in groupedCategories" :key="groupName">
-                      <div class="group-name">{{ groupName }}</div>
-                      <div class="tags-wrap">
-                        <span v-for="cat in group" :key="cat" class="tag-btn"
-                              :class="{ active: form.category === cat, disabled: !isCategoryAllowed(cat) }"
-                              @click="handleCategorySelect(cat)">{{ cat }}</span>
-                      </div>
-                    </div>
-                  </template>
+        <div class="form-card" :class="{'emergency-glow': sysMode === 'EMERGENCY'}">
+          <div class="smart-autofill-zone" v-if="sysMode === 'NORMAL' && hasHistoryRecord">
+            <div class="autofill-info">
+              <span class="icon">✨</span> 发现您最近捐赠过 <strong>{{ historyRecordName }}</strong>
+            </div>
+            <button class="autofill-btn" @click="loadLastRecord">一键填入参数</button>
+          </div>
+
+          <div class="form-item main-input-item">
+            <input v-model="form.goodsName" type="text" placeholder="请输入物资名称，如：达利园全麦吐司面包 500g..." class="huge-input"/>
+          </div>
+
+          <div class="form-item">
+            <label class="soft-label">
+              <span>请选择物资大类</span>
+              <span v-if="sysMode === 'EMERGENCY'" class="lock-tip">🔒 应急模式下已开启定向锁定</span>
+            </label>
+            <div class="category-pills" :class="{'is-locked': sysMode === 'EMERGENCY'}">
+              <template v-for="(group, groupName) in groupedCategories" :key="groupName">
+                <div class="pill-group">
+                  <div class="pill-group-title">{{ groupName }}</div>
+                  <div class="pill-wrap">
+                    <span v-for="cat in group" :key="cat" class="pill-btn"
+                          :class="{ active: form.category === cat, disabled: !isCategoryAllowed(cat) }"
+                          @click="handleCategorySelect(cat)">{{ cat }}</span>
+                  </div>
                 </div>
-              </div>
+              </template>
             </div>
           </div>
         </div>
 
-        <div class="form-card">
-          <div class="card-title">🔬 02. 调度与精细化特征</div>
-
-          <div class="physics-grid">
-            <div class="physics-group">
-              <label>📦 体积占用预估</label>
-              <div class="abstract-options">
-                <div class="abs-card" :class="{ active: form.volumeLevel === 1 }" @click="form.volumeLevel = 1"><div class="abs-icon">🛍️</div><div class="abs-text">手提袋级</div></div>
-                <div class="abs-card" :class="{ active: form.volumeLevel === 2 }" @click="form.volumeLevel = 2"><div class="abs-icon">🎒</div><div class="abs-text">外卖箱级</div></div>
-                <div class="abs-card" :class="{ active: form.volumeLevel === 3 }" @click="form.volumeLevel = 3"><div class="abs-icon">🚙</div><div class="abs-text">后备箱级</div></div>
-              </div>
-            </div>
-            <div class="physics-group">
-              <label>⚖️ 重量预估</label>
-              <div class="abstract-options">
-                <div class="abs-card" :class="{ active: form.weightLevel === 1 }" @click="form.weightLevel = 1"><div class="abs-icon">🪶</div><div class="abs-text">轻便 &lt;5kg</div></div>
-                <div class="abs-card" :class="{ active: form.weightLevel === 2 }" @click="form.weightLevel = 2"><div class="abs-icon">🧱</div><div class="abs-text">偏重 ~15kg</div></div>
-                <div class="abs-card" :class="{ active: form.weightLevel === 3 }" @click="form.weightLevel = 3"><div class="abs-icon">🏋️‍♂️</div><div class="abs-text">极重 &gt;20kg</div></div>
-              </div>
-            </div>
-          </div>
-
+        <div class="form-card compact-card">
           <transition name="fade-slide">
             <div v-if="form.category" class="tag-engine-section">
-              <label class="section-sub-label">🎯 食用门槛与特殊标签 (赋能算法精准匹配)</label>
-              <div class="tags-matrix">
-                <div class="tags-wrap">
-                  <span v-for="tag in availableTags" :key="tag" class="tag-btn multi-select" :class="{ active: form.tags.includes(tag) }" @click="toggleTag(tag)">
-                    {{ form.tags.includes(tag) ? '✅ ' : '+ ' }}{{ tag }}
-                  </span>
-                </div>
+              <label class="soft-label">💡 我们为您智能推荐了以下标签，请点选符合的特征：</label>
+              <div class="tags-wrap">
+                <span v-for="tag in availableTags" :key="tag" class="smart-tag" :class="{ active: form.tags.includes(tag) }" @click="toggleTag(tag)">
+                  {{ form.tags.includes(tag) ? '✅ ' : '+ ' }}{{ tag }}
+                </span>
               </div>
             </div>
           </transition>
+
+          <div class="physics-row">
+            <div class="physics-item">
+              <label class="mini-label">体积预估</label>
+              <div class="mini-options">
+                <span :class="{ active: form.volumeLevel === 1 }" @click="form.volumeLevel = 1">🛍️ 手提袋</span>
+                <span :class="{ active: form.volumeLevel === 2 }" @click="form.volumeLevel = 2">🎒 外卖箱</span>
+                <span :class="{ active: form.volumeLevel === 3 }" @click="form.volumeLevel = 3">🚙 后备箱</span>
+              </div>
+            </div>
+            <div class="physics-divider"></div>
+            <div class="physics-item">
+              <label class="mini-label">重量预估</label>
+              <div class="mini-options">
+                <span :class="{ active: form.weightLevel === 1 }" @click="form.weightLevel = 1">🪶 轻便</span>
+                <span :class="{ active: form.weightLevel === 2 }" @click="form.weightLevel = 2">🧱 偏重</span>
+                <span :class="{ active: form.weightLevel === 3 }" @click="form.weightLevel = 3">🏋️ 极重</span>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div class="form-card">
-          <div class="card-title">⏳ 03. 数量与生命周期监控</div>
+        <div class="form-card compact-card">
           <div class="form-row">
             <div class="form-item flex-2">
-              <label><span class="req">*</span> 捐赠数量与单位</label>
+              <label class="soft-label">捐出多少份温暖？</label>
               <div class="input-with-unit">
-                <input v-model="form.stock" type="number" min="1" placeholder="填入数字" ref="stockInput"/>
+                <input v-model="form.stock" type="number" min="1" placeholder="填入数字" ref="stockInput" class="num-input"/>
                 <select v-model="form.unit" class="unit-select">
                   <option value="件">件</option><option value="箱">箱</option><option value="份">份</option>
                   <option value="kg">kg</option><option value="袋">袋</option><option value="提">提</option>
@@ -133,37 +129,35 @@
               </div>
             </div>
             <div class="form-item flex-3">
-              <label><span class="req">*</span> 过期/临期警戒线</label>
+              <label class="soft-label">请留意包装日期，保障食品安全</label>
               <div class="date-input-wrap">
                 <input v-model="form.expirationDate" type="datetime-local" class="datetime-input" />
                 <div class="quick-dates">
-                  <button class="qd-btn danger" @click="setQuickDate(1)">仅剩1天</button>
-                  <button class="qd-btn warning" @click="setQuickDate(3)">剩3天内</button>
-                  <button class="qd-btn safe" @click="setQuickDate(7)">剩1周</button>
-                  <button class="qd-btn" @click="setQuickDate(30)">长期有效</button>
+                  <span class="qd-tag danger" @click="setQuickDate(1)">剩1天</span>
+                  <span class="qd-tag warning" @click="setQuickDate(3)">剩3天</span>
+                  <span class="qd-tag safe" @click="setQuickDate(7)">剩1周</span>
+                  <span class="qd-tag normal" @click="setQuickDate(30)">长期有效</span>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="form-card" style="margin-bottom: 0;">
-          <div class="card-title">
-            📍 04. {{ sysMode === 'NORMAL' ? '目标捐入驿站设定' : '物流路由模式 (系统已接管)' }}
-          </div>
-
+        <div class="form-card no-margin-bottom">
           <template v-if="sysMode === 'NORMAL'">
-            <div class="form-item" style="margin-bottom: 0;">
-              <label><span class="req">*</span> 期望存入的社区驿站 (系统将指派志愿者上门取货并送往此地)</label>
+            <div class="form-item no-margin-bottom">
+              <label class="soft-label">推荐存入的社区驿站 (骑士上门取货后将送往此地)</label>
               <div class="select-wrapper">
                 <select v-model="form.currentStationId" :class="{ 'has-value': form.currentStationId !== '' }">
                   <option disabled value="">请选择距您最近的社区驿站...</option>
-                  <option v-for="st in availableStations" :key="st.stationId" :value="st.stationId">📍 {{ st.stationName }}</option>
+                  <option v-for="st in availableStations" :key="st.stationId" :value="st.stationId">
+                    📍 {{ st.stationName }} {{ st.hasFreezer === 1 ? '🧊' : '' }}
+                  </option>
                 </select>
               </div>
               <transition name="fade-slide">
                 <div v-if="isColdChainNeeded" class="dynamic-tip cold-tip">
-                  🧊 当前物资或标签涉及冷链要求，系统已为您自动隐藏无冷藏设备的普通驿站。
+                  🧊 当前物资涉及冷链要求，系统已为您自动过滤无冷藏设备的普通驿站。
                 </div>
               </transition>
             </div>
@@ -173,8 +167,8 @@
             <div class="emergency-route-box">
               <div class="route-icon">🚀</div>
               <div class="route-text">
-                <h4>急用直达模式已激活 (Point-to-Point)</h4>
-                <p>生命通道已开启！系统将越过社区驿站，指派骑士从您的商铺取货后，<strong>点对点直线护送</strong>至求助市民手中！</p>
+                <h4>生命通道直达模式 (Point-to-Point)</h4>
+                <p>系统将越过社区驿站，指派骑士从您的商铺取件后，<strong>点对点全速护送</strong>至求助市民手中！</p>
               </div>
             </div>
           </template>
@@ -182,7 +176,7 @@
 
         <button class="submit-btn" :class="{'emergency-submit': sysMode === 'EMERGENCY'}" :disabled="!isFormValid" @click="handleDonate">
           <span class="btn-shine"></span>
-          {{ sysMode === 'EMERGENCY' ? '🚨 响应广播，立即发货！骑士秒接单' : '确认无误，发布捐赠 (等待取货)' }}
+          {{ sysMode === 'EMERGENCY' ? '🚨 响应广播，立即发货！' : '确认无误，发布捐赠 (呼叫骑士)' }}
         </button>
       </div>
     </div>
@@ -248,13 +242,11 @@ const loading = ref(false)
 const stations = ref([])
 const targetOrderId = ref(null)
 const sysMode = ref('NORMAL')
-const merchantIndustryType = ref(1)
 let pollTimer = null
 
 const fileInput = ref(null)
 const stockInput = ref(null)
 
-// 🚨 核心逻辑：防重放机制，存储已经处理过（同意/拒绝/弹出中）的紧急订单ID
 const processedBroadcastIds = new Set()
 
 const form = reactive({
@@ -266,6 +258,40 @@ const emergencyDialog = reactive({
   visible: false,
   data: null
 })
+
+// === 🚀 核心优化：智能历史填充探测 ===
+const hasHistoryRecord = ref(false)
+const historyRecordName = ref('')
+
+const checkHistoryRecord = () => {
+  const lastRecord = localStorage.getItem('lastDonationRecord')
+  if (lastRecord) {
+    try {
+      const data = JSON.parse(lastRecord)
+      if (data && data.goodsName) {
+        hasHistoryRecord.value = true
+        historyRecordName.value = data.goodsName.substring(0, 10) + (data.goodsName.length > 10 ? '...' : '')
+      }
+    } catch (e) {}
+  }
+}
+
+const loadLastRecord = () => {
+  const lastRecord = localStorage.getItem('lastDonationRecord')
+  if (!lastRecord) return
+  const data = JSON.parse(lastRecord)
+  Object.keys(data).forEach(key => { if (form.hasOwnProperty(key) && key !== 'expirationDate' && key !== 'stock') form[key] = data[key] })
+  ElMessage.success('✨ 魔法填充成功！请补充最新的数量与日期。')
+}
+
+const saveToLastRecord = () => {
+  localStorage.setItem('lastDonationRecord', JSON.stringify({
+    goodsName: form.goodsName, category: form.category, tags: form.tags, unit: form.unit,
+    volumeLevel: form.volumeLevel, weightLevel: form.weightLevel, goodsImageUrl: form.goodsImageUrl,
+    currentStationId: form.currentStationId
+  }))
+  checkHistoryRecord()
+}
 
 const isFormValid = computed(() => {
   if (sysMode.value === 'EMERGENCY') return form.goodsName && form.category && form.stock && form.expirationDate && form.goodsImageUrl
@@ -290,7 +316,7 @@ watch(availableStations, (newStations) => {
     const isStillValid = newStations.find(st => st.stationId === form.currentStationId)
     if (!isStillValid) {
       form.currentStationId = ''
-      ElMessage.warning('🧊 由于当前物资含冷链要求，已为您自动重置不符合条件的驿站')
+      ElMessage.warning('🧊 当前物资需冷藏，已为您重置不支持冷链的驿站')
     }
   }
 })
@@ -316,23 +342,7 @@ const setQuickDate = (days) => {
   form.expirationDate = localISOTime
 }
 
-const loadLastRecord = () => {
-  const lastRecord = localStorage.getItem('lastDonationRecord')
-  if (!lastRecord) return ElMessage.info('暂无历史发货记录')
-  const data = JSON.parse(lastRecord)
-  Object.keys(data).forEach(key => { if (form.hasOwnProperty(key) && key !== 'expirationDate' && key !== 'stock') form[key] = data[key] })
-  ElMessage.success('已自动填入历史常用参数！请补充数量与日期即可。')
-}
-
-const saveToLastRecord = () => {
-  localStorage.setItem('lastDonationRecord', JSON.stringify({
-    goodsName: form.goodsName, category: form.category, tags: form.tags, unit: form.unit,
-    volumeLevel: form.volumeLevel, weightLevel: form.weightLevel, goodsImageUrl: form.goodsImageUrl,
-    currentStationId: form.currentStationId
-  }))
-}
-
-// 提取出基础类目库
+// === 🚀 核心优化：废弃行业壁垒，全量平铺开放分类 ===
 const baseCategoryLib = {
   '🍞 粮油副食': ['米面粮油', '烘焙糕点', '速食品', '乳制品', '生鲜水果', '生鲜蔬菜', '生鲜冷冻'],
   '💊 医疗与特需': ['医疗用品', '助残设备', '营养品'],
@@ -340,26 +350,17 @@ const baseCategoryLib = {
 }
 
 const groupedCategories = computed(() => {
-  const type = Number(merchantIndustryType.value)
-  const mode = sysMode.value
-  let result = {}
-  if (mode === 'NORMAL') {
-    if (type === 1 || type === 2) result['🍞 粮油副食'] = baseCategoryLib['🍞 粮油副食']
-  } else if (mode === 'EMERGENCY') {
-    result['🍞 粮油副食'] = baseCategoryLib['🍞 粮油副食']; result['🛡️ 应急与生活'] = baseCategoryLib['🛡️ 应急与生活']; result['💊 医疗与特需'] = baseCategoryLib['💊 医疗与特需'];
-  }
-  return result
+  // 不再根据 industryType 隐藏类目，公益无界限！
+  return baseCategoryLib;
 })
 
-// 🚨 核心逻辑：宽泛与精确双重匹配算法
 const isCategoryAllowed = (cat) => {
   if (sysMode.value !== 'EMERGENCY') return true;
   const targetCat = emergencyDialog.data?.category || '';
-
-  if (targetCat === cat) return true; // 精确匹配子类
+  if (targetCat === cat) return true;
   for (const groupName in baseCategoryLib) {
     if (groupName.includes(targetCat)) {
-      if (baseCategoryLib[groupName].includes(cat)) return true; // 宽泛匹配大类解锁子类
+      if (baseCategoryLib[groupName].includes(cat)) return true;
     }
   }
   return false;
@@ -378,27 +379,21 @@ const availableTags = computed(() => {
   if (!cat) return []
   let tags = []
 
-  // 1. 食用门槛
   if (['米面粮油', '生鲜蔬菜', '生鲜冷冻'].includes(cat)) tags.push('需完整烹饪')
-  // 🚨 扩展速食品含义：既包含自热锅(需加热)，也包含实体店现做热餐(开盖即食)
   else if (['速食品'].includes(cat)) tags.push('需简单加热(微波/开水)', '开盖即食(现制热餐)')
   else if (['烘焙糕点', '乳制品', '生鲜水果', '饮用水', '应急食品'].includes(cat)) tags.push('开袋即食')
 
-  // 2. 特殊饮食
   if (['烘焙糕点', '速食品', '米面粮油'].includes(cat)) tags.push('无麸质')
   if (['生鲜冷冻', '速食品', '烘焙糕点', '米面粮油'].includes(cat)) { tags.push('清真(Halal)', '纯素食') }
   if (['生鲜冷冻', '乳制品'].includes(cat)) tags.push('需冷藏')
 
-  // 3. 弱势群体关怀标签
-  // 🚨 核心修复：把【速食品】(现制热食) 加入到弱势关怀支持矩阵中！
   if (['烘焙糕点', '乳制品', '生鲜水果', '营养品', '速食品'].includes(cat)) {
     tags.push('低GI/糖友友好', '低钠/心血管友好', '易吞咽/流食')
   }
 
-  // 4. 应急医疗
   if (['医疗用品', '应急装备'].includes(cat)) tags.push('外伤急救', '保暖防寒', '慢性病用药')
 
-  return [...new Set(tags)] // 去重返回
+  return [...new Set(tags)]
 })
 
 watch(() => form.category, () => {
@@ -407,14 +402,15 @@ watch(() => form.category, () => {
 const toggleTag = (tag) => { const idx = form.tags.indexOf(tag); if (idx > -1) form.tags.splice(idx, 1); else form.tags.push(tag) }
 
 onMounted(async () => {
+  checkHistoryRecord()
   loading.value = true
   try {
     sysMode.value = 'NORMAL'
     const userRes = await getUserProfile()
-    if (userRes.data) {
-      if (userRes.data.industryType) merchantIndustryType.value = userRes.data.industryType
-      if (userRes.data.currentLon) await fetchStations(userRes.data.currentLon, userRes.data.currentLat)
-      else await fetchStations()
+    if (userRes.data && userRes.data.currentLon) {
+      await fetchStations(userRes.data.currentLon, userRes.data.currentLat)
+    } else {
+      await fetchStations()
     }
   } catch (error) { await fetchStations() }
 
@@ -422,7 +418,6 @@ onMounted(async () => {
     try {
       const res = await checkMyEmergencyBroadcast()
       if (res?.data && res.data.category) {
-        // 🚨 核心防重放拦截
         if (processedBroadcastIds.has(res.data.orderId)) return;
         showEmergencyPopup(res.data)
       }
@@ -436,7 +431,7 @@ const showEmergencyPopup = (data) => {
   if (emergencyDialog.visible) return;
   emergencyDialog.data = data;
   emergencyDialog.visible = true;
-  processedBroadcastIds.add(data.orderId); // 记录单号
+  processedBroadcastIds.add(data.orderId);
 }
 
 const acceptEmergency = () => {
@@ -458,7 +453,6 @@ const rejectEmergency = () => {
   ElMessage.info('已忽略该调度请求，将继续为您流转其他驿站单据');
 }
 
-// 🚨 核心逻辑：退出死锁机制
 const cancelEmergency = () => {
   ElMessageBox.confirm(
       '取消后该求助工单将重新广播给其他周边商家，确认您当前库存不足或无法响应吗？',
@@ -478,7 +472,6 @@ const fetchStations = async (lon = null, lat = null) => {
     const res = await getRecommendStations({ lon, lat })
     stations.value = res.data?.records || res?.data?.data || res?.data || res || []
   } catch (e) {
-    console.error("拉取驿站失败", e)
   } finally {
     loading.value = false
   }
@@ -512,90 +505,105 @@ const handleDonate = async () => {
 </script>
 
 <style scoped>
-/* =========== 原始完全不动的 CSS =========== */
-.main-content { flex: 1; height: 100vh; overflow-y: auto; display: flex; flex-direction: column; position: relative; padding: 40px; background: #f1f5f9; }
-.top-status { position: absolute; top: 20px; right: 30px; z-index: 100; background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); padding: 8px 16px; border-radius: 20px; font-size: 0.75rem; color: #64748b; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05); transition: 0.3s; }
+.main-content { flex: 1; height: 100vh; overflow-y: auto; display: flex; flex-direction: column; position: relative; padding: 40px; background: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;}
+.top-status { position: absolute; top: 20px; right: 30px; z-index: 100; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); padding: 8px 16px; border-radius: 20px; font-size: 0.75rem; color: #64748b; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05); }
 .pulse-dot { width: 8px; height: 8px; background: #f97316; border-radius: 50%; box-shadow: 0 0 8px #f97316; animation: pulse-orange 2s infinite; }
 @keyframes pulse-orange { 0% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(249, 115, 22, 0); } 100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0); } }
 
-.donate-wrapper { max-width: 850px; margin: 0 auto; width: 100%; padding-bottom: 60px; }
-.page-header { display: flex; align-items: center; gap: 20px; margin-bottom: 25px; position: relative;}
-.header-icon { font-size: 3rem; background: #fff; padding: 15px; border-radius: 20px; box-shadow: 0 10px 25px rgba(249, 115, 22, 0.15); }
-.header-text h2 { color: #1e293b; margin: 0 0 8px; font-size: 2rem; font-weight: 900; }
-.header-text p { color: #64748b; margin: 0; font-size: 1.05rem; }
-
-.history-import-btn { position: absolute; right: 0; top: 50%; transform: translateY(-50%); background: #fff; border: 2px dashed #f97316; color: #ea580c; font-weight: bold; padding: 10px 20px; border-radius: 12px; cursor: pointer; transition: 0.3s; display: flex; align-items: center; gap: 8px;}
-.history-import-btn:hover { background: #fff7ed; border-style: solid; box-shadow: 0 4px 12px rgba(249,115,22,0.15); transform: translateY(-50%) scale(1.05);}
+.donate-wrapper { max-width: 760px; margin: 0 auto; width: 100%; padding-bottom: 60px; }
+.page-header { text-align: center; margin-bottom: 30px; }
+.header-text h2 { color: #0f172a; margin: 0 0 8px; font-size: 2.2rem; font-weight: 900; letter-spacing: 1px;}
+.header-text p { color: #64748b; margin: 0; font-size: 1rem; font-weight: 500;}
 
 .donate-board { display: flex; flex-direction: column; gap: 20px; }
-.form-card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(20px); padding: 30px 35px; border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.03); border: 1px solid #fff; transition: 0.3s; }
-.card-title { font-size: 1.15rem; font-weight: 900; color: #1e293b; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px dashed #f1f5f9; display: flex; align-items: center; gap: 10px; }
 
-/* 01. 基础画像结构 */
-.goods-base-info { display: flex; gap: 25px; align-items: stretch; }
-.upload-zone { flex: 0 0 180px; height: 180px; border: 2px dashed #cbd5e1; border-radius: 16px; background: #f8fafc; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: 0.3s; position: relative; overflow: hidden; }
-.upload-zone:hover { border-color: #3b82f6; background: #eff6ff; }
-.upload-zone .up-icon { font-size: 2.5rem; margin-bottom: 10px; }
-.upload-zone .up-text { font-size: 0.85rem; font-weight: bold; color: #3b82f6; text-align: center; }
-.upload-zone .up-sub { font-size: 0.7rem; color: #94a3b8; margin-top: 5px; }
-.uploaded-img { width: 100%; height: 100%; object-fit: cover; }
-.up-mask { position: absolute; inset: 0; background: rgba(0,0,0,0.5); color: #fff; font-weight: bold; display: flex; align-items: center; justify-content: center; opacity: 0; transition: 0.3s; }
-.upload-zone.has-img:hover .up-mask { opacity: 1; }
-.base-inputs { flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
+/* 📸 视觉大图区 */
+.hero-upload-card { width: 100%; height: 260px; border-radius: 24px; background: linear-gradient(135deg, #e0e7ff 0%, #f1f5f9 100%); border: 2px dashed #93c5fd; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); position: relative; overflow: hidden; box-shadow: 0 10px 20px rgba(0,0,0,0.02);}
+.hero-upload-card:hover { transform: translateY(-4px); box-shadow: 0 15px 30px rgba(59, 130, 246, 0.15); border-color: #3b82f6; border-style: solid;}
+.hero-upload-card .up-icon { font-size: 3.5rem; margin-bottom: 12px; filter: drop-shadow(0 4px 6px rgba(59,130,246,0.2));}
+.hero-upload-card .up-title { font-size: 1.2rem; font-weight: 900; color: #1e3a8a; margin-bottom: 6px;}
+.hero-upload-card .up-sub { font-size: 0.85rem; color: #64748b; font-weight: 500;}
+.hero-img { width: 100%; height: 100%; object-fit: cover; }
+.hero-upload-card .up-mask { position: absolute; inset: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); color: #fff; font-weight: bold; font-size: 1.1rem; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; transition: 0.3s; gap: 8px;}
+.hero-upload-card.has-img:hover .up-mask { opacity: 1; }
+.mask-icon { font-size: 2rem; }
+
+/* 📝 核心信息填写区 */
+.form-card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(20px); padding: 25px 30px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.03); border: 1px solid rgba(255,255,255,0.8); transition: 0.3s; }
+.compact-card { padding: 20px 30px; }
+.no-margin-bottom { margin-bottom: 0 !important; }
+
+/* 魔法导入提示 */
+.smart-autofill-zone { background: #fff7ed; border: 1px dashed #fdba74; border-radius: 12px; padding: 12px 16px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+.autofill-info { font-size: 0.9rem; color: #9a3412; }
+.autofill-info strong { color: #ea580c; }
+.autofill-btn { background: #f97316; color: white; border: none; padding: 6px 14px; border-radius: 8px; font-weight: bold; font-size: 0.8rem; cursor: pointer; transition: 0.2s; box-shadow: 0 2px 8px rgba(249,115,22,0.3);}
+.autofill-btn:hover { background: #ea580c; transform: translateY(-1px); }
+
 .form-item { display: flex; flex-direction: column; margin-bottom: 20px; }
-.form-item label { font-size: 0.9rem; font-weight: bold; color: #475569; margin-bottom: 10px; }
-.req { color: #ef4444; margin-right: 4px; }
-.form-item input { padding: 14px 18px; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 1.05rem; background: #f8fafc; outline: none; transition: 0.3s; color: #1e293b; font-weight: 500;}
-.form-item input:focus { background: #fff; border-color: #f97316; box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.1); }
-.form-row { display: flex; gap: 20px; } .flex-1 { flex: 1; } .flex-2 { flex: 1.2; } .flex-3 { flex: 2; }
-.category-matrix { background: #f8fafc; padding: 15px; border-radius: 12px; border: 1px dashed #cbd5e1; max-height: 150px; overflow-y: auto;}
-.cat-group { margin-bottom: 15px; } .cat-group:last-child { margin-bottom: 0; }
-.group-name { font-size: 0.8rem; color: #94a3b8; font-weight: bold; margin-bottom: 8px; }
+.main-input-item { margin-bottom: 25px; border-bottom: 2px dashed #f1f5f9; padding-bottom: 25px;}
+.huge-input { width: 100%; border: none; background: transparent; font-size: 1.6rem; font-weight: 900; color: #0f172a; outline: none; padding: 0;}
+.huge-input::placeholder { color: #cbd5e1; font-weight: 600; }
+
+.soft-label { font-size: 0.9rem; font-weight: bold; color: #64748b; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;}
+
+/* 胶囊分类选择器 */
+.category-pills { display: flex; flex-direction: column; gap: 15px; }
+.pill-group { display: flex; flex-direction: column; gap: 8px;}
+.pill-group-title { font-size: 0.75rem; color: #94a3b8; font-weight: bold; padding-left: 4px;}
+.pill-wrap { display: flex; flex-wrap: wrap; gap: 10px; }
+.pill-btn { padding: 8px 18px; background: #f8fafc; border: 1px solid #e2e8f0; color: #475569; border-radius: 100px; font-size: 0.9rem; font-weight: bold; cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); user-select: none;}
+.pill-btn:hover { border-color: #cbd5e1; background: #f1f5f9; transform: translateY(-1px);}
+.pill-btn.active { background: #3b82f6; border-color: #2563eb; color: #fff; box-shadow: 0 4px 12px rgba(59,130,246,0.3); transform: scale(1.02);}
+
+/* 智能标签推荐 */
+.tag-engine-section { background: #f8fafc; padding: 15px 20px; border-radius: 16px; margin-bottom: 20px; border: 1px dashed #e2e8f0;}
 .tags-wrap { display: flex; flex-wrap: wrap; gap: 8px; }
-.tag-btn { padding: 6px 14px; background: #fff; border: 1px solid #e2e8f0; color: #475569; border-radius: 8px; font-size: 0.85rem; font-weight: bold; cursor: pointer; transition: 0.2s; }
-.tag-btn:hover { border-color: #fdba74; color: #ea580c; }
-.tag-btn.active { background: #fff7ed; border-color: #f97316; color: #ea580c; box-shadow: 0 2px 8px rgba(249,115,22,0.15); }
+.smart-tag { padding: 6px 12px; background: #fff; border: 1px solid #e2e8f0; color: #64748b; border-radius: 8px; font-size: 0.8rem; font-weight: bold; cursor: pointer; transition: 0.2s; }
+.smart-tag.active { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
 
-.physics-grid { display: flex; gap: 30px; margin-bottom: 20px; }
-.physics-group { flex: 1; }
-.physics-group label { display: block; font-size: 0.85rem; color: #64748b; font-weight: bold; margin-bottom: 10px; }
-.abstract-options { display: flex; gap: 8px; }
-.abs-card { flex: 1; background: #f8fafc; border: 2px solid #e2e8f0; border-radius: 12px; padding: 10px 5px; text-align: center; cursor: pointer; transition: 0.2s; user-select: none; }
-.abs-card:hover { border-color: #cbd5e1; transform: translateY(-2px); }
-.abs-card.active { background: #eff6ff; border-color: #3b82f6; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2); }
-.abs-icon { font-size: 1.5rem; margin-bottom: 5px; }
-.abs-text { font-size: 0.75rem; font-weight: 900; color: #64748b; }
-.abs-card.active .abs-text { color: #2563eb; }
-.tag-engine-section { margin-top: 5px; }
-.section-sub-label { font-size: 0.85rem; font-weight: bold; color: #64748b; margin-bottom: 10px; display: block; }
-.tags-matrix { background: #eff6ff; padding: 15px; border-radius: 12px; border: 1px dashed #93c5fd; }
-.tag-btn.multi-select { background: #f8fafc; border-color: #e2e8f0; }
-.tag-btn.multi-select.active { background: #3b82f6; color: #fff; border-color: #2563eb; box-shadow: 0 2px 8px rgba(59,130,246,0.3);}
+/* 物理特征精简版 */
+.physics-row { display: flex; align-items: center; justify-content: space-between; background: #f8fafc; padding: 12px 20px; border-radius: 16px; }
+.physics-item { display: flex; align-items: center; gap: 15px; }
+.mini-label { font-size: 0.8rem; font-weight: bold; color: #94a3b8; }
+.mini-options { display: flex; gap: 8px; }
+.mini-options span { padding: 6px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: bold; color: #64748b; background: #fff; cursor: pointer; transition: 0.2s; border: 1px solid transparent;}
+.mini-options span.active { background: #fff; color: #f97316; border-color: #fdba74; box-shadow: 0 2px 8px rgba(249,115,22,0.15);}
+.physics-divider { width: 2px; height: 30px; background: #e2e8f0; }
 
-.input-with-unit { display: flex; gap: 10px; } .input-with-unit input { flex: 1; }
-.unit-select { width: 75px; padding: 0 10px; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 1rem; color: #ea580c; background: #fff7ed; font-weight: bold; outline: none; cursor: pointer; text-align: center; }
+/* 数量与日期 */
+.form-row { display: flex; gap: 20px; } .flex-2 { flex: 1.2; } .flex-3 { flex: 2; }
+.input-with-unit { display: flex; gap: 10px; }
+.num-input { flex: 1; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 1.1rem; background: #f8fafc; outline: none; transition: 0.3s; font-weight: 900; color: #1e293b;}
+.num-input:focus, .datetime-input:focus, .select-wrapper select:focus { background: #fff; border-color: #3b82f6; box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1); }
+.unit-select { width: 80px; padding: 0 10px; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 1rem; color: #3b82f6; background: #eff6ff; font-weight: bold; outline: none; cursor: pointer; text-align: center; }
 .date-input-wrap { display: flex; flex-direction: column; gap: 10px; }
+.datetime-input { padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 1rem; background: #f8fafc; outline: none; transition: 0.3s; font-weight: bold; color: #475569; width: 100%; box-sizing: border-box;}
 .quick-dates { display: flex; gap: 8px; }
-.qd-btn { flex: 1; padding: 6px 0; border: none; border-radius: 8px; background: #f1f5f9; color: #64748b; font-size: 0.8rem; font-weight: bold; cursor: pointer; transition: 0.2s; }
-.qd-btn:hover { background: #e2e8f0; }
-.qd-btn.danger { color: #ef4444; background: #fef2f2; } .qd-btn.danger:hover { background: #fee2e2; }
-.qd-btn.warning { color: #f97316; background: #fff7ed; } .qd-btn.warning:hover { background: #ffedd5; }
-.qd-btn.safe { color: #10b981; background: #ecfdf5; } .qd-btn.safe:hover { background: #d1fae5; }
-.select-wrapper select { width: 100%; padding: 14px 18px; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 1.05rem; color: #94a3b8; background: #f8fafc; outline: none; cursor: pointer; font-weight: bold;}
-.select-wrapper select.has-value { color: #1e293b; background: #fff; border-color: #3b82f6; }
-.cold-tip { margin-top: 10px; color: #0284c7; background: #e0f2fe; border: 1px dashed #7dd3fc; padding: 8px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: bold; }
+.qd-tag { padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; cursor: pointer; transition: 0.2s; background: #f1f5f9; color: #64748b;}
+.qd-tag:hover { filter: brightness(0.95); }
+.qd-tag.danger { color: #ef4444; background: #fef2f2; }
+.qd-tag.warning { color: #f97316; background: #fff7ed; }
+.qd-tag.safe { color: #10b981; background: #ecfdf5; }
 
-.emergency-route-box { background: #fef2f2; border: 2px dashed #fca5a5; padding: 20px; border-radius: 14px; display: flex; align-items: flex-start; gap: 15px; margin-top: 10px;}
+/* 驿站选择 */
+.select-wrapper select { width: 100%; padding: 14px 18px; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 1.05rem; color: #94a3b8; background: #f8fafc; outline: none; cursor: pointer; font-weight: bold;}
+.select-wrapper select.has-value { color: #1e293b; background: #fff; border-color: #10b981; box-shadow: 0 0 0 4px rgba(16,185,129,0.1);}
+.cold-tip { margin-top: 12px; color: #0369a1; background: #e0f2fe; padding: 10px 14px; border-radius: 10px; font-size: 0.85rem; font-weight: bold; display: flex; align-items: center; gap: 8px;}
+
+/* 紧急路由覆盖 */
+.emergency-route-box { background: #fef2f2; border: 2px dashed #fca5a5; padding: 20px; border-radius: 16px; display: flex; align-items: flex-start; gap: 15px; margin-top: 10px;}
 .route-icon { font-size: 2.5rem; animation: floatUp 2s ease-in-out infinite; }
 .route-text h4 { color: #ef4444; margin: 0 0 5px; font-size: 1.1rem; font-weight: 900; }
 .route-text p { color: #7f1d1d; margin: 0; font-size: 0.95rem; font-weight: bold; line-height: 1.5;}
 @keyframes floatUp { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
 
-.submit-btn { width: 100%; padding: 18px; border: none; border-radius: 16px; background: linear-gradient(135deg, #f97316, #ea580c); color: #fff; font-size: 1.2rem; font-weight: 900; cursor: pointer; transition: 0.3s; margin-top: 10px; }
-.submit-btn:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 12px 30px rgba(234, 88, 12, 0.35); }
-.submit-btn:disabled { background: #cbd5e1; cursor: not-allowed; opacity: 0.7; }
+/* 提交按钮 */
+.submit-btn { width: 100%; padding: 20px; border: none; border-radius: 20px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: #fff; font-size: 1.3rem; font-weight: 900; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); margin-top: 10px; letter-spacing: 1px;}
+.submit-btn:hover:not(:disabled) { transform: translateY(-4px); box-shadow: 0 15px 35px rgba(37, 99, 235, 0.4); }
+.submit-btn:disabled { background: #cbd5e1; cursor: not-allowed; opacity: 0.7; transform: none; box-shadow: none;}
 
-/* =========== 🚨 本次只在尾部追加必需的极简增量样式 =========== */
+/* =========== 🚨 战时相关补丁 =========== */
 .active-mission-banner { background: linear-gradient(135deg, #fef2f2, #fee2e2); border: 2px solid #fca5a5; border-radius: 20px; padding: 20px 25px; margin-bottom: 20px; display: flex; align-items: center; gap: 20px; box-shadow: 0 10px 25px rgba(239, 68, 68, 0.15); }
 .mission-icon-wrap { font-size: 2.5rem; }
 .pulse-red-icon { animation: float-and-pulse 2s infinite ease-in-out; filter: drop-shadow(0 0 8px rgba(239,68,68,0.5)); }
@@ -608,22 +616,25 @@ const handleDonate = async () => {
 .quit-mission-btn:hover { background: #fee2e2; border-color: #ef4444; }
 
 .emergency-glow { border-color: #fca5a5; box-shadow: 0 0 20px rgba(239, 68, 68, 0.1); }
-.lock-tip { color: #ef4444; font-size: 0.8rem; background: #fee2e2; padding: 2px 8px; border-radius: 4px; }
-.category-matrix.is-locked { background: #f1f5f9; border-color: #e2e8f0; opacity: 0.9; }
+.lock-tip { color: #ef4444; font-size: 0.8rem; background: #fee2e2; padding: 2px 8px; border-radius: 6px; margin-left: auto;}
+.category-pills.is-locked { opacity: 0.8; pointer-events: none;}
+.category-pills.is-locked .pill-wrap { pointer-events: auto;} /* 让按钮自身处理禁用点击 */
 
-/* 锁死标签样式 */
-.tag-btn.disabled { opacity: 0.4; cursor: not-allowed; background: #f1f5f9; }
-.tag-btn.disabled:hover { border-color: #e2e8f0; color: #475569; }
-.tag-btn.disabled.active { opacity: 1; background: #fee2e2; border-color: #ef4444; color: #dc2626; box-shadow: 0 2px 8px rgba(239,68,68,0.2); cursor: not-allowed;}
+.pill-btn.disabled { opacity: 0.3; cursor: not-allowed; background: #f1f5f9; border-color: transparent;}
+.pill-btn.disabled:hover { transform: none; }
+.pill-btn.disabled.active { opacity: 1; background: #fee2e2; border-color: #ef4444; color: #dc2626; box-shadow: 0 4px 12px rgba(239,68,68,0.2); cursor: not-allowed;}
 
-/* 紧急状态提交按钮 */
-.submit-btn.emergency-submit { background: linear-gradient(135deg, #ef4444, #dc2626); box-shadow: 0 8px 25px rgba(239, 68, 68, 0.3); animation: heartbeat 2s infinite; }
-.submit-btn.emergency-submit:hover:not(:disabled) { box-shadow: 0 12px 35px rgba(239, 68, 68, 0.5); }
+.submit-btn.emergency-submit { background: linear-gradient(135deg, #ef4444, #dc2626); box-shadow: 0 10px 30px rgba(239, 68, 68, 0.3); animation: heartbeat 2s infinite; }
+.submit-btn.emergency-submit:hover:not(:disabled) { box-shadow: 0 15px 40px rgba(239, 68, 68, 0.5); }
 @keyframes heartbeat { 0% { transform: scale(1); } 5% { transform: scale(1.02); } 10% { transform: scale(1); } }
+
+/* 动画类 */
+.fade-slide-enter-active, .fade-slide-leave-active { transition: all 0.3s ease; }
+.fade-slide-enter-from, .fade-slide-leave-to { opacity: 0; transform: translateY(-10px); }
 </style>
 
 <style>
-/* 保持你原本的高级弹窗样式不变 */
+/* 保持紧急任务弹窗样式完全不变 */
 .premium-emergency-dialog {
   border-radius: 20px !important;
   overflow: hidden;

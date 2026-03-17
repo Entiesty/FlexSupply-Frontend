@@ -101,3 +101,11 @@ export function verifyPickup(pickupCode) {
         params: { pickupCode }
     })
 }
+
+// 📦 骑士确认已取货 (破冰节点)
+export function pickupTask(taskId) {
+    return request({
+        url: `/trade/task/pickup/${taskId}`,
+        method: 'post'
+    })
+}

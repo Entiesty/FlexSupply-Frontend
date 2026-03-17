@@ -73,16 +73,23 @@
           </div>
 
           <div class="col-route">
-            <div class="route-point source-box">
-              <div class="point-icon source">取</div>
+            <div class="route-point source-box" :class="{ 'is-done': item.taskStatus === 2 }">
+              <div class="point-icon source">
+                <el-icon v-if="item.taskStatus === 2"><Check /></el-icon>
+                <span v-else>取</span>
+              </div>
               <div class="point-info">
-                <div class="p-name" :title="item.sourceName">{{ item.sourceName || '起点未知' }}</div>
+                <div class="p-name" :title="item.sourceName" :style="item.taskStatus === 2 ? 'text-decoration: line-through; color: #94a3b8;' : ''">
+                  {{ item.sourceName || '起点未知' }}
+                </div>
                 <div class="p-address" :title="item.sourceAddress">{{ item.sourceAddress || '地址未录入' }}</div>
               </div>
             </div>
+
             <div class="route-connection">
               <div class="line"></div><el-icon class="arrow"><Right /></el-icon>
             </div>
+
             <div class="route-point target-box">
               <div class="point-icon target">送</div>
               <div class="point-info">
@@ -119,27 +126,53 @@
               <el-icon><MapLocation /></el-icon> 路线推演
             </button>
             <button v-if="activeTab === 'available'" class="btn-main grab" @click="handleGrab(item)">⚡ 立即响应</button>
-            <button v-if="activeTab === 'progress'" class="btn-main finish" @click="openCheckoutDialog(item)">📸 送达核销</button>
+
+            <template v-if="activeTab === 'progress'">
+              <button v-if="item.taskStatus === 1" class="btn-main pickup" @click="handlePickup(item)">
+                📦 我已取货
+              </button>
+              <button v-else-if="item.taskStatus === 2" class="btn-main finish" @click="openCheckoutDialog(item)">
+                📸 送达核销
+              </button>
+            </template>
           </div>
         </div>
       </transition-group>
     </div>
 
-    <el-drawer v-model="mapDrawerVisible" title="🗺️ 三点一线导航级路径推演" size="45%" @opened="initMapRouting">
-      <div class="map-wrapper" v-loading="isMapLoading" element-loading-text="高德引擎路径测算中...">
-        <div id="amap-routing-container"></div>
-        <div class="map-overlay-panel" v-if="routeEstimate.distance > 0">
-          <div class="overlay-item">
-            <span class="label">骑行总里程</span>
-            <span class="value">{{ routeEstimate.distance }} <small>km</small></span>
+    <el-dialog
+        v-model="mapDialogVisible"
+        title="🗺️ 护航路线导航"
+        width="90%"
+        style="max-width: 500px; border-radius: 20px; overflow: hidden;"
+        destroy-on-close
+        @opened="initMapRouting"
+    >
+      <div class="map-modal-body" v-loading="isMapLoading" element-loading-text="高德引擎路径测算中...">
+
+        <div class="route-segment-control" v-if="currentMapOrder?.taskStatus !== 2">
+          <button class="seg-btn" :class="{ active: currentRouteStep === 'all' }" @click="switchRoute('all')">全览</button>
+          <button class="seg-btn" :class="{ active: currentRouteStep === 'pickup' }" @click="switchRoute('pickup')">取货路段</button>
+          <button class="seg-btn" :class="{ active: currentRouteStep === 'delivery' }" @click="switchRoute('delivery')">送货路段</button>
+        </div>
+        <div class="route-segment-control" v-else>
+          <button class="seg-btn active" style="cursor: default;">📍 专线直达导航 (已取货)</button>
+        </div>
+
+        <div id="amap-routing-container" class="amap-container"></div>
+
+        <div class="route-info-float glass-effect">
+          <div class="info-item">
+            <span class="i-label">📍 当前导航</span>
+            <span class="i-value highlight">{{ routeStepName }}</span>
           </div>
-          <div class="overlay-item">
-            <span class="label">预计总耗时</span>
-            <span class="value">{{ routeEstimate.time }} <small>min</small></span>
+          <div class="info-item">
+            <span class="i-label">🛣️ 预计距离</span>
+            <span class="i-value">{{ routeDistance }}</span>
           </div>
         </div>
       </div>
-    </el-drawer>
+    </el-dialog>
 
     <el-dialog v-model="checkoutVisible" title="🛡️ 护航履约确认" width="400px">
       <div class="upload-zone">
@@ -159,15 +192,16 @@
 
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
-import { ElMessage, ElNotification } from 'element-plus'
-import { Monitor, Right, MapLocation, UploadFilled, Compass, Location } from '@element-plus/icons-vue'
-import { getAvailableOrders, grabTask, getMyTasks, checkOutTask } from '@/api/trade'
+import { ElMessage, ElNotification, ElMessageBox } from 'element-plus'
+import { Monitor, Right, MapLocation, UploadFilled, Compass, Location, Warning, Check } from '@element-plus/icons-vue' // 🚨 引入 Check 图标
+import { getAvailableOrders, grabTask, getMyTasks, checkOutTask, pickupTask } from '@/api/trade'
 import { getUserProfile } from '@/api/user'
 import { uploadFile } from '@/api/common'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import AMapLoader from '@amap/amap-jsapi-loader'
 
 const route = useRoute()
+const router = useRouter()
 const activeTab = ref(route.query.tab || 'available')
 
 const currentCredit = ref(0)
@@ -178,11 +212,18 @@ let pollingTimer = null
 const locStatus = reactive({ type: 'none', label: '引擎雷达搜索中...', color: '#94a3b8' })
 const currentLocation = reactive({ lon: null, lat: null })
 
-const mapDrawerVisible = ref(false)
+// ================= 🗺️ 导航引擎与状态变量 =================
+const mapDialogVisible = ref(false)
 const isMapLoading = ref(false)
-let currentMapOrder = null
-let amapInstance = null
-const routeEstimate = reactive({ distance: 0, time: 0 })
+// 🚨 核心修复：改为响应式引用，以便 template 内动态判断
+const currentMapOrder = ref(null)
+const amapRoutingInstance = ref(null)
+let ridingPluginA = null
+let ridingPluginB = null
+
+const currentRouteStep = ref('all')
+const routeStepName = ref('全程总览')
+const routeDistance = ref('计算中...')
 
 const checkoutVisible = ref(false)
 const submitLoading = ref(false)
@@ -319,9 +360,18 @@ const handleGrab = async (item) => {
   } catch (err) {}
 }
 
-const openMapPreview = (item) => {
-  currentMapOrder = item; mapDrawerVisible.value = true;
-  routeEstimate.distance = 0; routeEstimate.time = 0;
+const handlePickup = async (item) => {
+  try {
+    await ElMessageBox.confirm(
+        '请确认您已到达物理据点，并核对物资【名称】与【数量】无误？',
+        '⚖️ 物权交接确认',
+        { confirmButtonText: '确认无误，已取货', cancelButtonText: '再核对一下', type: 'warning' }
+    )
+    loading.value = true
+    await pickupTask(item.taskId || item.orderId)
+    ElMessage.success('✅ 取货登记成功！请火速前往终点进行配送。')
+    loadData()
+  } catch (error) {} finally { loading.value = false }
 }
 
 const openCheckoutDialog = (item) => { currentCheckoutOrder.value = item; selectedPhoto.value = null; if (uploadRef.value) uploadRef.value.clearFiles(); checkoutVisible.value = true }
@@ -349,61 +399,119 @@ const submitCheckout = async () => {
   finally { submitLoading.value = false }
 }
 
+const openMapPreview = (item) => {
+  currentMapOrder.value = item;
+  mapDialogVisible.value = true;
+}
+
+const switchRoute = (step) => {
+  if (currentMapOrder.value?.taskStatus === 2) return; // 拦截：若已取货，强锁状态
+  currentRouteStep.value = step
+  if (step === 'all') {
+    routeStepName.value = '全程总览'
+    routeDistance.value = '综合推演中...'
+  } else if (step === 'pickup') {
+    routeStepName.value = '前往取货点'
+    routeDistance.value = '计算中...'
+  } else {
+    routeStepName.value = '前往送货点'
+    routeDistance.value = '计算中...'
+  }
+  drawRouteByStep()
+}
+
 const initMapRouting = () => {
+  if (!currentMapOrder.value) return
+
+  // 🚨 核心逻辑升级：根据订单的进度决定初始视角
+  if (currentMapOrder.value.taskStatus === 2) {
+    currentRouteStep.value = 'delivery'
+    routeStepName.value = '正在前往送货终点'
+  } else {
+    currentRouteStep.value = 'all'
+    routeStepName.value = '全程总览'
+  }
+
+  routeDistance.value = '计算中...'
   isMapLoading.value = true
+
   nextTick(async () => {
     window._AMapSecurityConfig = { securityJsCode: import.meta.env.VITE_AMAP_SECURITY_CODE }
-
     try {
       const AMap = await AMapLoader.load({ key: import.meta.env.VITE_AMAP_KEY, version: '2.0', plugins: ['AMap.Riding'] })
-      if (amapInstance) amapInstance.destroy()
 
-      amapInstance = new AMap.Map('amap-routing-container', { zoom: 14, center: [currentMapOrder.sourceLon, currentMapOrder.sourceLat], mapStyle: 'amap://styles/fresh' })
+      if (amapRoutingInstance.value) amapRoutingInstance.value.destroy()
 
-      const ptA = (currentLocation.lon && currentLocation.lat) ? new AMap.LngLat(currentLocation.lon, currentLocation.lat) : null;
-      const ptB = new AMap.LngLat(currentMapOrder.sourceLon, currentMapOrder.sourceLat);
-      const ptC = new AMap.LngLat(currentMapOrder.targetLon, currentMapOrder.targetLat);
+      amapRoutingInstance.value = new AMap.Map('amap-routing-container', {
+        zoom: 13,
+        center: [Number(currentMapOrder.value.sourceLon), Number(currentMapOrder.value.sourceLat)],
+        viewMode: '2D'
+      })
 
-      if (ptA) new AMap.Marker({ map: amapInstance, position: ptA, content: '<div style="background:#3b82f6; width:16px; height:16px; border:3px solid #fff; border-radius:50%; box-shadow:0 0 10px rgba(59,130,246,0.6)"></div>', offset: new AMap.Pixel(-8, -8), zIndex: 110, title: '我的位置' });
-      new AMap.Marker({ map: amapInstance, position: ptB, content: '<div style="background:#f97316; width:16px; height:16px; border:3px solid #fff; border-radius:50%; box-shadow:0 0 10px rgba(249,115,22,0.6)"></div>', offset: new AMap.Pixel(-8, -8), zIndex: 100, title: '取货源点' });
-      new AMap.Marker({ map: amapInstance, position: ptC, content: '<div style="background:#10b981; width:22px; height:22px; border:2px solid #fff; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff; font-size:12px; font-weight:bold; box-shadow:0 0 10px rgba(16,185,129,0.6)">终</div>', offset: new AMap.Pixel(-11, -11), zIndex: 100, title: '送达终点' });
+      ridingPluginA = new AMap.Riding({ map: amapRoutingInstance.value, hideMarkers: false, outlineColor: '#3b82f6' })
+      ridingPluginB = new AMap.Riding({ map: amapRoutingInstance.value, hideMarkers: false, outlineColor: '#10b981' })
 
-      const riding = new AMap.Riding({ map: null, policy: 0 })
-
-      const searchAndDraw = (startLoc, endLoc, routeColor, layerZIndex) => {
-        return new Promise((resolve) => {
-          riding.search(startLoc, endLoc, (status, result) => {
-            if (status === 'complete' && result.routes && result.routes.length > 0) {
-              const route = result.routes[0]
-              let path = route.rides.flatMap(ride => ride.path)
-              new AMap.Polyline({ map: amapInstance, path: path, strokeColor: routeColor, strokeWeight: 7, strokeOpacity: 0.9, lineJoin: 'round', lineCap: 'round', showDir: true, dirColor: '#ffffff', isOutline: true, outlineColor: '#ffffff', borderWeight: 2, zIndex: layerZIndex })
-              resolve({ dist: route.distance / 1000, time: route.time / 60 })
-            } else {
-              const straightDist = startLoc.distance(endLoc) / 1000;
-              new AMap.Polyline({ map: amapInstance, path: [startLoc, endLoc], strokeColor: routeColor, strokeWeight: 5, strokeStyle: 'dashed', strokeDasharray: [15, 10], lineJoin: 'round', zIndex: layerZIndex })
-              resolve({ dist: straightDist, time: (straightDist / 15) * 60 })
-            }
-          })
-        })
-      }
-
-      routeEstimate.distance = 0; routeEstimate.time = 0;
-
-      if (ptA) {
-        const res2 = await searchAndDraw(ptB, ptC, '#10b981', 50)
-        const res1 = await searchAndDraw(ptA, ptB, '#3b82f6', 60)
-        routeEstimate.distance = (res1.dist + res2.dist).toFixed(2)
-        routeEstimate.time = Math.ceil(res1.time + res2.time)
-      } else {
-        const res = await searchAndDraw(ptB, ptC, '#10b981', 50)
-        routeEstimate.distance = res.dist.toFixed(2)
-        routeEstimate.time = Math.ceil(res.time)
-      }
-
-      amapInstance.setFitView(null, false, [60, 60, 60, 60])
-    } catch (e) { ElMessage.error('高德引擎渲染失败') }
-    finally { isMapLoading.value = false }
+      drawRouteByStep(AMap)
+    } catch (e) {
+      ElMessage.error('高德引擎渲染失败')
+    } finally {
+      isMapLoading.value = false
+    }
   })
+}
+
+// 🚨 导航推演逻辑的核心改造区
+const drawRouteByStep = (AMapClass) => {
+  const AMap = AMapClass || window.AMap
+  const ptMe = (currentLocation.lon && currentLocation.lat)
+      ? new AMap.LngLat(Number(currentLocation.lon), Number(currentLocation.lat))
+      : null
+  const ptSource = new AMap.LngLat(Number(currentMapOrder.value.sourceLon), Number(currentMapOrder.value.sourceLat))
+  const ptTarget = new AMap.LngLat(Number(currentMapOrder.value.targetLon), Number(currentMapOrder.value.targetLat))
+
+  ridingPluginA.clear()
+  ridingPluginB.clear()
+
+  // 🚨 拦截已取货状态：直接只画【当前位置 -> 送货终点】的绿线！
+  if (currentMapOrder.value.taskStatus === 2) {
+    if (ptMe) {
+      ridingPluginB.search(ptMe, ptTarget, (status, result) => {
+        if(status === 'complete') routeDistance.value = '约 ' + (result.routes[0].distance / 1000).toFixed(1) + ' km'
+        else routeDistance.value = '路线规划失败'
+      })
+    } else {
+      routeDistance.value = '未获取到您的定位'
+    }
+    return;
+  }
+
+  // 正常未取货的推演逻辑
+  if (currentRouteStep.value === 'all') {
+    let totalDist = 0;
+    if (ptMe) {
+      ridingPluginA.search(ptMe, ptSource, (status, result) => {
+        if(status === 'complete') totalDist += (result.routes[0].distance / 1000)
+      })
+    }
+    ridingPluginB.search(ptSource, ptTarget, (status, result) => {
+      if(status === 'complete') {
+        totalDist += (result.routes[0].distance / 1000)
+        routeDistance.value = ptMe ? `约 ${totalDist.toFixed(1)} km (总程)` : `约 ${totalDist.toFixed(1)} km (后半段)`
+      }
+    })
+  } else if (currentRouteStep.value === 'pickup') {
+    if (ptMe) {
+      ridingPluginA.search(ptMe, ptSource, (status, result) => {
+        if(status === 'complete') routeDistance.value = '约 ' + (result.routes[0].distance / 1000).toFixed(1) + ' km'
+      })
+    } else {
+      routeDistance.value = '未获取到您的定位'
+    }
+  } else if (currentRouteStep.value === 'delivery') {
+    ridingPluginB.search(ptSource, ptTarget, (status, result) => {
+      if(status === 'complete') routeDistance.value = '约 ' + (result.routes[0].distance / 1000).toFixed(1) + ' km'
+    })
+  }
 }
 
 onMounted(() => { initLocationStrategy() })
@@ -441,7 +549,6 @@ onMounted(() => { initLocationStrategy() })
 .radar-spinner { width: 50px; height: 50px; border: 4px solid #f1f5f9; border-top-color: #3b82f6; border-radius: 50%; margin-bottom: 20px; animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* 列表动画 */
 .list-move, .list-enter-active, .list-leave-active { transition: all 0.5s cubic-bezier(0.55, 0, 0.1, 1); }
 .list-enter-from, .list-leave-to { opacity: 0; transform: translateY(30px) scale(0.95); }
 .list-leave-active { position: absolute; }
@@ -468,26 +575,30 @@ onMounted(() => { initLocationStrategy() })
 .micro-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px;}
 .m-tag { background: #f1f5f9; color: #475569; font-size: 11px; padding: 3px 6px; border-radius: 4px; font-weight: bold;}
 
-/* 算分 UI */
 .algorithm-info { display: flex; flex-direction: column; font-size: 12px; font-family: monospace; font-weight: bold; color: #64748b; background: #f8fafc; padding: 8px 10px; border-radius: 8px; margin-top: auto;}
 .algo-row { display: flex; align-items: center; gap: 8px;}
 .divider { color: #cbd5e1; }
 
 .col-route { flex: 1; display: flex; align-items: center; padding: 0 30px; gap: 20px; overflow: hidden; }
 .route-point { display: flex; align-items: flex-start; gap: 14px; overflow: hidden; }
-.route-point.source-box { flex: 0.7; }
+.route-point.source-box { flex: 0.7; transition: 0.3s; }
 .route-point.target-box { flex: 1.3; }
+
+/* 🚨 核心 UI 升级：已取货的灰色状态 */
+.route-point.source-box.is-done { filter: grayscale(100%); opacity: 0.5; }
+.route-point.source-box.is-done .point-icon.source { background: #94a3b8; }
+.point-icon.source .el-icon { font-weight: 900; font-size: 1.2rem; }
+
 .point-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; justify-content: center; align-items: center; font-size: 16px; font-weight: 900; color: white; flex-shrink: 0; box-shadow: inset 0 -3px 0 rgba(0,0,0,0.15); }
 .point-icon.source { background: #f97316; }
 .point-icon.target { background: #10b981; }
 .point-info { display: flex; flex-direction: column; gap: 6px; overflow: hidden; width: 100%; }
-.p-name { font-size: 16px; font-weight: 900; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.p-name { font-size: 16px; font-weight: 900; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: 0.3s; }
 .p-address { font-size: 14px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
 
 .route-connection { display: flex; align-items: center; color: #94a3b8; width: 60px; flex-shrink: 0; }
 .route-connection .line { flex: 1; height: 3px; background: repeating-linear-gradient(to right, #cbd5e1 0, #cbd5e1 6px, transparent 6px, transparent 12px); }
 
-/* ================= 物资清单小票 UI ================= */
 .col-goods { width: 240px; flex-shrink: 0; padding: 0 20px; border-left: 2px dashed #f1f5f9; display: flex; flex-direction: column; justify-content: center; }
 
 .goods-receipt { background: linear-gradient(to bottom, #f8fafc, #ffffff); border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; height: 100%; box-sizing: border-box; box-shadow: inset 0 2px 4px rgba(0,0,0,0.01); }
@@ -498,7 +609,6 @@ onMounted(() => { initLocationStrategy() })
 
 .receipt-body { flex: 1; display: flex; align-items: flex-start; overflow: hidden; }
 .r-main-item { display: flex; justify-content: space-between; align-items: flex-start; width: 100%; gap: 10px; }
-/* 支持多行文本溢出隐藏，名字再长也能优雅换行展示 */
 .r-name { font-size: 14px; font-weight: 900; color: #0f172a; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; word-break: break-all; }
 .r-qty { display: flex; align-items: baseline; color: #3b82f6; flex-shrink: 0; margin-top: -2px;}
 .r-qty .x { font-size: 13px; font-weight: bold; margin-right: 2px; }
@@ -512,19 +622,32 @@ onMounted(() => { initLocationStrategy() })
 .btn-main { padding: 12px 0; border: none; border-radius: 10px; color: white; font-weight: 900; font-size: 15px; cursor: pointer; transition: 0.3s; letter-spacing: 1px; display: flex; justify-content: center; align-items: center; gap: 6px;}
 .btn-main.grab { background: linear-gradient(135deg, #3b82f6, #2563eb); box-shadow: 0 6px 15px rgba(37, 99, 235, 0.3); }
 .btn-main.grab:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(37, 99, 235, 0.4); }
+.btn-main.pickup { background: linear-gradient(135deg, #f97316, #ea580c); box-shadow: 0 6px 15px rgba(249, 115, 22, 0.3); }
+.btn-main.pickup:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(249, 115, 22, 0.4); }
 .btn-main.finish { background: linear-gradient(135deg, #10b981, #059669); box-shadow: 0 6px 15px rgba(16, 185, 129, 0.3); }
 .btn-main.finish:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(16, 185, 129, 0.4); }
 
-.map-wrapper { width: 100%; height: 100%; position: relative; }
-#amap-routing-container { width: 100%; height: 100%; }
-.map-overlay-panel { position: absolute; top: 20px; left: 20px; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); padding: 15px 25px; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); display: flex; gap: 20px; border: 1px solid #e2e8f0; z-index: 100; }
-.overlay-item { display: flex; flex-direction: column; }
-.overlay-item .label { font-size: 12px; font-weight: bold; color: #64748b; margin-bottom: 4px; }
-.overlay-item .value { font-size: 24px; font-weight: 900; color: #0f172a; }
 .upload-zone { text-align: center; }
 .upload-tip { color: #64748b; font-size: 14px; margin-bottom: 16px; }
 
-/* 🚨 新增：移动端骑士响应式适配 */
+.map-modal-body { position: relative; height: 65vh; display: flex; flex-direction: column; background: #f1f5f9; }
+.amap-container { flex: 1; width: 100%; }
+
+.route-segment-control { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); z-index: 100; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); padding: 5px; border-radius: 12px; display: flex; gap: 5px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border: 1px solid rgba(255,255,255,0.5);}
+.seg-btn { border: none; background: transparent; padding: 8px 16px; border-radius: 8px; font-size: 0.9rem; font-weight: bold; color: #64748b; cursor: pointer; transition: 0.3s; white-space: nowrap;}
+.seg-btn.active { background: #10b981; color: white; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3); }
+
+.route-info-float { position: absolute; bottom: 20px; left: 20px; right: 20px; z-index: 100; padding: 15px 20px; border-radius: 16px; display: flex; justify-content: space-between; align-items: center;}
+.glass-effect { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); box-shadow: 0 10px 25px rgba(0,0,0,0.08); border: 1px solid #fff; }
+.info-item { display: flex; flex-direction: column; gap: 4px; }
+.i-label { font-size: 0.75rem; color: #94a3b8; font-weight: bold; }
+.i-value { font-size: 1.1rem; color: #1e293b; font-weight: 900; }
+.i-value.highlight { color: #f97316; }
+
+:deep(.el-dialog__header) { padding: 20px; border-bottom: 1px solid #f1f5f9; margin-right: 0; margin-bottom: 0;}
+:deep(.el-dialog__title) { font-weight: 900; color: #1e293b; }
+:deep(.el-dialog__body) { padding: 0; }
+
 @media screen and (max-width: 768px) {
   .workspace-container {
     padding: 15px 10px !important;
@@ -539,5 +662,6 @@ onMounted(() => { initLocationStrategy() })
   .credit-badge { width: 100%; justify-content: center; }
   .segmented-control { width: 100%; flex-wrap: wrap; }
   .segment-btn { flex: 1; min-width: 40%; text-align: center; justify-content: center;}
+  .map-modal-body { height: 75vh; }
 }
 </style>
