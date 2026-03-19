@@ -10,12 +10,12 @@
     <div class="donate-wrapper">
       <header class="page-header">
         <div class="header-text">
-          <h2>传递城市温度 💝</h2>
-          <p>您捐出的每一份微小余量，都是他人眼里的光。</p>
+          <h2>物资供给与捐赠工作台 📦</h2>
+          <p>高效流转城市余量物资，精准保障社区应急需求。</p>
         </div>
       </header>
 
-      <div class="donate-board" v-loading="loading" element-loading-text="爱心电波发送中...">
+      <div class="donate-board" v-loading="loading" element-loading-text="正在同步至大盘调度中心...">
 
         <transition name="el-zoom-in-top">
           <div v-if="sysMode === 'EMERGENCY'" class="active-mission-banner">
@@ -25,7 +25,7 @@
             <div class="mission-info">
               <h3>生命通道援助任务已锁定！</h3>
               <p>
-                目标援助范围：<span class="highlight-target">【{{ emergencyDialog.data?.category }}】</span><br/>
+                目标援助范围：<span class="highlight-target">【{{ emergencyDialog.data?.requiredCategory || emergencyDialog.data?.category }}】</span><br/>
                 骑士运力已在待命，请在下方选择<strong style="color: #dc2626;">对应的高亮子类目</strong>，补充数量并发布！
               </p>
             </div>
@@ -39,7 +39,7 @@
           <template v-if="!form.goodsImageUrl">
             <div class="up-icon">📷</div>
             <div class="up-title">点击拍摄 / 上传物资实拍图</div>
-            <div class="up-sub">真实的照片能让受赠者更加安心，也是护航骑士核对的凭证</div>
+            <div class="up-sub">清晰的实拍图是护航骑士核对物资、受赠者确认收货的重要凭证</div>
           </template>
           <template v-else>
             <img :src="form.goodsImageUrl" class="hero-img" />
@@ -54,7 +54,7 @@
         <div class="form-card" :class="{'emergency-glow': sysMode === 'EMERGENCY'}">
           <div class="smart-autofill-zone" v-if="sysMode === 'NORMAL' && hasHistoryRecord">
             <div class="autofill-info">
-              <span class="icon">✨</span> 发现您最近捐赠过 <strong>{{ historyRecordName }}</strong>
+              <span class="icon">✨</span> 发现您最近上架过 <strong>{{ historyRecordName }}</strong>
             </div>
             <button class="autofill-btn" @click="loadLastRecord">一键填入参数</button>
           </div>
@@ -65,7 +65,7 @@
 
           <div class="form-item">
             <label class="soft-label">
-              <span>请选择物资大类</span>
+              <span>物资大类选择</span>
               <span v-if="sysMode === 'EMERGENCY'" class="lock-tip">🔒 应急模式下已开启定向锁定</span>
             </label>
             <div class="category-pills" :class="{'is-locked': sysMode === 'EMERGENCY'}">
@@ -86,7 +86,7 @@
         <div class="form-card compact-card">
           <transition name="fade-slide">
             <div v-if="form.category" class="tag-engine-section">
-              <label class="soft-label">💡 我们为您智能推荐了以下标签，请点选符合的特征：</label>
+              <label class="soft-label">💡 系统已智能推荐以下靶向标签，请点选符合当前物资的特征：</label>
               <div class="tags-wrap">
                 <span v-for="tag in availableTags" :key="tag" class="smart-tag" :class="{ active: form.tags.includes(tag) }" @click="toggleTag(tag)">
                   {{ form.tags.includes(tag) ? '✅ ' : '+ ' }}{{ tag }}
@@ -95,22 +95,34 @@
             </div>
           </transition>
 
-          <div class="physics-row">
-            <div class="physics-item">
-              <label class="mini-label">体积预估</label>
-              <div class="mini-options">
-                <span :class="{ active: form.volumeLevel === 1 }" @click="form.volumeLevel = 1">🛍️ 手提袋</span>
-                <span :class="{ active: form.volumeLevel === 2 }" @click="form.volumeLevel = 2">🎒 外卖箱</span>
-                <span :class="{ active: form.volumeLevel === 3 }" @click="form.volumeLevel = 3">🚙 后备箱</span>
+          <div class="physics-matrix">
+            <div class="pm-section">
+              <label class="pm-label">📦 物资体积预估</label>
+              <div class="pm-grid">
+                <div class="pm-card" :class="{ active: form.volumeLevel === 1 }" @click="form.volumeLevel = 1">
+                  <div class="pm-icon">🛍️</div><div class="pm-text">手提袋</div>
+                </div>
+                <div class="pm-card" :class="{ active: form.volumeLevel === 2 }" @click="form.volumeLevel = 2">
+                  <div class="pm-icon">🎒</div><div class="pm-text">外卖箱</div>
+                </div>
+                <div class="pm-card" :class="{ active: form.volumeLevel === 3 }" @click="form.volumeLevel = 3">
+                  <div class="pm-icon">🚙</div><div class="pm-text">大件/后备箱</div>
+                </div>
               </div>
             </div>
-            <div class="physics-divider"></div>
-            <div class="physics-item">
-              <label class="mini-label">重量预估</label>
-              <div class="mini-options">
-                <span :class="{ active: form.weightLevel === 1 }" @click="form.weightLevel = 1">🪶 轻便</span>
-                <span :class="{ active: form.weightLevel === 2 }" @click="form.weightLevel = 2">🧱 偏重</span>
-                <span :class="{ active: form.weightLevel === 3 }" @click="form.weightLevel = 3">🏋️ 极重</span>
+            <div class="pm-divider"></div>
+            <div class="pm-section">
+              <label class="pm-label">⚖️ 物资重量预估</label>
+              <div class="pm-grid">
+                <div class="pm-card" :class="{ active: form.weightLevel === 1 }" @click="form.weightLevel = 1">
+                  <div class="pm-icon">🪶</div><div class="pm-text">轻便 (<5kg)</div>
+                </div>
+                <div class="pm-card" :class="{ active: form.weightLevel === 2 }" @click="form.weightLevel = 2">
+                  <div class="pm-icon">🧱</div><div class="pm-text">偏重 (5-15kg)</div>
+                </div>
+                <div class="pm-card" :class="{ active: form.weightLevel === 3 }" @click="form.weightLevel = 3">
+                  <div class="pm-icon">🏋️</div><div class="pm-text">极重 (>15kg)</div>
+                </div>
               </div>
             </div>
           </div>
@@ -119,9 +131,9 @@
         <div class="form-card compact-card">
           <div class="form-row">
             <div class="form-item flex-2">
-              <label class="soft-label">捐出多少份温暖？</label>
+              <label class="soft-label">捐赠 / 上架数量</label>
               <div class="input-with-unit">
-                <input v-model="form.stock" type="number" min="1" placeholder="填入数字" ref="stockInput" class="num-input"/>
+                <input v-model="form.stock" type="number" min="1" placeholder="填入数值" ref="stockInput" class="num-input"/>
                 <select v-model="form.unit" class="unit-select">
                   <option value="件">件</option><option value="箱">箱</option><option value="份">份</option>
                   <option value="kg">kg</option><option value="袋">袋</option><option value="提">提</option>
@@ -129,14 +141,18 @@
               </div>
             </div>
             <div class="form-item flex-3">
-              <label class="soft-label">请留意包装日期，保障食品安全</label>
+              <label class="soft-label">保质期 / 临期警戒线</label>
               <div class="date-input-wrap">
                 <input v-model="form.expirationDate" type="datetime-local" class="datetime-input" />
-                <div class="quick-dates">
-                  <span class="qd-tag danger" @click="setQuickDate(1)">剩1天</span>
-                  <span class="qd-tag warning" @click="setQuickDate(3)">剩3天</span>
-                  <span class="qd-tag safe" @click="setQuickDate(7)">剩1周</span>
-                  <span class="qd-tag normal" @click="setQuickDate(30)">长期有效</span>
+                <div class="form-tip">
+                  <div class="quick-dates" v-if="form.category">
+                    <span class="q-btn" v-for="opt in quickDateOptions" :key="opt.label" @click="applyQuickDate(opt)">
+                      {{ opt.label }}
+                    </span>
+                  </div>
+                  <div v-else style="color: #94a3b8; font-size: 0.8rem; margin-top: 4px;">
+                    (请先选择上方物资大类，解锁智能有效期推荐)
+                  </div>
                 </div>
               </div>
             </div>
@@ -146,18 +162,18 @@
         <div class="form-card no-margin-bottom">
           <template v-if="sysMode === 'NORMAL'">
             <div class="form-item no-margin-bottom">
-              <label class="soft-label">推荐存入的社区驿站 (骑士上门取货后将送往此地)</label>
+              <label class="soft-label">目标履约驿站 (骑士上门取货后将送往此地枢纽)</label>
               <div class="select-wrapper">
                 <select v-model="form.currentStationId" :class="{ 'has-value': form.currentStationId !== '' }">
-                  <option disabled value="">请选择距您最近的社区驿站...</option>
+                  <option disabled value="">请选择系统为您 LBS 匹配的最近驿站...</option>
                   <option v-for="st in availableStations" :key="st.stationId" :value="st.stationId">
-                    📍 {{ st.stationName }} {{ st.hasFreezer === 1 ? '🧊' : '' }}
+                    📍 {{ st.stationName }} {{ st.hasFreezer === 1 ? '🧊(支持冷链)' : '' }}
                   </option>
                 </select>
               </div>
               <transition name="fade-slide">
                 <div v-if="isColdChainNeeded" class="dynamic-tip cold-tip">
-                  🧊 当前物资涉及冷链要求，系统已为您自动过滤无冷藏设备的普通驿站。
+                  🧊 监测到当前物资存在冷链储藏需求，系统已自动屏蔽无冷库设备的普通驿站。
                 </div>
               </transition>
             </div>
@@ -168,7 +184,7 @@
               <div class="route-icon">🚀</div>
               <div class="route-text">
                 <h4>生命通道直达模式 (Point-to-Point)</h4>
-                <p>系统将越过社区驿站，指派骑士从您的商铺取件后，<strong>点对点全速护送</strong>至求助市民手中！</p>
+                <p>该单将越过社区驿站大仓，系统已指派运力从您的商铺取件，<strong>点对点全速护送</strong>至求助市民处！</p>
               </div>
             </div>
           </template>
@@ -176,7 +192,7 @@
 
         <button class="submit-btn" :class="{'emergency-submit': sysMode === 'EMERGENCY'}" :disabled="!isFormValid" @click="handleDonate">
           <span class="btn-shine"></span>
-          {{ sysMode === 'EMERGENCY' ? '🚨 响应广播，立即发货！' : '确认无误，发布捐赠 (呼叫骑士)' }}
+          {{ sysMode === 'EMERGENCY' ? '🚨 响应紧急广播，立即发货！' : '确认上架，呼叫运力接货' }}
         </button>
       </div>
     </div>
@@ -207,7 +223,7 @@
 
             <div class="e-target-goods-box">
               <span class="bracket">【</span>
-              <span class="goods-core">{{ emergencyDialog.data?.category }}</span>
+              <span class="goods-core">{{ emergencyDialog.data?.requiredCategory || emergencyDialog.data?.category }}</span>
               <span class="bracket">】</span>
             </div>
 
@@ -219,9 +235,9 @@
         </div>
 
         <div class="e-footer-zone">
-          <button class="e-btn btn-reject" @click="rejectEmergency">已售罄 / 忽略</button>
+          <button class="e-btn btn-reject" @click="rejectEmergency">库存不足 / 忽略</button>
           <button class="e-btn btn-accept" @click="acceptEmergency">
-            <span class="btn-icon">⚡</span> 店里有，马上响应
+            <span class="btn-icon">⚡</span> 锁定任务，马上发货
           </button>
         </div>
       </div>
@@ -246,7 +262,6 @@ let pollTimer = null
 
 const fileInput = ref(null)
 const stockInput = ref(null)
-
 const processedBroadcastIds = new Set()
 
 const form = reactive({
@@ -259,7 +274,7 @@ const emergencyDialog = reactive({
   data: null
 })
 
-// === 🚀 核心优化：智能历史填充探测 ===
+// === 历史记录填充 ===
 const hasHistoryRecord = ref(false)
 const historyRecordName = ref('')
 
@@ -270,7 +285,7 @@ const checkHistoryRecord = () => {
       const data = JSON.parse(lastRecord)
       if (data && data.goodsName) {
         hasHistoryRecord.value = true
-        historyRecordName.value = data.goodsName.substring(0, 10) + (data.goodsName.length > 10 ? '...' : '')
+        historyRecordName.value = data.goodsName.substring(0, 15) + (data.goodsName.length > 15 ? '...' : '')
       }
     } catch (e) {}
   }
@@ -281,7 +296,7 @@ const loadLastRecord = () => {
   if (!lastRecord) return
   const data = JSON.parse(lastRecord)
   Object.keys(data).forEach(key => { if (form.hasOwnProperty(key) && key !== 'expirationDate' && key !== 'stock') form[key] = data[key] })
-  ElMessage.success('✨ 魔法填充成功！请补充最新的数量与日期。')
+  ElMessage.success('✨ 记录提取成功！请补充当前库存数量与有效期。')
 }
 
 const saveToLastRecord = () => {
@@ -300,7 +315,7 @@ const isFormValid = computed(() => {
 
 const isColdChainNeeded = computed(() => {
   if (form.category === '生鲜冷冻') return true;
-  if (form.tags.includes('需冷藏') || form.tags.includes('需要冷藏')) return true;
+  if (form.tags.includes('需冷藏保鲜')) return true;
   return false;
 })
 
@@ -316,7 +331,7 @@ watch(availableStations, (newStations) => {
     const isStillValid = newStations.find(st => st.stationId === form.currentStationId)
     if (!isStillValid) {
       form.currentStationId = ''
-      ElMessage.warning('🧊 当前物资需冷藏，已为您重置不支持冷链的驿站')
+      ElMessage.warning('🧊 监测到当前物资需冷链支持，已为您重置不支持设备的驿站选项')
     }
   }
 })
@@ -330,33 +345,74 @@ const handleFileChange = async (e) => {
     loading.value = true
     const res = await uploadFile(file)
     form.goodsImageUrl = res.data
-    ElMessage.success('实拍图上传成功')
+    ElMessage.success('凭证照片上传成功')
   } catch (error) { ElMessage.error('上传失败') } finally { loading.value = false }
 }
 
-const setQuickDate = (days) => {
-  const target = new Date()
-  target.setDate(target.getDate() + days)
-  const tzOffset = target.getTimezoneOffset() * 60000
-  const localISOTime = new Date(target - tzOffset).toISOString().slice(0, 16)
-  form.expirationDate = localISOTime
-}
+// === 🚀 智能动态保质期引擎 ===
+const quickDateOptions = computed(() => {
+  const cat = form.category
+  if (!cat) return []
 
-// === 🚀 核心优化：废弃行业壁垒，全量平铺开放分类 ===
-const baseCategoryLib = {
-  '🍞 粮油副食': ['米面粮油', '烘焙糕点', '速食品', '乳制品', '生鲜水果', '生鲜蔬菜', '生鲜冷冻'],
-  '💊 医疗与特需': ['医疗用品', '助残设备', '营养品'],
-  '🛡️ 应急与生活': ['饮用水', '应急食品', '应急装备', '生活用品', '防寒衣物']
-}
-
-const groupedCategories = computed(() => {
-  // 不再根据 industryType 隐藏类目，公益无界限！
-  return baseCategoryLib;
+  if (['热乎盒饭'].includes(cat)) {
+    return [
+      { label: '⏱️ 4小时内', hours: 4 },
+      { label: '🌙 今晚前', hours: 'tonight' }
+    ]
+  } else if (['生鲜冷冻', '新鲜果蔬', '烘焙糕点', '乳制品'].includes(cat)) {
+    return [
+      { label: '剩1天', days: 1 },
+      { label: '剩3天', days: 3 },
+      { label: '剩1周', days: 7 }
+    ]
+  } else if (['米面粮油', '方便速食', '饮用水', '感冒退烧药', '肠胃用药', '营养补品'].includes(cat)) {
+    return [
+      { label: '剩1个月', months: 1 },
+      { label: '半年有效', months: 6 },
+      { label: '1年以上', years: 1 }
+    ]
+  } else if (['防寒衣物', '棉被毯子', '暖贴/取暖', '生活日用品', '应急装备', '降压/心脏药', '外伤消炎药', '医疗器械'].includes(cat)) {
+    return [
+      { label: '1年有效', years: 1 },
+      { label: '🌟 长期有效', years: 10 }
+    ]
+  }
+  return [
+    { label: '剩3天', days: 3 },
+    { label: '剩1周', days: 7 },
+    { label: '长期', years: 5 }
+  ]
 })
+
+const applyQuickDate = (opt) => {
+  const target = new Date()
+  if (opt.hours === 'tonight') {
+    target.setHours(23, 59, 59)
+  } else if (opt.hours) {
+    target.setHours(target.getHours() + opt.hours)
+  } else if (opt.days) {
+    target.setDate(target.getDate() + opt.days)
+  } else if (opt.months) {
+    target.setMonth(target.getMonth() + opt.months)
+  } else if (opt.years) {
+    target.setFullYear(target.getFullYear() + opt.years)
+  }
+  const tzOffset = target.getTimezoneOffset() * 60000
+  form.expirationDate = new Date(target - tzOffset).toISOString().slice(0, 16)
+}
+
+// === 类别与标签引擎 ===
+const baseCategoryLib = {
+  '🍚 温暖餐食': ['热乎盒饭', '米面粮油', '方便速食', '新鲜果蔬', '烘焙糕点', '生鲜冷冻', '乳制品', '饮用水'],
+  '💊 常备用药': ['感冒退烧药', '降压/心脏药', '肠胃用药', '外伤消炎药', '医疗器械', '营养补品'],
+  '🧥 越冬日用': ['防寒衣物', '棉被毯子', '暖贴/取暖', '生活日用品', '应急装备']
+}
+
+const groupedCategories = computed(() => baseCategoryLib)
 
 const isCategoryAllowed = (cat) => {
   if (sysMode.value !== 'EMERGENCY') return true;
-  const targetCat = emergencyDialog.data?.category || '';
+  const targetCat = emergencyDialog.data?.requiredCategory || emergencyDialog.data?.category || '';
   if (targetCat === cat) return true;
   for (const groupName in baseCategoryLib) {
     if (groupName.includes(targetCat)) {
@@ -368,7 +424,7 @@ const isCategoryAllowed = (cat) => {
 
 const handleCategorySelect = (cat) => {
   if (!isCategoryAllowed(cat)) {
-    ElMessage.warning(`🚨 应急模式下已被系统锁定需求范围，只能选择高亮类目！`)
+    ElMessage.warning(`🚨 应急模式下已被锁定救助范围，只能选择高亮的类目！`)
     return;
   }
   form.category = cat;
@@ -377,23 +433,35 @@ const handleCategorySelect = (cat) => {
 const availableTags = computed(() => {
   const cat = form.category
   if (!cat) return []
-  let tags = []
+  let tags = new Set()
 
-  if (['米面粮油', '生鲜蔬菜', '生鲜冷冻'].includes(cat)) tags.push('需完整烹饪')
-  else if (['速食品'].includes(cat)) tags.push('需简单加热(微波/开水)', '开盖即食(现制热餐)')
-  else if (['烘焙糕点', '乳制品', '生鲜水果', '饮用水', '应急食品'].includes(cat)) tags.push('开袋即食')
+  if (['热乎盒饭', '方便速食', '烘焙糕点', '饮用水', '乳制品'].includes(cat)) {
+    tags.add('开袋即食'); tags.add('无需加热');
+  } else if (['米面粮油', '生鲜冷冻', '新鲜果蔬'].includes(cat)) {
+    tags.add('需加热/烹饪');
+  }
+  if (['生鲜冷冻', '乳制品'].includes(cat)) tags.add('需冷藏保鲜');
 
-  if (['烘焙糕点', '速食品', '米面粮油'].includes(cat)) tags.push('无麸质')
-  if (['生鲜冷冻', '速食品', '烘焙糕点', '米面粮油'].includes(cat)) { tags.push('清真(Halal)', '纯素食') }
-  if (['生鲜冷冻', '乳制品'].includes(cat)) tags.push('需冷藏')
-
-  if (['烘焙糕点', '乳制品', '生鲜水果', '营养品', '速食品'].includes(cat)) {
-    tags.push('低GI/糖友友好', '低钠/心血管友好', '易吞咽/流食')
+  if (['生鲜冷冻', '方便速食', '烘焙糕点', '米面粮油', '热乎盒饭'].includes(cat)) {
+    tags.add('清真'); tags.add('纯素食');
+  }
+  if (['烘焙糕点', '乳制品', '新鲜果蔬', '营养补品', '方便速食', '热乎盒饭', '米面粮油'].includes(cat)) {
+    tags.add('无糖/低糖'); tags.add('清淡易消化'); tags.add('易咀嚼/流食');
   }
 
-  if (['医疗用品', '应急装备'].includes(cat)) tags.push('外伤急救', '保暖防寒', '慢性病用药')
+  if (cat === '降压/心脏药') {
+    tags.add('高血压适用'); tags.add('心脏病适用');
+  } else if (cat === '肠胃用药') {
+    tags.add('肠胃脆弱');
+  } else if (['外伤消炎药', '医疗器械', '应急装备'].includes(cat)) {
+    tags.add('外伤急救');
+  } else if (cat === '感冒退烧药') {
+    tags.add('慢性病/常用药');
+  }
 
-  return [...new Set(tags)]
+  if (['防寒衣物', '棉被毯子', '暖贴/取暖'].includes(cat)) tags.add('保暖防寒');
+
+  return Array.from(tags)
 })
 
 watch(() => form.category, () => {
@@ -417,7 +485,7 @@ onMounted(async () => {
   pollTimer = setInterval(async () => {
     try {
       const res = await checkMyEmergencyBroadcast()
-      if (res?.data && res.data.category) {
+      if (res?.data && (res.data.category || res.data.requiredCategory)) {
         if (processedBroadcastIds.has(res.data.orderId)) return;
         showEmergencyPopup(res.data)
       }
@@ -450,20 +518,20 @@ const acceptEmergency = () => {
 const rejectEmergency = () => {
   emergencyDialog.visible = false;
   emergencyDialog.data = null;
-  ElMessage.info('已忽略该调度请求，将继续为您流转其他驿站单据');
+  ElMessage.info('已忽略该调度请求，平台将继续为您流转常规订单');
 }
 
 const cancelEmergency = () => {
   ElMessageBox.confirm(
-      '取消后该求助工单将重新广播给其他周边商家，确认您当前库存不足或无法响应吗？',
-      '⚠️ 退出应急援助任务',
-      { confirmButtonText: '确认取消任务', cancelButtonText: '点错了，继续发货', type: 'warning' }
+      '取消后该紧急工单将重新放入公池或广播给其他商铺，确认当前库存不足或无法响应吗？',
+      '⚠️ 撤销援助任务',
+      { confirmButtonText: '确认撤销', cancelButtonText: '点错了，继续发货', type: 'warning' }
   ).then(() => {
     sysMode.value = 'NORMAL';
     targetOrderId.value = null;
     form.category = '';
     form.tags = [];
-    ElMessage.info('已退出应急响应模式，您可继续发布日常捐赠。');
+    ElMessage.info('已退出应急响应模式，您可继续发布常规物资。');
   }).catch(() => {});
 }
 
@@ -477,25 +545,34 @@ const fetchStations = async (lon = null, lat = null) => {
   }
 }
 
+const getMainCategoryStr = (subCat) => {
+  for (const [groupName, subs] of Object.entries(baseCategoryLib)) {
+    if (subs.includes(subCat)) return groupName.split(' ')[1];
+  }
+  return subCat;
+}
+
 const handleDonate = async () => {
   loading.value = true
   try {
-    const finalGoodsName = `${form.goodsName} (单位:${form.unit})`
+    const finalGoodsName = `[${form.category}] ${form.goodsName} (单位:${form.unit})`
     let formattedDate = form.expirationDate.replace('T', ' ');
     if (formattedDate.length === 16) formattedDate += ':00';
 
     const submitData = {
       ...form,
+      category: getMainCategoryStr(form.category),
       goodsName: finalGoodsName,
       expirationDate: formattedDate,
       tags: form.tags,
       currentStationId: sysMode.value === 'EMERGENCY' ? null : form.currentStationId,
       targetOrderId: targetOrderId.value
     }
+
     await donateGoods(submitData)
     saveToLastRecord()
 
-    ElNotification.success({ title: '🎉 成功', message: '已接入调度大盘，运力测算中...', duration: 5000 })
+    ElNotification.success({ title: '✅ 发布成功', message: '已同步至调度大盘，运力测算与匹配中...', duration: 5000 })
     form.goodsName = ''; form.stock = ''; form.category = ''; form.tags = []; form.expirationDate = ''; form.currentStationId = '';
     form.volumeLevel = 1; form.weightLevel = 1; form.goodsImageUrl = '';
     sysMode.value = 'NORMAL'; targetOrderId.value = null;
@@ -534,11 +611,11 @@ const handleDonate = async () => {
 .no-margin-bottom { margin-bottom: 0 !important; }
 
 /* 魔法导入提示 */
-.smart-autofill-zone { background: #fff7ed; border: 1px dashed #fdba74; border-radius: 12px; padding: 12px 16px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
-.autofill-info { font-size: 0.9rem; color: #9a3412; }
-.autofill-info strong { color: #ea580c; }
-.autofill-btn { background: #f97316; color: white; border: none; padding: 6px 14px; border-radius: 8px; font-weight: bold; font-size: 0.8rem; cursor: pointer; transition: 0.2s; box-shadow: 0 2px 8px rgba(249,115,22,0.3);}
-.autofill-btn:hover { background: #ea580c; transform: translateY(-1px); }
+.smart-autofill-zone { background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 12px; padding: 12px 16px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+.autofill-info { font-size: 0.9rem; color: #334155; }
+.autofill-info strong { color: #1e293b; font-weight: bold;}
+.autofill-btn { background: #fff; color: #3b82f6; border: 1px solid #bfdbfe; padding: 6px 14px; border-radius: 8px; font-weight: bold; font-size: 0.8rem; cursor: pointer; transition: 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.02);}
+.autofill-btn:hover { background: #eff6ff; border-color: #93c5fd; }
 
 .form-item { display: flex; flex-direction: column; margin-bottom: 20px; }
 .main-input-item { margin-bottom: 25px; border-bottom: 2px dashed #f1f5f9; padding-bottom: 25px;}
@@ -548,7 +625,7 @@ const handleDonate = async () => {
 .soft-label { font-size: 0.9rem; font-weight: bold; color: #64748b; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;}
 
 /* 胶囊分类选择器 */
-.category-pills { display: flex; flex-direction: column; gap: 15px; }
+.category-pills { display: flex; flex-direction: column; gap: 15px; transition: 0.3s; }
 .pill-group { display: flex; flex-direction: column; gap: 8px;}
 .pill-group-title { font-size: 0.75rem; color: #94a3b8; font-weight: bold; padding-left: 4px;}
 .pill-wrap { display: flex; flex-wrap: wrap; gap: 10px; }
@@ -556,35 +633,42 @@ const handleDonate = async () => {
 .pill-btn:hover { border-color: #cbd5e1; background: #f1f5f9; transform: translateY(-1px);}
 .pill-btn.active { background: #3b82f6; border-color: #2563eb; color: #fff; box-shadow: 0 4px 12px rgba(59,130,246,0.3); transform: scale(1.02);}
 
+.category-pills.is-locked { opacity: 0.9; }
+.pill-btn.disabled { opacity: 0.3; cursor: not-allowed; background: #f1f5f9; border-color: transparent;}
+.pill-btn.disabled:hover { transform: none; border-color: transparent; }
+.pill-btn.disabled.active { opacity: 1; background: #fee2e2; border-color: #ef4444; color: #dc2626; box-shadow: 0 4px 12px rgba(239,68,68,0.2); cursor: not-allowed;}
+
 /* 智能标签推荐 */
 .tag-engine-section { background: #f8fafc; padding: 15px 20px; border-radius: 16px; margin-bottom: 20px; border: 1px dashed #e2e8f0;}
-.tags-wrap { display: flex; flex-wrap: wrap; gap: 8px; }
+.tags-wrap { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;}
 .smart-tag { padding: 6px 12px; background: #fff; border: 1px solid #e2e8f0; color: #64748b; border-radius: 8px; font-size: 0.8rem; font-weight: bold; cursor: pointer; transition: 0.2s; }
 .smart-tag.active { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
 
-/* 物理特征精简版 */
-.physics-row { display: flex; align-items: center; justify-content: space-between; background: #f8fafc; padding: 12px 20px; border-radius: 16px; }
-.physics-item { display: flex; align-items: center; gap: 15px; }
-.mini-label { font-size: 0.8rem; font-weight: bold; color: #94a3b8; }
-.mini-options { display: flex; gap: 8px; }
-.mini-options span { padding: 6px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: bold; color: #64748b; background: #fff; cursor: pointer; transition: 0.2s; border: 1px solid transparent;}
-.mini-options span.active { background: #fff; color: #f97316; border-color: #fdba74; box-shadow: 0 2px 8px rgba(249,115,22,0.15);}
-.physics-divider { width: 2px; height: 30px; background: #e2e8f0; }
+/* 物理矩阵 UI */
+.physics-matrix { display: flex; gap: 25px; align-items: stretch; margin-top: 15px; }
+.pm-section { flex: 1; display: flex; flex-direction: column;}
+.pm-label { font-size: 0.9rem; font-weight: bold; color: #64748b; margin-bottom: 12px; display: block;}
+.pm-grid { display: flex; gap: 10px; flex: 1;}
+.pm-card { flex: 1; background: #f8fafc; border: 2px solid #e2e8f0; border-radius: 14px; padding: 16px 5px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; user-select: none; }
+.pm-card:hover { border-color: #cbd5e1; background: #f1f5f9; transform: translateY(-2px);}
+.pm-card.active { border-color: #f97316; background: #fff7ed; box-shadow: 0 6px 15px rgba(249,115,22,0.12); transform: scale(1.02);}
+.pm-icon { font-size: 2rem; margin-bottom: 8px; line-height: 1; }
+.pm-text { font-size: 0.85rem; font-weight: bold; color: #475569; transition: 0.2s;}
+.pm-card.active .pm-text { color: #ea580c; }
+.pm-divider { width: 2px; background: #f1f5f9; border-radius: 2px; margin: 10px 0;}
 
 /* 数量与日期 */
-.form-row { display: flex; gap: 20px; } .flex-2 { flex: 1.2; } .flex-3 { flex: 2; }
+.form-row { display: flex; gap: 20px; margin-top: 25px;} .flex-2 { flex: 1.2; } .flex-3 { flex: 2; }
 .input-with-unit { display: flex; gap: 10px; }
 .num-input { flex: 1; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 1.1rem; background: #f8fafc; outline: none; transition: 0.3s; font-weight: 900; color: #1e293b;}
 .num-input:focus, .datetime-input:focus, .select-wrapper select:focus { background: #fff; border-color: #3b82f6; box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1); }
 .unit-select { width: 80px; padding: 0 10px; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 1rem; color: #3b82f6; background: #eff6ff; font-weight: bold; outline: none; cursor: pointer; text-align: center; }
 .date-input-wrap { display: flex; flex-direction: column; gap: 10px; }
 .datetime-input { padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 1rem; background: #f8fafc; outline: none; transition: 0.3s; font-weight: bold; color: #475569; width: 100%; box-sizing: border-box;}
-.quick-dates { display: flex; gap: 8px; }
-.qd-tag { padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; cursor: pointer; transition: 0.2s; background: #f1f5f9; color: #64748b;}
-.qd-tag:hover { filter: brightness(0.95); }
-.qd-tag.danger { color: #ef4444; background: #fef2f2; }
-.qd-tag.warning { color: #f97316; background: #fff7ed; }
-.qd-tag.safe { color: #10b981; background: #ecfdf5; }
+.form-tip { margin-top: 4px;}
+.quick-dates { display: flex; flex-wrap: wrap; gap: 8px; }
+.q-btn { padding: 6px 12px; border-radius: 8px; font-size: 0.8rem; font-weight: bold; cursor: pointer; transition: 0.2s; background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0;}
+.q-btn:hover { background: #e2e8f0; color: #1e293b; border-color: #cbd5e1; }
 
 /* 驿站选择 */
 .select-wrapper select { width: 100%; padding: 14px 18px; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 1.05rem; color: #94a3b8; background: #f8fafc; outline: none; cursor: pointer; font-weight: bold;}
@@ -617,12 +701,6 @@ const handleDonate = async () => {
 
 .emergency-glow { border-color: #fca5a5; box-shadow: 0 0 20px rgba(239, 68, 68, 0.1); }
 .lock-tip { color: #ef4444; font-size: 0.8rem; background: #fee2e2; padding: 2px 8px; border-radius: 6px; margin-left: auto;}
-.category-pills.is-locked { opacity: 0.8; pointer-events: none;}
-.category-pills.is-locked .pill-wrap { pointer-events: auto;} /* 让按钮自身处理禁用点击 */
-
-.pill-btn.disabled { opacity: 0.3; cursor: not-allowed; background: #f1f5f9; border-color: transparent;}
-.pill-btn.disabled:hover { transform: none; }
-.pill-btn.disabled.active { opacity: 1; background: #fee2e2; border-color: #ef4444; color: #dc2626; box-shadow: 0 4px 12px rgba(239,68,68,0.2); cursor: not-allowed;}
 
 .submit-btn.emergency-submit { background: linear-gradient(135deg, #ef4444, #dc2626); box-shadow: 0 10px 30px rgba(239, 68, 68, 0.3); animation: heartbeat 2s infinite; }
 .submit-btn.emergency-submit:hover:not(:disabled) { box-shadow: 0 15px 40px rgba(239, 68, 68, 0.5); }
@@ -631,10 +709,16 @@ const handleDonate = async () => {
 /* 动画类 */
 .fade-slide-enter-active, .fade-slide-leave-active { transition: all 0.3s ease; }
 .fade-slide-enter-from, .fade-slide-leave-to { opacity: 0; transform: translateY(-10px); }
+
+/* 移动端适配 */
+@media screen and (max-width: 768px) {
+  .physics-matrix { flex-direction: column; gap: 15px;}
+  .pm-divider { display: none; }
+  .form-row { flex-direction: column; gap: 15px; }
+}
 </style>
 
 <style>
-/* 保持紧急任务弹窗样式完全不变 */
 .premium-emergency-dialog {
   border-radius: 20px !important;
   overflow: hidden;
@@ -664,8 +748,7 @@ const handleDonate = async () => {
 .radar-sweep { position: absolute; width: 50%; height: 50%; top: 0; left: 50%; transform-origin: bottom left; background: linear-gradient(90deg, rgba(239, 68, 68, 0.1) 0%, rgba(239, 68, 68, 0) 100%); animation: radar-spin 4s linear infinite; }
 @keyframes radar-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 .e-content-front { position: relative; z-index: 2; }
-.e-alert-icon { font-size: 4rem; margin-bottom: 15px; animation: floatUp 2s ease-in-out infinite; filter: drop-shadow(0 4px 6px rgba(239,68,68,0.2)); }
-.e-main-title { color: #991b1b; font-size: 1.4rem; font-weight: 900; margin: 0 0 8px; }
+.e-alert-icon { font-size: 4rem; margin-bottom: 15px; animation: floatUp 2s ease-in-out infinite; filter: drop-shadow(0 4px 6px rgba(239,68,68,0.2)); }.e-main-title { color: #991b1b; font-size: 1.4rem; font-weight: 900; margin: 0 0 8px; }
 .e-sub-desc { color: #7f1d1d; font-size: 0.95rem; margin: 0 0 20px; font-weight: bold;}
 .e-target-goods-box { background: #fff; display: inline-block; padding: 10px 20px; border-radius: 12px; border: 2px dashed #f87171; box-shadow: 0 4px 15px rgba(239, 68, 68, 0.1); margin-bottom: 25px; }
 .e-target-goods-box .bracket { color: #f87171; font-weight: bold; }

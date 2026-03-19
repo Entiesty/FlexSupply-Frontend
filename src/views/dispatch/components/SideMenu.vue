@@ -37,13 +37,20 @@
              :src="currentUser.avatar" class="avatar-img" alt="avatar" />
         <span v-else class="avatar-emoji">{{ currentUser.avatar || '👤' }}</span>
       </div>
+
       <div class="u-info">
-        <div class="u-name">{{ currentUser.username }}</div>
+        <div class="u-name" :title="currentUser.username">{{ currentUser.username }}</div>
         <div class="u-role" :style="{ color: currentUser.isVerified === 1 ? '#10b981' : '#f59e0b' }">
           {{ roleName }}
           <span v-if="currentUser.isVerified === 0" style="font-size:12px">(审核中)</span>
         </div>
       </div>
+
+      <el-tooltip content="退出系统" placement="top" effect="light">
+        <button class="logout-mini-btn" @click="handleLogout">
+          🚪
+        </button>
+      </el-tooltip>
     </div>
   </aside>
 </template>
@@ -53,40 +60,43 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { logout } from '@/api/auth'
-import { getUserProfile } from '@/api/user' // 🚨 引入获取个人信息的 API
-import { verifyPickup } from '@/api/trade' // 引入刚才加的接口
+import { getUserProfile } from '@/api/user'
+import { verifyPickup } from '@/api/trade'
 
-// 🚨 触发线下核销的全局弹窗逻辑
+// 🚨 触发线下核销的全局弹窗逻辑 (重构文案与样式注入)
 const triggerVerifyPickup = () => {
   ElMessageBox.prompt(
-      '居民到达线下物理据点后，请输入其出示的 6 位数字取件码进行物资交接与核销：',
-      '🎫 线下实物验码核销',
+      '请输入居民出示的 6 位专属取件码，完成物理世界的最后一米交接：',
+      '🎫 线下物资核销',
       {
-        confirmButtonText: '确认提取',
+        confirmButtonText: '确认无误，立即核销',
         cancelButtonText: '取消',
+        inputPlaceholder: '请输入 6 位数字取件码',
         inputPattern: /^\d{6}$/,
-        inputErrorMessage: '取件码格式错误，必须为 6 位纯数字',
-        customClass: 'dopamine-msg-box'
+        inputErrorMessage: '格式错误：必须为 6 位纯数字',
+        customClass: 'dopamine-msg-box', // 注入魔法样式
+        center: true, // 居中显示
+        showClose: false // 隐藏原生的右上角关闭按钮
       }
   ).then(async ({ value }) => {
     try {
       await verifyPickup(value)
-      ElMessage.success(`核销成功！凭证码 ${value} 对应的物资已物理交接完毕，系统已计入您的信誉账户。`)
-    } catch (error) {
-      // 错误提示由后端的 BusinessException 拦截器自动抛出
-    }
+      ElMessage.success({
+        message: `🎉 核销成功！凭证码 ${value} 已核销，系统已将积分计入您的账户。`,
+        duration: 4000
+      })
+    } catch (error) {}
   }).catch(() => {})
 }
 
 const router = useRouter()
 const route = useRoute()
 
-// 🚨 扩充 currentUser，增加 isVerified 字段
 const currentUser = ref({
   userId: localStorage.getItem('userId') || '',
   username: localStorage.getItem('username') || '调度员',
   role: parseInt(localStorage.getItem('userRole') || '3'),
-  isVerified: 0 // 默认未审核，稍后通过接口拉取
+  isVerified: 0
 })
 
 const roleMap = { 1: '受赠长者', 2: '爱心商家', 3: '城市护航骑士', 4: '指挥中心' }
@@ -104,18 +114,14 @@ const allMenus = [
   { name: '我的信誉档案', icon: '🏆', path: '/volunteer/credit', roles: [3], requiresAuth: true },
   { name: '物资捐赠大厅', icon: '💝', path: '/merchant/donate', roles: [2], requiresAuth: true },
   { name: '我的捐赠记录', icon: '📦', path: '/merchant/history', roles: [2], requiresAuth: true },
-
-  // 🚨 核心修复：把“日常食物银行”加进 Role = 1 的可见菜单中
   { name: '日常食物银行', icon: '🏪', path: '/market', roles: [1], requiresAuth: true },
   { name: '紧急呼救大舱', icon: '🚨', path: '/sos', roles: [1], requiresAuth: false },
   { name: '我的受赠档案', icon: '📜', path: '/recipient/history', roles: [1], requiresAuth: true },
-
   { name: '个人账号设置', icon: '👤', path: '/volunteer/profile', roles: [1, 2, 3, 4], requiresAuth: false }
 ]
 
 const visibleMenus = computed(() => allMenus.filter(menu => menu.roles.includes(currentUser.value.role)))
 
-// 🚨 每次侧边栏挂载时，静默拉取一下最新状态，更新锁头
 onMounted(async () => {
   try {
     const res = await getUserProfile()
@@ -128,21 +134,16 @@ onMounted(async () => {
 
 const goToHome = () => {
   if (currentUser.value.role === 2) router.push('/merchant/donate')
-  else if (currentUser.value.role === 1) router.push('/sos')
+  else if (currentUser.value.role === 1) router.push('/market')
   else router.push('/map')
 }
 
-// 🚨 核心拦截器：如果点击了带锁的菜单，强制拦截并弹窗！
 const handleMenuClick = (item) => {
   if (item.requiresAuth && currentUser.value.isVerified === 0) {
     ElMessageBox.alert(
         '该模块包含城市核心调度数据，需要指挥中心授权。<br/><br/>👉 <strong>请先前往【个人账号设置】完善基础资料与资质凭证，并等待核验。</strong>',
         '🔒 系统权限受限',
-        {
-          confirmButtonText: '去完善资料',
-          dangerouslyUseHTMLString: true,
-          type: 'warning'
-        }
+        { confirmButtonText: '去完善资料', dangerouslyUseHTMLString: true, type: 'warning' }
     ).then(() => {
       if (route.path !== '/volunteer/profile') router.push('/volunteer/profile')
     }).catch(() => {})
@@ -152,20 +153,24 @@ const handleMenuClick = (item) => {
 }
 
 const handleLogout = () => {
-  ElMessageBox.confirm('确定要退出当前账号吗？', '提示', {
-    confirmButtonText: '确定退出', cancelButtonText: '暂不退出', type: 'warning'
-  }).then(async () => {
-    try { if (currentUser.value.userId) await logout(currentUser.value.userId) } catch (e) {} finally {
+  ElMessageBox.confirm(
+      '退出后将无法接收紧急调度与广播指令，确认退出吗？',
+      '🚪 退出系统',
+      { confirmButtonText: '确认退出', cancelButtonText: '暂不退出', type: 'warning' }
+  ).then(async () => {
+    try {
+      if (currentUser.value.userId) await logout(currentUser.value.userId)
+    } catch (e) {
+    } finally {
       localStorage.clear()
-      ElMessage.success('已安全退出')
-      router.replace('/auth')
+      ElMessage.success('已安全退出系统')
+      window.location.href = '/auth'
     }
   }).catch(() => {})
 }
 </script>
 
 <style scoped>
-/* 继承原样式，只补充锁头的 CSS */
 .side-menu { width: 260px; height: 100vh; background: #fff; border-right: 1px solid rgba(249, 115, 22, 0.1); display: flex; flex-direction: column; z-index: 200; box-shadow: 4px 0 20px rgba(0, 0, 0, 0.02); }
 .logo-zone { padding: 30px 20px; display: flex; align-items: center; gap: 15px; cursor: pointer; transition: opacity 0.3s ease; }
 .logo-zone:hover { opacity: 0.85; }
@@ -174,43 +179,175 @@ const handleLogout = () => {
 .logo-text { font-size: 1.1rem; color: #1e293b; font-weight: 900; line-height: 1.3; margin: 0; }
 .logo-text .sub { font-size: 0.8rem; color: #f97316; font-weight: bold; }
 
-.menu-list { flex: 1; padding: 0 15px; display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.menu-list { flex: 1; padding: 0 15px; display: flex; flex-direction: column; gap: 8px; margin-top: 10px; overflow-y: auto; }
 .menu-item { padding: 14px 20px; border-radius: 14px; color: #64748b; font-weight: bold; font-size: 0.95rem; display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: 0.3s; }
 .menu-content { display: flex; align-items: center; gap: 12px; }
 .menu-item:hover:not(.is-locked) { background: #f8fafc; color: #1e293b; }
 .menu-item.active { background: #f97316; color: #fff; box-shadow: 0 8px 20px rgba(249, 115, 22, 0.25); }
 
-/* 🚨 锁定状态的特殊样式 */
 .menu-item.is-locked { color: #cbd5e1; cursor: not-allowed; }
 .menu-item.is-locked:hover { background: #fef2f2; color: #ef4444; }
 .lock-icon { font-size: 1.1rem; opacity: 0.6; }
-
 .m-icon { font-size: 1.2rem; }
 
-.user-profile { padding: 20px; margin: 20px; background: #f8fafc; border-radius: 16px; display: flex; align-items: center; gap: 12px; border: 1px solid #f1f5f9; position: relative; }
-.avatar { font-size: 1.8rem; background: #fff; width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; border-radius: 12px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05); flex-shrink: 0; }
-.u-info { flex: 1; overflow: hidden; }
-.u-info .u-name { font-weight: 800; color: #1e293b; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.u-info .u-role { font-size: 0.75rem; font-weight: bold; margin-top: 2px; }
+.menu-item.verify-btn { margin-top: 15px; background: #ecfdf5; color: #059669; border: 1px dashed #34d399; }
+.menu-item.verify-btn:hover { background: #d1fae5; color: #047857; transform: translateY(-2px); box-shadow: 0 4px 10px rgba(16, 185, 129, 0.2); }
 
-.logout-btn { background: none; border: none; color: #94a3b8; cursor: pointer; padding: 8px; border-radius: 8px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
-.logout-btn:hover { background: #fee2e2; color: #ef4444; }
-
-.avatar-dynamic { width: 45px; height: 45px; border-radius: 50%; overflow: hidden; background: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
-.avatar-img { width: 100%; height: 100%; object-fit: cover; }
-.avatar-emoji { font-size: 1.8rem; line-height: 1; }
-
-/* 让核销按钮稍微显眼一点 */
-.menu-item.verify-btn {
-  margin-top: 15px;
-  background: #ecfdf5;
-  color: #059669;
-  border: 1px dashed #34d399;
+.user-profile {
+  padding: 15px;
+  margin: 15px;
+  background: #f8fafc;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #e2e8f0;
+  transition: 0.3s;
 }
-.menu-item.verify-btn:hover {
-  background: #d1fae5;
-  color: #047857;
+.user-profile:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.avatar-dynamic { width: 42px; height: 42px; border-radius: 50%; overflow: hidden; background: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,0.05); flex-shrink: 0;}
+.avatar-img { width: 100%; height: 100%; object-fit: cover; }
+.avatar-emoji { font-size: 1.6rem; line-height: 1; }
+
+.u-info { flex: 1; overflow: hidden; display: flex; flex-direction: column; justify-content: center; }
+.u-info .u-name { font-weight: 800; color: #1e293b; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.u-info .u-role { font-size: 0.75rem; font-weight: bold; margin-top: 3px; }
+
+.logout-mini-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+.logout-mini-btn:hover {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  transform: translateX(2px);
+  box-shadow: 0 4px 8px rgba(239, 68, 68, 0.15);
+}
+.logout-mini-btn:active {
+  transform: scale(0.95);
+}
+</style>
+
+<style>
+/* ======================================================
+   🚨 全局挂载的 Element Plus MessageBox 深度定制 (毛玻璃多巴胺风格)
+   ====================================================== */
+.dopamine-msg-box {
+  width: 420px !important;
+  border-radius: 24px !important;
+  border: 1px solid rgba(255, 255, 255, 0.8) !important;
+  background: rgba(255, 255, 255, 0.95) !important;
+  backdrop-filter: blur(20px) !important;
+  box-shadow: 0 25px 50px -12px rgba(16, 185, 129, 0.15), 0 0 0 1px rgba(16, 185, 129, 0.05) !important;
+  padding: 30px !important;
+}
+
+.dopamine-msg-box .el-message-box__header {
+  padding: 0 0 20px 0 !important;
+  text-align: center;
+}
+.dopamine-msg-box .el-message-box__title {
+  font-size: 1.4rem !important;
+  font-weight: 900 !important;
+  color: #065f46 !important;
+  letter-spacing: 1px;
+}
+
+.dopamine-msg-box .el-message-box__content {
+  padding: 0 !important;
+}
+.dopamine-msg-box .el-message-box__message {
+  text-align: center;
+  color: #64748b !important;
+  font-size: 1.05rem !important;
+  font-weight: bold;
+  line-height: 1.6;
+  margin-bottom: 25px !important;
+}
+
+.dopamine-msg-box .el-input {
+  margin-bottom: 10px;
+}
+.dopamine-msg-box .el-input__wrapper {
+  background: #f8fafc !important;
+  border-radius: 16px !important;
+  box-shadow: 0 0 0 2px #e2e8f0 inset !important;
+  padding: 8px 20px !important;
+  transition: all 0.3s ease;
+}
+.dopamine-msg-box .el-input__wrapper.is-focus {
+  background: #fff !important;
+  box-shadow: 0 0 0 3px #10b981 inset, 0 8px 20px rgba(16, 185, 129, 0.15) !important;
+}
+.dopamine-msg-box .el-input__inner {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 1.8rem !important;
+  font-weight: 900 !important;
+  color: #059669 !important;
+  text-align: center;
+  letter-spacing: 8px;
+  height: 50px !important;
+}
+.dopamine-msg-box .el-input__inner::placeholder {
+  font-size: 1rem !important;
+  letter-spacing: normal;
+  color: #cbd5e1 !important;
+  font-family: inherit;
+}
+
+.dopamine-msg-box .el-message-box__errormsg {
+  color: #ef4444 !important;
+  font-weight: bold;
+  font-size: 0.85rem !important;
+  text-align: center;
+  margin-top: 8px;
+}
+
+.dopamine-msg-box .el-message-box__btns {
+  padding: 25px 0 0 0 !important;
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+}
+.dopamine-msg-box .el-button {
+  flex: 1;
+  height: 48px !important;
+  border-radius: 14px !important;
+  font-size: 1.05rem !important;
+  font-weight: 900 !important;
+  border: none !important;
+  transition: all 0.2s ease;
+}
+.dopamine-msg-box .el-button:first-child {
+  background: #f1f5f9 !important;
+  color: #64748b !important;
+}
+.dopamine-msg-box .el-button:first-child:hover {
+  background: #e2e8f0 !important;
+  color: #1e293b !important;
+}
+.dopamine-msg-box .el-button--primary {
+  background: linear-gradient(135deg, #10b981, #059669) !important;
+  color: #fff !important;
+  box-shadow: 0 6px 15px rgba(16, 185, 129, 0.3) !important;
+}
+.dopamine-msg-box .el-button--primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 10px rgba(16, 185, 129, 0.2);
+  box-shadow: 0 10px 20px rgba(16, 185, 129, 0.4) !important;
 }
 </style>

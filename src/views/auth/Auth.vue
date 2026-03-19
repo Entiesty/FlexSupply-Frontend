@@ -311,12 +311,13 @@ const handleSubmit = async () => {
       const profileRes = await getUserProfile()
       const realIsVerified = profileRes.data.isVerified
 
+// 🚨 修改后的登录跳转逻辑
       if (res.data.role !== 4 && realIsVerified === 0) {
         ElMessage.success('登录成功！请先完善个人档案与资质以解锁系统。')
         await router.push('/volunteer/profile')
       } else {
         ElMessage.success('登录成功，欢迎回来！')
-        if (res.data.role === 1) await router.push('/sos')
+        if (res.data.role === 1) await router.push('/market') // 👈 核心修改：改为跳转至食物银行
         else if (res.data.role === 2) await router.push('/merchant/donate')
         else if (res.data.role === 3) await router.push('/map')
         else if (res.data.role === 4) await router.push('/map')

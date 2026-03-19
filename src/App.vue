@@ -13,8 +13,10 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+// 👇 1. 扩充了 vue 和 element-plus 的引入
+import { computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { ElNotification } from 'element-plus'
 import SideMenu from '@/views/dispatch/components/SideMenu.vue'
 
 const route = useRoute()
@@ -25,6 +27,46 @@ const showMenu = computed(() => {
   const noMenuPaths = ['/auth', '/']
   return !noMenuPaths.includes(route.path)
 })
+
+// 👇 2. 新增：全局 WebSocket 监听逻辑（核心！）
+let ws = null
+
+const initGlobalWebSocket = () => {
+  // 从本地存储拿取登录用户信息
+  const userInfoStr = localStorage.getItem('userInfo')
+  if (!userInfoStr) return
+
+  const userInfo = JSON.parse(userInfoStr)
+  if (!userInfo.userId) return
+
+  // 动态拼接 WebSocket 地址连上后端
+  const wsUrl = `ws://localhost:8080/ws/sos/${userInfo.userId}`
+  ws = new WebSocket(wsUrl)
+
+  ws.onopen = () => console.log('✅ 战时通讯雷达已全局连接')
+
+  ws.onmessage = (event) => {
+    // 🚨 收到后端传来的喜报，立刻在右上角弹出不可忽视的绿色通知！
+    ElNotification({
+      title: '🚨 紧急调度大盘通知',
+      message: event.data,
+      type: 'success',
+      duration: 0, // 0 表示永不自动消失，确保老人一定能看到
+      position: 'top-right'
+    })
+  }
+
+  ws.onclose = () => console.log('❌ 战时通讯雷达已断开')
+}
+
+onMounted(() => {
+  initGlobalWebSocket()
+})
+
+onUnmounted(() => {
+  if (ws) ws.close()
+})
+// 👆 新增逻辑结束
 </script>
 
 <style>

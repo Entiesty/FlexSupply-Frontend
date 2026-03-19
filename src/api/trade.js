@@ -13,8 +13,13 @@ export function getAvailableOrders(params) {
 }
 
 // 受赠方发布紧急求助
+// 受赠方发布紧急求助
 export function publishDemand(data) {
-    return request({ url: '/trade/order/publish-demand', method: 'post', data })
+    return request({
+        url: '/trade/order/publish', // 🚨 仅修改这里：去掉后面的 -demand，与后端绝对对齐
+        method: 'post',
+        data
+    })
 }
 
 // 找到这部分代码，修改 URL 路径！

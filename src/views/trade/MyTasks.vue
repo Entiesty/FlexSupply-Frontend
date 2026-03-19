@@ -234,18 +234,28 @@ const uploadRef = ref(null)
 const isDonation = (sn) => sn?.startsWith('DON-')
 const isValidCoordinate = (lon, lat) => lon && lat && !isNaN(lon) && !isNaN(lat) && lon > 0 && lat > 0
 
+// 1. 修改文案映射，5 级才是特急
 const formatUrgency = (level) => {
-  const map = { 1: '🔥 特急(1级)', 2: '🔴 紧急(2级)', 3: '🟠 较高(3级)', 4: '🟡 常规(4级)', 5: '🟢 宽松(5级)' }
-  return map[level] || '🟡 常规(5级)'
+  const map = {
+    5: '🔥 特急(5级)',
+    4: '🔴 紧急(4级)',
+    3: '🟠 优先(3级)',
+    2: '🟡 常规(2级)',
+    1: '🟢 顺路(1级)'
+  }
+  return map[level] || '🟢 顺路(1级)' // 默认保底为 1 级
 }
 
+// 2. 修改微标签的判定条件
 const getMicroTags = (item) => {
   const tags = []
   const name = (item.goodsName || item.requiredCategory || '').toLowerCase()
   if (name.includes('奶') || name.includes('生鲜') || name.includes('菜')) tags.push('🧊 易坏需冷链')
   if (name.includes('药') || name.includes('胰岛素')) tags.push('💊 救命药物')
   if (item.targetName?.includes('老人') || item.targetName?.includes('长者')) tags.push('👵 弱势群体关怀')
-  if (item.urgencyLevel === 1 || item.urgencyLevel === 2) tags.push('⚡ 限时速达')
+
+  // 🚨 将原本的 === 1 || === 2，改为 >= 4 才触发限时速达
+  if (item.urgencyLevel >= 4) tags.push('⚡ 限时速达')
   return tags
 }
 
@@ -460,7 +470,6 @@ const initMapRouting = () => {
   })
 }
 
-// 🚨 导航推演逻辑的核心改造区
 const drawRouteByStep = (AMapClass) => {
   const AMap = AMapClass || window.AMap
   const ptMe = (currentLocation.lon && currentLocation.lat)
@@ -472,27 +481,25 @@ const drawRouteByStep = (AMapClass) => {
   ridingPluginA.clear()
   ridingPluginB.clear()
 
-  // 🚨 拦截已取货状态：直接只画【当前位置 -> 送货终点】的绿线！
+  // 🚨 已取货状态：严格执行【取货点 -> 送货点】的后半程推演
   if (currentMapOrder.value.taskStatus === 2) {
-    if (ptMe) {
-      ridingPluginB.search(ptMe, ptTarget, (status, result) => {
-        if(status === 'complete') routeDistance.value = '约 ' + (result.routes[0].distance / 1000).toFixed(1) + ' km'
-        else routeDistance.value = '路线规划失败'
-      })
-    } else {
-      routeDistance.value = '未获取到您的定位'
-    }
+    ridingPluginB.search(ptSource, ptTarget, (status, result) => {
+      if(status === 'complete') routeDistance.value = '约 ' + (result.routes[0].distance / 1000).toFixed(1) + ' km'
+      else routeDistance.value = '路线规划失败'
+    })
     return;
   }
 
   // 正常未取货的推演逻辑
   if (currentRouteStep.value === 'all') {
     let totalDist = 0;
+    // 第一段推演：当前位置 -> 取货点 (蓝线)
     if (ptMe) {
       ridingPluginA.search(ptMe, ptSource, (status, result) => {
         if(status === 'complete') totalDist += (result.routes[0].distance / 1000)
       })
     }
+    // 第二段推演：取货点 -> 送货点 (绿线，严格基于 ptSource)
     ridingPluginB.search(ptSource, ptTarget, (status, result) => {
       if(status === 'complete') {
         totalDist += (result.routes[0].distance / 1000)
@@ -500,6 +507,7 @@ const drawRouteByStep = (AMapClass) => {
       }
     })
   } else if (currentRouteStep.value === 'pickup') {
+    // 仅推演取货路段：当前位置 -> 取货点
     if (ptMe) {
       ridingPluginA.search(ptMe, ptSource, (status, result) => {
         if(status === 'complete') routeDistance.value = '约 ' + (result.routes[0].distance / 1000).toFixed(1) + ' km'
@@ -508,6 +516,7 @@ const drawRouteByStep = (AMapClass) => {
       routeDistance.value = '未获取到您的定位'
     }
   } else if (currentRouteStep.value === 'delivery') {
+    // 仅推演送货路段：取货点 -> 送货点 (严格基于 ptSource)
     ridingPluginB.search(ptSource, ptTarget, (status, result) => {
       if(status === 'complete') routeDistance.value = '约 ' + (result.routes[0].distance / 1000).toFixed(1) + ' km'
     })
@@ -563,11 +572,12 @@ onMounted(() => { initLocationStrategy() })
 .bg-blue { background: #3b82f6; box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3); }
 .bg-red { background: #ef4444; box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3); }
 .urgency-badge { padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 900; border: 1px solid;}
-.urgency-1 { color: #b91c1c; background: #fef2f2; border-color: #fca5a5; }
-.urgency-2 { color: #c2410c; background: #fff7ed; border-color: #fdba74; }
-.urgency-3 { color: #d97706; background: #fef3c7; border-color: #fde68a; }
-.urgency-4 { color: #4d7c0f; background: #ecfccb; border-color: #bef264; }
-.urgency-5 { color: #047857; background: #d1fae5; border-color: #6ee7b7; }
+/* 🚨 颠倒颜色：5 级最红，1 级最绿 */
+.urgency-5 { color: #b91c1c; background: #fef2f2; border-color: #fca5a5; } /* 红色系 */
+.urgency-4 { color: #c2410c; background: #fff7ed; border-color: #fdba74; } /* 橘红色 */
+.urgency-3 { color: #d97706; background: #fef3c7; border-color: #fde68a; } /* 橙黄色 */
+.urgency-2 { color: #4d7c0f; background: #ecfccb; border-color: #bef264; } /* 浅黄绿 */
+.urgency-1 { color: #047857; background: #d1fae5; border-color: #6ee7b7; } /* 翠绿色 */
 
 .order-sn { font-family: monospace; font-size: 14px; color: #475569; font-weight: 900; }
 .time-info { font-size: 12px; color: #94a3b8; font-weight: bold;}
