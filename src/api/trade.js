@@ -114,3 +114,11 @@ export function pickupTask(taskId) {
         method: 'post'
     })
 }
+
+// 🔍 查询商家某批次物资的具体领取名录与评价反馈
+export function getGoodsDistribution(goodsId) {
+    return request({
+        url: `/trade/order/distribution/${goodsId}`,
+        method: 'get'
+    })
+}

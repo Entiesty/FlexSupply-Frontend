@@ -103,20 +103,29 @@ const roleMap = { 1: '受赠长者', 2: '爱心商家', 3: '城市护航骑士',
 const roleName = computed(() => roleMap[currentUser.value.role] || '未知角色')
 
 const allMenus = [
+  // 🔴 核心业务入口 (最高频操作，排在最上面)
   { name: '实时调度大屏', icon: '🗺️', path: '/map', roles: [3, 4], requiresAuth: true },
-  { name: '异常预警监控', icon: '🚨', path: '/admin/exception-monitor', roles: [4], requiresAuth: true },
+  { name: '紧急呼救大舱', icon: '🚨', path: '/sos', roles: [1], requiresAuth: false },
+  { name: '物资捐赠大厅', icon: '💝', path: '/merchant/donate', roles: [2], requiresAuth: true },
+  { name: '日常食物银行', icon: '🏪', path: '/market', roles: [1], requiresAuth: true },
+
+  // 🟡 任务与流转记录 (中频查看，排在中间)
+  { name: '我的配送任务', icon: '🚴', path: '/my-tasks', roles: [3], requiresAuth: true },
+  { name: '我的捐赠记录', icon: '📦', path: '/merchant/history', roles: [2], requiresAuth: true },
+  { name: '我的受赠档案', icon: '📜', path: '/recipient/history', roles: [1], requiresAuth: true },
+
+  // 🟢 资产与信誉 (低频查看，靠后)
+  { name: '城市信誉资产', icon: '🏆', path: '/volunteer/credit', roles: [2, 3], requiresAuth: true },
+
+  // 🔵 指挥中心管理模块 (管理员专属区块，聚拢在一起)
   { name: '全局订单流转', icon: '📊', path: '/flow', roles: [4], requiresAuth: true },
+  { name: '异常预警监控', icon: '🚨', path: '/admin/exception-monitor', roles: [4], requiresAuth: true },
   { name: '物理据点管理', icon: '🏥', path: '/admin/stations', roles: [4], requiresAuth: true },
   { name: '全域用户台账', icon: '👥', path: '/admin/users', roles: [4], requiresAuth: true },
   { name: '入驻材料审核', icon: '🛡️', path: '/admin/review', roles: [4], requiresAuth: true },
   { name: '调度引擎调参', icon: '⚙️', path: '/config', roles: [4], requiresAuth: true },
-  { name: '我的配送任务', icon: '🚴', path: '/my-tasks', roles: [3], requiresAuth: true },
-  { name: '我的信誉档案', icon: '🏆', path: '/volunteer/credit', roles: [3], requiresAuth: true },
-  { name: '物资捐赠大厅', icon: '💝', path: '/merchant/donate', roles: [2], requiresAuth: true },
-  { name: '我的捐赠记录', icon: '📦', path: '/merchant/history', roles: [2], requiresAuth: true },
-  { name: '日常食物银行', icon: '🏪', path: '/market', roles: [1], requiresAuth: true },
-  { name: '紧急呼救大舱', icon: '🚨', path: '/sos', roles: [1], requiresAuth: false },
-  { name: '我的受赠档案', icon: '📜', path: '/recipient/history', roles: [1], requiresAuth: true },
+
+  // ⚪ 通用基础设置 (永远垫底)
   { name: '个人账号设置', icon: '👤', path: '/volunteer/profile', roles: [1, 2, 3, 4], requiresAuth: false }
 ]
 

@@ -153,7 +153,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElNotification, ElMessageBox } from 'element-plus'
-import { publishDemand, getMyActiveSos, cancelDemand, confirmReceiptOrder } from '@/api/trade'
+import { publishDemand, getMyActiveSos, cancelDemand, rateOrder } from '@/api/trade'
 import { getUserProfile } from '@/api/user'
 
 const route = useRoute()
@@ -385,7 +385,7 @@ const submitRating = async () => {
   if (ratingForm.rating === 0) return ElMessage.warning('请至少点亮一颗星星哦')
   loading.value = true
   try {
-    await confirmReceiptOrder({
+    await rateOrder({
       orderId: activeOrder.value.orderId,
       rating: ratingForm.rating,
       comment: ratingForm.comment

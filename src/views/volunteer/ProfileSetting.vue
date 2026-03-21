@@ -4,7 +4,7 @@
       <span class="pulse-dot"></span> 千人千面成就系统渲染中
     </div>
 
-    <div class="alert-box warning-status" v-if="userInfo && userInfo.isVerified !== 1">
+    <div class="alert-box warning-status" v-if="userInfo && userInfo.isVerified !== 1 && userInfo.role !== 4">
       <span class="alert-icon">⚠️</span>
       您的{{ unverifiedTip.title }}。&nbsp;{{ unverifiedTip.desc }}
     </div>
@@ -30,7 +30,7 @@
           </div>
         </div>
 
-        <template v-if="stats.isVerified === 1">
+        <template v-if="stats.isVerified === 1 || stats.role === 4">
           <div v-if="stats.role === 3" class="dashboard-cards volunteer-board">
             <div class="data-card fitness-card"><div class="card-icon">🏃‍♂️</div><div class="card-info"><p>累计有氧减脂里程</p><h3>{{ stats.runningMileage || '0.00' }} <span>km</span></h3></div></div>
             <div class="data-card"><div class="card-icon">📦</div><div class="card-info"><p>护航履约单数</p><h3>{{ stats.totalDeliveredOrders || 0 }} <span>单</span></h3></div></div>
@@ -39,16 +39,21 @@
           <div v-else-if="stats.role === 2" class="dashboard-cards merchant-board">
             <div class="data-card"><div class="card-icon">💝</div><div class="card-info"><p>累计捐赠物资批次</p><h3>{{ stats.totalDonatedGoods || 0 }} <span>批</span></h3></div></div>
             <div class="data-card heart-card"><div class="card-icon">🌟</div><div class="card-info"><p>累计温暖城市人次</p><h3>{{ stats.totalHelpCount || 0 }} <span>人次</span></h3></div></div>
+            <div class="data-card score-card"><div class="card-icon">🏆</div><div class="card-info"><p>商铺信誉星级评分</p><h3>{{ stats.creditScore || 100 }} <span>分</span></h3></div></div>
           </div>
           <div v-else-if="stats.role === 1" class="dashboard-cards recipient-board">
             <div class="data-card"><div class="card-icon">🛡️</div><div class="card-info"><p>专属人群关怀标签</p><h3>{{ formatUserTag(stats.userTag) }}</h3></div></div>
             <div class="data-card"><div class="card-icon">🤝</div><div class="card-info"><p>累计获得援助次数</p><h3>{{ stats.totalReceivedTimes || 0 }} <span>次</span></h3></div></div>
           </div>
+          <div v-else-if="stats.role === 4" class="dashboard-cards admin-board">
+            <div class="data-card"><div class="card-icon">📡</div><div class="card-info"><p>系统运行状态</p><h3>正常 <span>在线</span></h3></div></div>
+            <div class="data-card"><div class="card-icon">🛡️</div><div class="card-info"><p>权限级别</p><h3>Root <span>最高级</span></h3></div></div>
+          </div>
         </template>
 
-        <div v-else class="locked-dashboard">
+        <div v-else-if="stats.role !== 4" class="locked-dashboard">
           <div class="lock-huge">🔒</div>
-          <h3>您的专属城市护航档案生成中...</h3>
+          <h3>您的专属城市档案生成中...</h3>
           <p>提交资质并由指挥中心审核通过后唤醒</p>
         </div>
       </div>
@@ -59,27 +64,53 @@
       </div>
 
       <div class="settings-grid">
-        <div class="setting-card">
+        <div class="setting-card" :style="stats.role === 4 ? 'grid-column: 1 / -1;' : ''">
           <div class="card-header"><h3>📝 基础身份资料</h3></div>
           <div class="card-body">
             <div class="info-row"><label>注册手机号 (凭证不可改)</label><input type="text" :value="profile.phone" disabled class="input-disabled" /></div>
             <div class="info-row"><label><span style="color:#ef4444">*</span> 系统展示名称 / 真实姓名</label><input type="text" v-model="profileForm.username" placeholder="请输入您的姓名" class="input-normal" /></div>
 
-            <template v-if="[1, 2, 3].includes(stats.role)">
-              <div class="inner-divider"></div>
+            <div class="inner-divider" v-if="[1, 2, 3].includes(stats.role)"></div>
+
+            <template v-if="stats.role === 1">
+              <div class="info-row"><label><span style="color:#ef4444">*</span> 🏠 详细门牌号 (必填，精确到室)</label><input type="text" v-model="profileForm.doorNumber" placeholder="例如：幸福小区3栋2梯402室" class="input-normal" /></div>
+              <div class="info-row"><label>☎️ 紧急联系人电话</label><input type="text" v-model="profileForm.emergencyPhone" placeholder="突发状况时方便骑士联系" class="input-normal" /></div>
+              <div class="info-row"><label>❤️ 健康与送达备注</label><input type="text" v-model="profileForm.healthRemark" placeholder="例如：严重糖尿病(需无糖)，或双目失明需电话联系" class="input-normal" /></div>
+            </template>
+
+            <template v-if="stats.role === 2">
               <div class="info-row">
-                <label><span style="color:#ef4444">*</span> {{ stats.role === 3 ? '📍 常驻服务辖区 (算法派单基准点)' : (stats.role === 2 ? '📍 实体商铺位置 (系统上门取货精准坐标)' : '📍 家庭住址 (志愿者上门精准定位)') }}</label>
+                <label><span style="color:#ef4444">*</span> 📍 实体商铺位置 (决定物资发货起点)</label>
                 <div class="location-picker-box">
                   <div class="loc-display" :class="{'has-val': profileForm.currentLon}">
-                    <div class="loc-address">{{ profileForm.addressName || '尚未设置坐标，请点击右侧按钮进行地图选点' }}</div>
+                    <div class="loc-address">{{ profileForm.addressName || '尚未设置坐标，请点击地图选点' }}</div>
                     <div class="loc-coords" v-if="profileForm.currentLon">Lon: {{ profileForm.currentLon }} | Lat: {{ profileForm.currentLat }}</div>
                   </div>
                   <button type="button" class="pick-map-btn" @click="openMapDialog">🗺️ 地图选点</button>
                 </div>
               </div>
+              <div class="info-row" style="margin-top: 15px;">
+                <label><span style="color:#ef4444">*</span> 🏪 商铺主营类目 (决定您能发货的物资范围)</label>
+                <select v-model="profileForm.industryType" class="input-normal" style="cursor: pointer; background: #ecfdf5; border-color: #6ee7b7; color: #059669; font-weight: bold;">
+                  <option disabled value="">请选择商铺类型...</option>
+                  <option :value="1">🥩 餐饮生鲜 (热食、盒饭、生鲜蔬菜)</option>
+                  <option :value="2">🛒 商超便利 (米面粮油、方便速食、日用品)</option>
+                  <option :value="3">💊 医药器械 (常备药、外用急救、医疗耗材)</option>
+                </select>
+              </div>
             </template>
 
             <template v-if="stats.role === 3">
+              <div class="info-row">
+                <label><span style="color:#ef4444">*</span> 📍 常驻服务辖区 (算法派单基准点)</label>
+                <div class="location-picker-box">
+                  <div class="loc-display" :class="{'has-val': profileForm.currentLon}">
+                    <div class="loc-address">{{ profileForm.addressName || '尚未设置坐标，请点击地图选点' }}</div>
+                    <div class="loc-coords" v-if="profileForm.currentLon">Lon: {{ profileForm.currentLon }} | Lat: {{ profileForm.currentLat }}</div>
+                  </div>
+                  <button type="button" class="pick-map-btn" @click="openMapDialog">🗺️ 地图选点</button>
+                </div>
+              </div>
               <div class="info-row" style="margin-top: 15px;">
                 <label><span style="color:#ef4444">*</span> 🛵 您的主力交通工具 (决定系统派单范围与重量限制)</label>
                 <select v-model="profileForm.vehicleType" class="input-normal" style="cursor: pointer; background: #fff7ed; border-color: #fdba74; color: #ea580c; font-weight: bold;">
@@ -91,29 +122,30 @@
               </div>
             </template>
 
-            <template v-if="stats.role === 1">
-              <div class="info-row"><label><span style="color:#ef4444">*</span> 🏠 详细门牌号 (必填，精确到室)</label><input type="text" v-model="profileForm.doorNumber" placeholder="例如：3栋2单元402室" class="input-normal" /></div>
-              <div class="info-row"><label>☎️ 紧急联系人电话</label><input type="text" v-model="profileForm.emergencyPhone" class="input-normal" /></div>
-              <div class="info-row"><label>❤️ 健康与送达备注</label><input type="text" v-model="profileForm.healthRemark" class="input-normal" /></div>
-            </template>
-
-            <button type="button" class="save-btn" @click="handleUpdateProfile(false)">💾 仅暂存基础资料</button>
+            <button type="button" class="save-btn" @click="handleUpdateProfile(false)">
+              {{ stats.role === 4 ? '💾 确认保存修改' : '💾 仅暂存基础资料' }}
+            </button>
           </div>
         </div>
 
-        <div class="setting-card auth-card">
+        <div class="setting-card auth-card" v-if="stats.role !== 4">
           <div class="card-header"><h3>📜 平台入驻资质认证</h3></div>
           <div class="card-body">
             <div class="auth-status-box" :class="stats.isVerified === 1 ? 'status-pass' : 'status-pending'">
               <div class="auth-icon">{{ stats.isVerified === 1 ? '✅' : '⏳' }}</div>
               <div class="auth-text">
                 <h4>{{ stats.isVerified === 1 ? '资质已核验通过' : '平台审核中 / 未提交' }}</h4>
-                <p>{{ stats.isVerified === 1 ? '您已获得城市护航网络的完整调度权限' : '请上传相关凭证，指挥中心将尽快为您办理' }}</p>
+                <p>{{ stats.isVerified === 1 ? '您已获得城市互助网络的完整权限' : '请上传相关凭证，指挥中心将尽快为您办理' }}</p>
               </div>
             </div>
 
             <div class="info-row">
-              <label><span style="color:#ef4444">*</span> {{ stats.role === 1 ? '上传凭证 (身份证/低保证/残疾证/老年证)' : stats.role === 2 ? '上传凭证 (企业营业执照/食品经营许可证)' : '上传凭证 (身份证/学生证/驾驶证)' }}</label>
+              <label>
+                <span style="color:#ef4444">*</span>
+                {{ stats.role === 1 ? '上传凭证 (身份证 / 低保证 / 残疾证 / 老年卡)' :
+                  stats.role === 2 ? '上传凭证 (营业执照 / 食品经营许可证)' :
+                      '上传凭证 (身份证 / 学生证 / 驾驶证)' }}
+              </label>
               <div class="proof-upload-area" @click="triggerProofUpload">
                 <img v-if="profileForm.identityProofUrl" :src="profileForm.identityProofUrl" class="proof-img" />
                 <div v-else class="upload-placeholder"><span class="upload-icon">📄</span><span>点击拍摄或上传您的资质文件</span></div>
@@ -139,7 +171,7 @@
       </div>
     </div>
 
-    <el-dialog v-model="mapVisible" title="定位常驻服务网格" width="95%" style="max-width: 750px;" @opened="initMap" destroy-on-close custom-class="map-dialog">
+    <el-dialog v-if="[2, 3].includes(stats.role)" v-model="mapVisible" title="定位常驻服务网格" width="95%" style="max-width: 750px;" @opened="initMap" destroy-on-close custom-class="map-dialog">
       <div class="map-search-bar">
         <el-autocomplete v-model="searchKeyword" :fetch-suggestions="querySearchAsync" placeholder="请输入详细地址" @select="handleSelectPoi" class="map-search-input-wrap" value-key="name" :trigger-on-focus="false" clearable @keyup.enter="handleSearchAddress">
           <template #default="{ item }"><div class="custom-poi-item"><div class="poi-name">{{ item.name }}</div><div class="poi-address">{{ item.district }}{{ item.address }}</div></div></template>
@@ -170,7 +202,8 @@ const avatarInput = ref(null); const proofInput = ref(null); const radarChartRef
 const roleNameMap = { 1: '👴 重点关怀对象', 2: '🏪 城市爱心合伙人', 3: '🚴 核心护航骑手', 4: '👨‍💻 指挥中心 Root' }
 const roleThemeClass = computed(() => { const map = { 1: 'theme-recipient', 2: 'theme-merchant', 3: 'theme-volunteer', 4: 'theme-admin' }; return map[stats.value.role] || 'theme-volunteer' })
 
-const profileForm = reactive({ username: '', currentLon: '', currentLat: '', addressName: '', doorNumber: '', emergencyPhone: '', healthRemark: '', identityProofUrl: '', vehicleType: 1 })
+// 🚨 补充 industryType
+const profileForm = reactive({ username: '', currentLon: '', currentLat: '', addressName: '', doorNumber: '', emergencyPhone: '', healthRemark: '', identityProofUrl: '', vehicleType: 1, industryType: '' })
 const pwdForm = reactive({ oldPassword: '', newPassword: '', confirmPassword: '' })
 
 // 高德地图变量及方法
@@ -200,6 +233,8 @@ const fetchAllData = async () => {
     profileForm.doorNumber = profileRes.data.doorNumber || ''; profileForm.emergencyPhone = profileRes.data.emergencyPhone || ''; profileForm.healthRemark = profileRes.data.healthRemark || ''
     profileForm.identityProofUrl = profileRes.data.identityProofUrl || ''
     profileForm.vehicleType = profileRes.data.vehicleType || 1
+    // 🚨 读取商铺行业类型
+    profileForm.industryType = profileRes.data.industryType || ''
 
     if (profileForm.currentLon && profileForm.currentLat) { profileForm.addressName = '正在解析...'; resolveAddressFromCoords(profileForm.currentLon, profileForm.currentLat) }
     if (stats.value.role === 3 && stats.value.isVerified === 1) nextTick(() => initRadarChart())
@@ -214,23 +249,29 @@ const triggerProofUpload = () => { if(stats.value.isVerified===1) return ElMessa
 const handleProofChange = async(e) => { const f=e.target.files[0]; if(!f)return; loading.value=true; try{ const r=await uploadFile(f); profileForm.identityProofUrl=r.data; ElMessage.success('凭证照片暂存成功！请点击下方按钮提交。') }catch(err){}finally{loading.value=false;e.target.value=''} }
 
 const handleUpdateProfile = async (isSubmitAudit = false) => {
-  const payload = {
-    username: profileForm.username,
-    vehicleType: profileForm.vehicleType
-  }
+  const payload = { username: profileForm.username }
 
   if (profileForm.identityProofUrl && profileForm.identityProofUrl !== profile.value.identityProofUrl) {
     payload.identityProofUrl = profileForm.identityProofUrl
   }
 
-  if (profileForm.currentLon) { payload.currentLon = parseFloat(profileForm.currentLon); payload.currentLat = parseFloat(profileForm.currentLat) }
-  if (stats.value.role === 1) { payload.doorNumber = profileForm.doorNumber; payload.emergencyPhone = profileForm.emergencyPhone; payload.healthRemark = profileForm.healthRemark }
+  // 🚨 动态组装 Payload，避免脏数据越界
+  if ([2, 3].includes(stats.value.role)) {
+    if (profileForm.currentLon) { payload.currentLon = parseFloat(profileForm.currentLon); payload.currentLat = parseFloat(profileForm.currentLat) }
+  }
+  if (stats.value.role === 1) {
+    payload.doorNumber = profileForm.doorNumber;
+    payload.emergencyPhone = profileForm.emergencyPhone;
+    payload.healthRemark = profileForm.healthRemark
+  }
+  if (stats.value.role === 2) { payload.industryType = profileForm.industryType }
+  if (stats.value.role === 3) { payload.vehicleType = profileForm.vehicleType }
 
   try {
     await updateUserProfile(payload)
     localStorage.setItem('username', profileForm.username)
     stats.value.username = profileForm.username
-    if (!isSubmitAudit) ElMessage.success('基础资料更新成功！')
+    if (!isSubmitAudit) ElMessage.success(stats.value.role === 4 ? '设置已保存！' : '基础资料暂存成功！')
     fetchAllData()
     return true
   } catch (e) { return false }
@@ -238,11 +279,16 @@ const handleUpdateProfile = async (isSubmitAudit = false) => {
 
 const handleSubmitAudit = async () => {
   if (!profileForm.username.trim()) return ElMessage.warning('请填写系统展示名称 / 真实姓名')
-  if ([1, 2, 3].includes(stats.value.role) && !profileForm.currentLon) {
+
+  // 🚨 各司其职的严格校验
+  if ([2, 3].includes(stats.value.role) && !profileForm.currentLon) {
     return ElMessage.warning('底层 LBS 引擎需要您的基站坐标，请点击【地图选点】完成定位！')
   }
   if (stats.value.role === 1 && !profileForm.doorNumber) {
     return ElMessage.warning('请填写详细门牌号，否则志愿者无法精准上门履约！')
+  }
+  if (stats.value.role === 2 && !profileForm.industryType) {
+    return ElMessage.warning('请选择您的商铺主营类目！')
   }
   if (!profileForm.identityProofUrl) {
     return ElMessage.warning('请先点击上方框内区域，上传您的相关资质凭证图片！')
@@ -252,19 +298,15 @@ const handleSubmitAudit = async () => {
   const success = await handleUpdateProfile(true)
   loading.value = false
   if (success) {
-    ElMessage.success('🎉 必填项校验通过！您的入驻申请已推送至指挥中心队列，请耐心等待核验。')
+    ElMessage.success('🎉 必填项校验通过！您的申请已推送至指挥中心队列，请耐心等待核验。')
   }
 }
 
 const unverifiedTip = computed(() => {
   const currentRole = userInfo.value?.role;
-  if (currentRole === 1) {
-    return { title: "【求助与关怀档案】尚未激活", desc: "请向下滚动完善健康备注与门牌号，以便算法为您精准匹配合适的援助物资！" };
-  } else if (currentRole === 2) {
-    return { title: "【爱心商铺入驻资质】处于受限状态", desc: "请向下滚动补充商铺定位与资质，解锁全量物资捐赠与调度网络！" };
-  } else if (currentRole === 3) {
-    return { title: "【城市护航者接单权限】处于受限状态", desc: "请向下滚动上传身份证明与载具信息，解锁完整的调度大盘与实况抢单！" };
-  }
+  if (currentRole === 1) return { title: "【求助与关怀档案】尚未激活", desc: "请向下滚动完善门牌号并上传身份证明，以便调度网络为您精准送货上门！" };
+  if (currentRole === 2) return { title: "【爱心商铺入驻资质】审核中", desc: "请补充商铺定位、主营类目与营业执照，解锁物资捐赠大厅权限！" };
+  if (currentRole === 3) return { title: "【城市护航者接单权限】受限", desc: "请完善载具信息并上传身份凭证，解锁实时抢单与信誉系统！" };
   return { title: "【系统权限】受限", desc: "请向下滚动完善基础资料并上传资质凭证。" };
 })
 
@@ -352,10 +394,6 @@ onMounted(() => { fetchAllData(); window.addEventListener('resize', () => { if(m
 .status-pass .auth-icon { background: #d1fae5; text-shadow: 0 2px 4px rgba(16, 185, 129, 0.3); }
 .status-pass h4 { color: #059669; }
 
-.auth-icon { font-size: 2rem; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
-.auth-text h4 { margin: 0 0 5px 0; font-size: 1.1rem; font-weight: 900; }
-.auth-text p { margin: 0; font-size: 0.85rem; color: #64748b; font-weight: bold; line-height: 1.4; }
-
 .proof-upload-area { border: 2px dashed #cbd5e1; border-radius: 16px; height: 160px; display: flex; align-items: center; justify-content: center; background: #fff; cursor: pointer; overflow: hidden; transition: 0.3s; position: relative; }
 .proof-upload-area:hover { border-color: #3b82f6; background: #eff6ff; }
 .proof-img { width: 100%; height: 100%; object-fit: contain; background: #f1f5f9; }
@@ -391,7 +429,6 @@ onMounted(() => { fetchAllData(); window.addEventListener('resize', () => { if(m
 :deep(.map-dialog .el-dialog__header) { background: #f8fafc; font-weight: 900; border-bottom: 1px solid #f1f5f9; padding: 20px 25px; margin: 0;}
 :deep(.map-dialog .el-dialog__body) { padding: 25px; }
 
-/* 🚨 移动端地图弹窗适配 */
 @media screen and (max-width: 768px) {
   .amap-box { height: 350px !important; }
   :deep(.map-dialog .el-dialog__body) { padding: 10px !important; }

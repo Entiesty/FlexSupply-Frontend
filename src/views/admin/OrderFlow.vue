@@ -26,8 +26,8 @@
           <div class="stat-card">
             <div class="stat-icon success">✅</div>
             <div class="stat-info">
-              <p>当前页面已送达</p>
-              <h3>{{ tableData.filter(d => d.status === 2).length }} <span class="unit">单</span></h3>
+              <p>当前页面已闭环</p>
+              <h3>{{ tableData.filter(d => d.status === 3).length }} <span class="unit">单</span></h3>
             </div>
           </div>
         </div>
@@ -39,17 +39,18 @@
                 <el-input v-model="queryParams.orderSn" placeholder="输入完整或模糊单号" clearable prefix-icon="Search" />
               </el-form-item>
               <el-form-item label="订单状态">
-                <el-select v-model="queryParams.status" placeholder="全部状态" clearable style="width: 140px">
-                  <el-option label="待匹配 (异常)" :value="0" />
-                  <el-option label="调度中 (运送)" :value="1" />
-                  <el-option label="已送达 (完结)" :value="2" />
-                  <el-option label="已取消 (关闭)" :value="3" />
+                <el-select v-model="queryParams.status" placeholder="全部状态" clearable style="width: 160px">
+                  <el-option label="0-待匹配/待取货" :value="0" />
+                  <el-option label="1-流转中/运送中" :value="1" />
+                  <el-option label="2-已送达/已入库" :value="2" />
+                  <el-option label="3-履约完结/已发完" :value="3" />
+                  <el-option label="4-强制取消/商家自送" :value="4" />
                 </el-select>
               </el-form-item>
               <el-form-item label="履约模式">
                 <el-select v-model="queryParams.deliveryMethod" placeholder="全部模式" clearable style="width: 140px">
                   <el-option label="志愿者配送" :value="1" />
-                  <el-option label="居民自提" :value="2" />
+                  <el-option label="居民自提/商家自送" :value="2" />
                 </el-select>
               </el-form-item>
               <el-form-item>
@@ -70,8 +71,8 @@
           >
             <el-table-column label="业务线" min-width="110" align="center">
               <template #default="scope">
-                <div class="biz-badge" :class="scope.row.orderSn.startsWith('DON') ? 'don-type' : 'req-type'">
-                  {{ scope.row.orderSn.startsWith('DON') ? '🔵 捐赠入库' : '🔴 求助出库' }}
+                <div class="biz-badge" :class="getBizClass(scope.row.orderSn)">
+                  {{ getBizText(scope.row.orderSn) }}
                 </div>
               </template>
             </el-table-column>
@@ -100,12 +101,17 @@
               </template>
             </el-table-column>
 
-            <el-table-column label="紧急度" min-width="90" align="center">
+            <el-table-column label="紧急度" min-width="110" align="center">
               <template #default="scope">
-                <span v-if="!scope.row.orderSn.startsWith('DON')" :class="['urgency-badge', scope.row.urgencyLevel >= 8 ? 'high' : 'normal']">
-                  Lv.{{ scope.row.urgencyLevel }}
-                </span>
-                <span v-else class="urgency-badge normal">常规</span>
+                <div v-if="scope.row.orderSn.startsWith('DON')" class="urgency-badge don-tag">
+                  [-] 捐赠入库
+                </div>
+                <div v-else-if="scope.row.orderSn.startsWith('REQ')" class="urgency-badge normal">
+                  [Lv.{{ scope.row.urgencyLevel }}] 常规
+                </div>
+                <div v-else class="urgency-badge high">
+                  [Lv.{{ scope.row.urgencyLevel }}] 紧急
+                </div>
               </template>
             </el-table-column>
 
@@ -119,21 +125,33 @@
 
             <el-table-column prop="status" label="实时状态" min-width="120" align="center">
               <template #default="scope">
-                <el-tag v-if="scope.row.status === 0" type="danger" effect="light">🟡 待匹配 (未接单)</el-tag>
+                <template v-if="scope.row.orderSn.startsWith('DON')">
+                  <el-tag v-if="scope.row.status === 0" type="danger" effect="light">🟡 待取货在店</el-tag>
+                  <el-tag v-else-if="scope.row.status === 1" type="primary" effect="light">🔵 干线运送中</el-tag>
+                  <el-tag v-else-if="scope.row.status === 2" type="success" effect="light" style="color: #059669; background: #d1fae5; border-color: #a7f3d0;">
+                    🟢 已抵达入库
+                  </el-tag>
+                  <el-tag v-else-if="scope.row.status === 3" type="success" effect="dark" style="background-color: #10b981; border-color: #10b981;">
+                    🟢 物资已发完
+                  </el-tag>
+                  <el-tag v-else-if="scope.row.status === 4" type="warning" effect="light">🟣 商家自送中</el-tag>
+                  <el-tag v-else type="info" effect="light">⚫ 捐赠已取消</el-tag>
+                </template>
 
-                <el-tag v-else-if="scope.row.status === 1" type="primary" effect="light">
-                  {{ scope.row.deliveryMethod === 2 ? '🔵 待线下提货' : '🔵 调度流转中' }}
-                </el-tag>
-
-                <el-tag v-else-if="scope.row.status === 2" type="success" effect="light">🟢 履约已完结</el-tag>
-
-                <el-tag v-else-if="scope.row.status === 3 && scope.row.deliveryMethod === 2" type="success" effect="dark" style="background-color: #10b981; border-color: #10b981;">
-                  🟢 验码已核销
-                </el-tag>
-
-                <el-tag v-else-if="scope.row.status === 4" type="info" effect="dark">⚫ 超时已释放</el-tag>
-
-                <el-tag v-else type="info" effect="light">⚫ 已强制取消</el-tag>
+                <template v-else>
+                  <el-tag v-if="scope.row.status === 0" type="danger" effect="light">🟡 待匹配运力</el-tag>
+                  <el-tag v-else-if="scope.row.status === 1" type="primary" effect="light">
+                    {{ scope.row.deliveryMethod === 2 ? '🔵 待线下提货' : '🔵 调度流转中' }}
+                  </el-tag>
+                  <el-tag v-else-if="scope.row.status === 2" type="warning" effect="dark" style="background-color: #f59e0b; border-color: #f59e0b;">
+                    🟠 已送达待评
+                  </el-tag>
+                  <el-tag v-else-if="scope.row.status === 3" type="success" effect="dark" style="background-color: #10b981; border-color: #10b981;">
+                    🟢 履约已完结
+                  </el-tag>
+                  <el-tag v-else-if="scope.row.status === 4" type="info" effect="dark">⚫ 已强制取消</el-tag>
+                  <el-tag v-else type="info" effect="light">⚫ 未知状态</el-tag>
+                </template>
               </template>
             </el-table-column>
 
@@ -188,47 +206,75 @@
               </div>
               <div class="summary-item">
                 <span class="label">履约模式：</span>
-                <span class="value">{{ currentTraceOrder?.deliveryMethod === 2 ? '🚶 居民自提' : '🚴 志愿配送' }}</span>
+                <span class="value">{{ currentTraceOrder?.deliveryMethod === 2 ? '🚶 居民自提/自送' : '🚴 志愿配送' }}</span>
               </div>
             </div>
 
             <el-timeline class="custom-timeline">
-
               <el-timeline-item :timestamp="currentTraceOrder?.createTime" color="#3b82f6" size="large">
                 <h4 class="tl-title">
-                  {{ currentTraceOrder?.orderSn?.startsWith('DON') ? '🏪 爱心商家发起捐赠入库' : '👴 市民发起紧急求助出库' }}
+                  {{ currentTraceOrder?.orderSn?.startsWith('DON') ? '🏪 爱心商家发起捐赠入库' :
+                    (currentTraceOrder?.orderSn?.startsWith('SOS') ? '🚨 弱势群体发起紧急呼救' : '👴 普通市民发起日常申领') }}
                 </h4>
-                <p class="tl-desc">调度中枢已成功捕获需求，单号正式落库</p>
+                <p class="tl-desc">调度中枢已成功捕获需求单号正式落库</p>
               </el-timeline-item>
 
-              <el-timeline-item :timestamp="currentTraceOrder?.createTime" color="#10b981">
-                <h4 class="tl-title">🧠 引擎智能分拨完成</h4>
-                <p class="tl-desc">已测算 LBS 空间距离，自动就近锁定社区食物银行据点</p>
-              </el-timeline-item>
-
-              <el-timeline-item v-if="currentTraceOrder?.status === 3" color="#ef4444" size="large">
+              <el-timeline-item v-if="currentTraceOrder?.status === 4 && !currentTraceOrder?.orderSn?.startsWith('DON')" color="#ef4444" size="large">
                 <h4 class="tl-title error-text">🚨 订单已被指挥中心强制终止</h4>
-                <p class="tl-desc">运力已释放，本次调度任务永久关闭</p>
+                <p class="tl-desc">运力已释放且本次调度任务永久关闭</p>
               </el-timeline-item>
 
               <template v-else>
-                <el-timeline-item v-if="currentTraceOrder?.deliveryMethod === 1"
-                                  :color="currentTraceOrder?.status >= 1 ? '#f97316' : '#e2e8f0'"
-                                  :hollow="currentTraceOrder?.status < 1">
-                  <h4 class="tl-title" :class="{'pending-text': currentTraceOrder?.status < 1}">
-                    {{ currentTraceOrder?.status >= 1 ? '⚡ 志愿者已接单响应' : '⏳ 正在雷达广播，呼叫周边运力...' }}
-                  </h4>
-                  <p class="tl-desc" v-if="currentTraceOrder?.status >= 1">护航者正在按照最优导航路线前往据点</p>
-                </el-timeline-item>
+                <template v-if="currentTraceOrder?.orderSn?.startsWith('DON')">
+                  <el-timeline-item v-if="currentTraceOrder?.status === 4" color="#f97316" size="large">
+                    <h4 class="tl-title">🚗 商家自送流转中</h4>
+                    <p class="tl-desc">商家正在亲自护送物资前往据点入库</p>
+                  </el-timeline-item>
+                  <el-timeline-item v-else-if="currentTraceOrder?.status >= 1" color="#3b82f6" size="large">
+                    <h4 class="tl-title">🚴 干线运输进行中</h4>
+                    <p class="tl-desc">骑士已接单并正前往社区分发中心</p>
+                  </el-timeline-item>
 
-                <el-timeline-item :color="currentTraceOrder?.status === 2 ? '#10b981' : '#e2e8f0'"
-                                  :hollow="currentTraceOrder?.status < 2"
-                                  size="large">
-                  <h4 class="tl-title" :class="{'pending-text': currentTraceOrder?.status < 2}">
-                    {{ currentTraceOrder?.status === 2 ? '✅ 物资送达，履约核销完结' : '⏳ 等待最终送达核销...' }}
-                  </h4>
-                  <p class="tl-desc" v-if="currentTraceOrder?.status === 2">拍照核销成功，本次城市微光护航圆满结束</p>
-                </el-timeline-item>
+                  <el-timeline-item :color="currentTraceOrder?.status >= 2 ? '#10b981' : '#e2e8f0'" :hollow="currentTraceOrder?.status < 2" size="large">
+                    <h4 class="tl-title" :class="{'pending-text': currentTraceOrder?.status < 2}">
+                      {{ currentTraceOrder?.status >= 2 ? '🏥 物资已入库驿站' : '⏳ 系统正等待物资入库' }}
+                    </h4>
+                    <p class="tl-desc" v-if="currentTraceOrder?.status >= 2">物资已安全存入分发中心等待市民申领</p>
+                  </el-timeline-item>
+
+                  <el-timeline-item :color="currentTraceOrder?.status === 3 ? '#10b981' : '#e2e8f0'" :hollow="currentTraceOrder?.status < 3" size="large">
+                    <h4 class="tl-title" :class="{'pending-text': currentTraceOrder?.status < 3}">
+                      {{ currentTraceOrder?.status === 3 ? '🟢 物资已全部分发完毕' : '⏳ 系统正等待物资消耗流转' }}
+                    </h4>
+                  </el-timeline-item>
+                </template>
+
+                <template v-else>
+                  <el-timeline-item color="#10b981">
+                    <h4 class="tl-title">🧠 引擎智能分拨完成</h4>
+                    <p class="tl-desc">已自动测算 LBS 空间距离并就近锁定资源据点</p>
+                  </el-timeline-item>
+
+                  <el-timeline-item v-if="currentTraceOrder?.deliveryMethod === 1"
+                                    :color="currentTraceOrder?.status >= 1 ? '#f97316' : '#e2e8f0'"
+                                    :hollow="currentTraceOrder?.status < 1">
+                    <h4 class="tl-title" :class="{'pending-text': currentTraceOrder?.status < 1}">
+                      {{ currentTraceOrder?.status >= 1 ? '⚡ 志愿者已接单响应' : '⏳ 雷达广播正呼叫周边运力' }}
+                    </h4>
+                    <p class="tl-desc" v-if="currentTraceOrder?.status >= 1">护航者正按照最优导航路线派送物资</p>
+                  </el-timeline-item>
+
+                  <el-timeline-item :color="currentTraceOrder?.status >= 2 ? '#10b981' : '#e2e8f0'"
+                                    :hollow="currentTraceOrder?.status < 2"
+                                    size="large">
+                    <h4 class="tl-title" :class="{'pending-text': currentTraceOrder?.status < 2}">
+                      {{ currentTraceOrder?.status >= 2 ? '✅ 物资已安全送达' : '⏳ 履约端正等待最终物理核销' }}
+                    </h4>
+                    <p class="tl-desc" v-if="currentTraceOrder?.status >= 2">
+                      {{ currentTraceOrder?.status === 3 ? '物理交接完成且受助市民已评价，履约完美闭环' : '物理交接完成，正等待受助市民评价闭环' }}
+                    </p>
+                  </el-timeline-item>
+                </template>
               </template>
 
             </el-timeline>
@@ -240,9 +286,9 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { Search } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
 import { getAdminOrders, cancelOrder } from '@/api/trade'
 
 const queryParams = reactive({
@@ -301,16 +347,92 @@ const handleCancel = (row) => {
 }
 
 const handleTrace = (row) => { currentTraceOrder.value = row; traceVisible.value = true }
-const getStatusText = (status) => {
-  const map = { 0: '🟡 待匹配 (未接单)', 1: '🔵 调度流转中', 2: '🟢 履约已完结', 3: '⚫ 已强制取消' }
-  return map[status] || '未知状态'
+
+// 获取业务线配色 class
+const getBizClass = (sn) => {
+  if (!sn) return 'req-type'
+  if (sn.startsWith('DON')) return 'don-type'
+  if (sn.startsWith('SOS')) return 'sos-type'
+  return 'req-type'
 }
 
-onMounted(() => fetchData())
+// 获取业务线文字
+const getBizText = (sn) => {
+  if (!sn) return '🟢 日常申领'
+  if (sn.startsWith('DON')) return '🔵 捐赠入库'
+  if (sn.startsWith('SOS')) return '🔴 紧急呼救'
+  return '🟢 日常申领'
+}
+
+// ========================================================
+// 🚨 新增：WebSocket 实时通讯逻辑
+// ========================================================
+let socket = null
+
+const initWebSocket = () => {
+  // 获取当前登录管理员的 ID (防止空指针，默认给个 1)
+  const userId = localStorage.getItem('userId') || '1'
+
+  // ⚠️ 请将 localhost:8080 替换为你后端的真实运行端口
+  const wsUrl = `ws://localhost:8080/api/ws/sos/${userId}`
+
+  socket = new WebSocket(wsUrl)
+
+  socket.onopen = () => {
+    console.log('🟢 指挥中心大屏已成功接入实时调度通讯网')
+  }
+
+  socket.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data)
+
+      if (data.type === 'NEW_SOS') {
+        // 弹出最高级别的红色警报通知
+        ElNotification({
+          title: '🚨 紧急呼救响应',
+          message: `捕获到高优紧急单号: ${data.orderSn}，雷达广播已开启！`,
+          type: 'error',
+          duration: 0 // 0 表示不自动关闭，必须手动点掉
+        })
+        // 🚨 收到新单，自动刷新大屏数据！
+        fetchData()
+      }
+      else if (data.type === 'NEW_REQ') {
+        // 弹出普通的日常绿单通知
+        ElNotification({
+          title: '🟢 新增日常申领',
+          message: `新订单 ${data.orderSn} 已落库，正在等待调度。`,
+          type: 'success',
+          duration: 5000
+        })
+        fetchData()
+      }
+    } catch (err) {
+      console.error('消息解析失败', err)
+    }
+  }
+
+  socket.onclose = () => {
+    console.log('🔴 通讯网断开，5秒后尝试重连...')
+    setTimeout(initWebSocket, 5000)
+  }
+}
+
+// 在组件挂载时，不仅拉取数据，还要启动 WebSocket
+onMounted(() => {
+  fetchData()
+  initWebSocket()
+})
+
+// 组件销毁前断开连接
+onBeforeUnmount(() => {
+  if (socket) {
+    socket.close()
+  }
+})
 </script>
 
 <style scoped>
-/* 🚨 新增：补充最外层的管理员页面公共样式 */
 .main-content { flex: 1; display: flex; flex-direction: column; position: relative; padding: 40px; background: #f1f5f9; overflow-y: auto; height: 100vh; box-sizing: border-box;}
 .top-status { position: absolute; top: 20px; right: 30px; z-index: 100; background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); padding: 8px 16px; border-radius: 20px; font-size: 0.75rem; color: #64748b; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05); }
 .pulse-dot { animation: pulse-blue 2s infinite; border-radius: 50%; width: 8px; height: 8px; }
@@ -340,15 +462,18 @@ onMounted(() => fetchData())
 .custom-table { border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; }
 .order-sn { font-family: monospace; font-weight: bold; color: #334155; background: #f1f5f9; padding: 4px 8px; border-radius: 6px; }
 
-/* 业务徽章样式 */
+/* 业务徽章样式 (三线隔离) */
 .biz-badge { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 900; letter-spacing: 1px; }
 .don-type { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
-.req-type { background: #fef2f2; color: #ef4444; border: 1px solid #fecaca; }
+.req-type { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
+.sos-type { background: #fef2f2; color: #ef4444; border: 1px solid #fecaca; box-shadow: 0 0 8px rgba(239, 68, 68, 0.2);}
 
-.urgency-badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 900; }
-.urgency-badge.high { background: #fee2e2; color: #ef4444; animation: blink 2s infinite; }
-.urgency-badge.normal { background: #f1f5f9; color: #64748b; }
-@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+/* 紧急度统一标牌 */
+.urgency-badge { display: inline-block; padding: 4px 10px; border-radius: 10px; font-size: 0.8rem; font-weight: 900; }
+.urgency-badge.high { background: #fee2e2; color: #ef4444; animation: blink 2s infinite; border: 1px solid #fca5a5;}
+.urgency-badge.normal { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0;}
+.urgency-badge.don-tag { background: #f8fafc; color: #64748b; border: 1px solid #e2e8f0; font-weight: bold;}
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
 
 .delivery-type { font-size: 0.8rem; font-weight: bold; padding: 4px 12px; border-radius: 12px; display: inline-block; }
 .delivery-type.delivery { background: #eff6ff; color: #2563eb; }
@@ -359,10 +484,28 @@ onMounted(() => fetchData())
 .pagination-container { margin-top: 24px; display: flex; justify-content: flex-end; }
 :deep(.el-pagination.is-background .el-pager li.is-active) { background-color: #f97316 !important; color: #fff !important; }
 
-/* 🚨 物资复合列高密度样式 */
 .goods-info-cell { display: flex; flex-direction: column; gap: 6px; text-align: left; padding-left: 10px; }
 .goods-main { display: flex; align-items: center; gap: 8px; }
 .g-name { font-weight: 900; color: #1e293b; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
 .g-count { background: #fef2f2; color: #ef4444; padding: 2px 6px; border-radius: 8px; font-family: monospace; font-weight: 900; font-size: 0.8rem; border: 1px solid #fecaca; }
 .custom-tag-cat { border-color: #cbd5e1 !important; color: #64748b !important; font-weight: bold; }
+
+/* ================= 轨迹溯源弹窗专属 UI ================= */
+.trace-container { padding: 0 5px; }
+.trace-summary { background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 16px; padding: 20px; margin-bottom: 30px; display: flex; flex-direction: column; gap: 12px; }
+.summary-item { display: flex; align-items: center; font-size: 0.95rem; }
+.summary-item .label { color: #64748b; width: 80px; font-weight: bold;}
+.summary-item .goods-name { font-weight: 900; color: #1e293b; font-size: 1.15rem; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 12px;}
+.summary-item .goods-count { background: #fff7ed; color: #ea580c; padding: 4px 10px; border-radius: 8px; font-weight: 900; border: 1px solid #fdba74; }
+
+.custom-timeline { padding-left: 10px; margin-top: 10px;}
+.tl-title { margin: 0 0 6px 0; font-size: 1.1rem; color: #1e293b; font-weight: 900; }
+.tl-desc { margin: 0; font-size: 0.9rem; color: #64748b; line-height: 1.5; font-weight: bold;}
+.pending-text { color: #94a3b8 !important; }
+.error-text { color: #ef4444; }
+
+:deep(.el-timeline-item__node--large) { width: 16px; height: 16px; left: -2px; }
+:deep(.el-timeline-item__wrapper) { padding-left: 28px; top: -4px; }
+:deep(.el-dialog__header) { padding: 20px 25px; border-bottom: 1px solid #f1f5f9;}
+:deep(.el-dialog__title) { font-weight: 900; color: #1e293b; }
 </style>

@@ -58,6 +58,26 @@
               </div>
             </div>
 
+            <div class="my-review-box" v-if="item.status === 3 && item.recipientRating">
+              <div class="review-header">
+                <span class="review-label">💡 我给出的评价：</span>
+                <span class="review-stars">
+                  <span style="color: #f59e0b" v-for="s in item.recipientRating" :key="'on'+s">★</span>
+                  <span style="color: #e2e8f0" v-for="s in (5 - item.recipientRating)" :key="'off'+s">★</span>
+                </span>
+              </div>
+              <div class="review-content" v-if="item.recipientComment">
+                "{{ item.recipientComment }}"
+              </div>
+              <div class="review-content no-comment" v-else>
+                (仅星级评分，未留下文字寄语)
+              </div>
+            </div>
+
+            <div class="pending-review-tip" v-else-if="item.status === 2">
+              <span class="tip-icon">⏳</span> 物资已送达，请点击下方按钮给予爱心评价！
+            </div>
+
             <div class="pickup-zone" v-if="item.deliveryMethod === 2 && (item.status === 0 || item.status === 1) && item.pickupCode">
               <div class="pz-left">
                 <span class="pz-label">自提核销码</span>
@@ -130,7 +150,6 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Clock, Warning, RefreshRight } from '@element-plus/icons-vue'
-// ⚠️ 请确保在 api/trade.js 中有 rateOrder 接口方法指向后端 confirmReceiptAndRate
 import { getMyHistoryOrders, cancelOrder, rateOrder } from '@/api/trade'
 
 const router = useRouter()
@@ -152,7 +171,6 @@ const rateForm = ref({
   comment: ''
 })
 
-// 🚨 更新状态显示字典
 const getStatusText = (status, deliveryMethod) => {
   if (status === 0) return '匹配中 / 待接单'
   if (status === 1) return deliveryMethod === 2 ? '待提取' : '护航中 / 配送中'
@@ -252,11 +270,10 @@ const submitRating = async () => {
   if (rateForm.value.rating === 0) return ElMessage.warning('请至少点亮一颗星哦！')
   loading.value = true
   try {
-    // 【对接注意】确保在后端传递了 orderId, rating 和 comment 字段
     await rateOrder(rateForm.value)
     ElMessage.success('评价成功！您的感谢已传递给爱心人士！')
     rateVisible.value = false
-    fetchData(false) // 刷新列表，订单自动流转为"已完结"
+    fetchData(false)
   } catch (e) {
     console.error(e)
   } finally {
@@ -313,7 +330,7 @@ onMounted(() => {
 .status-badge { font-size: 0.85rem; font-weight: 900; padding: 6px 12px; border-radius: 10px; }
 .status-0 { background: #fff7ed; color: #ea580c; border: 1px solid #fdba74;}
 .status-1 { background: #eff6ff; color: #3b82f6; border: 1px solid #bfdbfe;}
-.status-2 { background: #fefce8; color: #ca8a04; border: 1px solid #fde047;} /* 待评价专属色 */
+.status-2 { background: #fefce8; color: #ca8a04; border: 1px solid #fde047;}
 .status-3 { background: #ecfdf5; color: #10b981; border: 1px solid #a7f3d0;}
 .status-4 { background: #f1f5f9; color: #94a3b8; border: 1px solid #cbd5e1;}
 
@@ -327,6 +344,17 @@ onMounted(() => {
 .bg-blue { background: #e0f2fe; color: #0284c7; }
 .bg-orange { background: #ffedd5; color: #c2410c; }
 .bg-gray { background: #f1f5f9; color: #475569; }
+
+/* 🚨 全新评价区块样式 */
+.my-review-box { margin: 0 20px 20px 20px; background: #f8fafc; border-radius: 16px; padding: 16px 20px; border: 1px dashed #cbd5e1; transition: 0.3s;}
+.my-review-box:hover { border-color: #94a3b8; background: #fff;}
+.review-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.review-label { font-size: 0.9rem; color: #64748b; font-weight: 900; }
+.review-stars { font-size: 1.2rem; letter-spacing: 2px; }
+.review-content { font-size: 0.95rem; color: #334155; font-style: italic; font-weight: bold; padding-left: 2px; line-height: 1.5;}
+.no-comment { color: #94a3b8; font-weight: normal; }
+
+.pending-review-tip { margin: 0 20px 20px 20px; background: #fff1f2; color: #e11d48; padding: 12px 16px; border-radius: 12px; font-size: 0.9rem; font-weight: bold; display: flex; align-items: center; gap: 8px; border: 1px solid #ffe4e6;}
 
 .pickup-zone { margin: 0 20px 20px 20px; background: #ecfdf5; border: 2px dashed #34d399; border-radius: 16px; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center;}
 .pz-left { display: flex; flex-direction: column; gap: 4px; }
@@ -344,7 +372,7 @@ onMounted(() => {
 .cancel-btn:hover { background: #fef2f2; color: #ef4444; border-color: #fca5a5; }
 .reorder-btn { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
 .reorder-btn:hover { background: #10b981; color: white; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(16,185,129,0.2);}
-.btn-rate { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; } /* 评价按钮专属金黄 */
+.btn-rate { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
 .btn-rate:hover { background: #f59e0b; color: white; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2); }
 
 /* 评价弹窗 */

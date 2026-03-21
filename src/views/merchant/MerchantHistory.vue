@@ -51,7 +51,7 @@
                 <div class="info-grid">
                   <div class="info-item">
                     <span class="i-label">捐赠结余数量</span>
-                    <span class="i-value stock-num">{{ row.stock }} <span class="unit">份</span></span>
+                    <span class="i-value stock-num">{{ row.stock }} <span class="unit">{{ row.unit || '份' }}</span></span>
                   </div>
                   <div class="info-item">
                     <span class="i-label">定向流转驿站</span>
@@ -91,13 +91,14 @@
       </div>
     </div>
 
-    <el-dialog v-model="traceVisible" title="📦 捐赠物资履约追踪" width="90%" style="max-width: 550px; border-radius: 20px;" custom-class="trace-dialog">
+    <el-dialog v-model="traceVisible" title="📦 捐赠物资履约追踪" width="90%" style="max-width: 650px; border-radius: 24px;" custom-class="trace-dialog">
       <div class="trace-container" v-if="currentTraceItem">
+
         <div class="trace-summary">
           <div class="summary-item">
             <span class="label">追踪物资：</span>
             <span class="value goods-name-trace">{{ cleanGoodsName(currentTraceItem.goodsName) }}</span>
-            <span class="value goods-count">剩余 {{ currentTraceItem.stock }} 份</span>
+            <span class="value goods-count">剩余 <strong style="font-size:1.2em">{{ currentTraceItem.stock }}</strong> {{ currentTraceItem.unit || '份' }}</span>
           </div>
           <div class="summary-item">
             <span class="label">目标驿站：</span>
@@ -126,27 +127,69 @@
               size="large">
             <h4 class="tl-title" :class="{'pending-text': currentTraceItem.status < 2}">
               <template v-if="currentTraceItem.status >= 2">
-                {{ currentTraceItem.stationName ? `🏥 物资已安全抵达【${currentTraceItem.stationName}】` : '🚀 急态绿色通道：跳过驿站中转直达现场' }}
+                {{ currentTraceItem.stationName ? `🏥 物资已安全抵达驿站入库` : '🚀 急态绿色通道：跳过驿站中转直达现场' }}
               </template>
               <template v-else>
                 ⏳ 等待物资入库食物银行驿站/直达现场...
               </template>
             </h4>
             <p class="tl-desc" v-if="currentTraceItem.status >= 2">
-              {{ currentTraceItem.stationName ? '驿站工作人员已清点并入库，等待受助市民实名申领。' : '触发紧急 P2P 调度模式，城市护航骑士将物资直接交接至求助市民手中。' }}
+              {{ currentTraceItem.stationName ? '工作人员已清点，物资正在陆续流转至有需要的市民手中。' : '触发紧急 P2P 调度模式，骑士将物资直接交接至求助市民。' }}
             </p>
           </el-timeline-item>
 
           <el-timeline-item
-              :color="currentTraceItem.status === 3 ? '#ef4444' : '#e2e8f0'"
-              :hollow="currentTraceItem.status < 3"
+              v-if="currentTraceItem.status === 3"
+              color="#ef4444"
               size="large">
-            <h4 class="tl-title" :class="{'pending-text': currentTraceItem.status < 3}">
-              {{ currentTraceItem.status === 3 ? '🎉 物资已全部分发核销完毕！' : '⏳ 等待流转至最终困难群体...' }}
-            </h4>
-            <p class="tl-desc" v-if="currentTraceItem.status === 3">这份物资已经在这个城市中化作了一道微光，再次代表社区感谢您的善举！</p>
+            <h4 class="tl-title">🎉 物资已全部分发核销完毕！</h4>
+            <p class="tl-desc">这份物资已经在这个城市中化作了一道微光，再次代表社区感谢您的善举！</p>
           </el-timeline-item>
         </el-timeline>
+
+        <transition name="fade-slide">
+          <div class="distribution-details" v-if="currentTraceItem.status >= 2">
+            <div class="dist-header">
+              <h4 class="dist-title">👥 受助市民申领与反哺记录</h4>
+              <span class="dist-privacy-tip"><i class="el-icon-lock"></i> 隐私脱敏保护</span>
+            </div>
+
+            <div class="dist-list" v-loading="distLoading">
+              <div v-if="!distLoading && distributionList.length === 0" class="dist-empty">
+                <span class="empty-emoji">📦</span>
+                <p>物资已静候在货架上，暂无受助人提取，请耐心等待。</p>
+              </div>
+
+              <div class="dist-item" v-for="(item, index) in distributionList" :key="index">
+                <div class="dist-user">
+                  <span class="dist-avatar">👤</span>
+                  <div class="dist-u-info">
+                    <span class="dist-name">
+                      {{ item.recipientName }}
+                      <span class="dist-tag">{{ item.recipientTag }}</span>
+                    </span>
+                    <span class="dist-time">于 {{ item.createTime?.replace('T', ' ') }} 申领了 <strong>{{ item.goodsCount }}</strong> {{ currentTraceItem.unit || '份' }}</span>
+                  </div>
+                </div>
+
+                <div class="dist-rating-box">
+                  <template v-if="item.status === 3 && item.rating">
+                    <div class="rating-stars">
+                      <span style="color: #f59e0b" v-for="s in item.rating" :key="s">★</span><span style="color: #e2e8f0" v-for="s in (5 - item.rating)" :key="s+5">★</span>
+                    </div>
+                    <div class="rating-comment" v-if="item.comment">"{{ item.comment }}"</div>
+                  </template>
+                  <template v-else>
+                    <div class="rating-wait">
+                      <span class="wait-icon">⏳</span> 待送达/体验后评价...
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </div>
+        </transition>
+
       </div>
     </el-dialog>
   </main>
@@ -156,14 +199,13 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getMerchantGoodsPage, revokeGoods, startSelfDelivery, finishSelfDelivery } from '@/api/resource'
-// 🚨 修复二：引入获取用户个人信息的接口
 import { getUserProfile } from '@/api/user'
+// 🚨 引入获取明细分布的 API 接口
+import { getGoodsDistribution } from '@/api/trade'
 
 const loading = ref(false)
 const tableData = ref([])
 const total = ref(0)
-
-// 🚨 修复二：定义信誉分响应式变量
 const myCreditScore = ref(100)
 
 const queryParams = ref({
@@ -176,12 +218,15 @@ const queryParams = ref({
 const traceVisible = ref(false)
 const currentTraceItem = ref(null)
 
+// 领取详情状态
+const distributionList = ref([])
+const distLoading = ref(false)
+
 const getStatusText = (status) => {
   const map = { 0: '待取货', 1: '骑手运送中', 2: '已入库', 3: '已发完', 4: '商家自送中' }
   return map[status] || '未知'
 }
 
-// 统一清洗物资名称，防止过长
 const cleanGoodsName = (name) => {
   if (!name) return '未知物资'
   return name.replace(/^急需：/, '').replace(/\[.*?\]\s*/, '')
@@ -200,9 +245,24 @@ const fetchData = async () => {
   }
 }
 
-const openTrace = (row) => {
+// 🚨 核心改造：打开溯源弹窗时同步拉取明细
+const openTrace = async (row) => {
   currentTraceItem.value = row
   traceVisible.value = true
+
+  // 如果状态大于等于2（入库以后），才去拉取受助人分配明细
+  if (row.status >= 2) {
+    distributionList.value = []
+    distLoading.value = true
+    try {
+      const res = await getGoodsDistribution(row.goodsId)
+      distributionList.value = res.data || []
+    } catch (e) {
+      console.error('获取领取明细失败', e)
+    } finally {
+      distLoading.value = false
+    }
+  }
 }
 
 const handleRevoke = (row) => {
@@ -217,7 +277,6 @@ const handleRevoke = (row) => {
       ElMessage.success('撤销成功，已从大盘移除')
       fetchData()
     } catch (e) {
-      console.error(e)
     } finally {
       loading.value = false
     }
@@ -231,7 +290,6 @@ const handleStart = async (row) => {
     ElMessage.success('物资已锁定防抢单！请注意交通安全')
     await fetchData()
   } catch (e) {
-    console.error(e)
   } finally {
     loading.value = false
   }
@@ -249,14 +307,12 @@ const handleFinish = async (row) => {
       ElMessage.success('核销成功，感谢您的亲力亲为！')
       await fetchData()
     } catch (e) {
-      console.error(e)
     } finally {
       loading.value = false
     }
   }).catch(() => {})
 }
 
-// 🚨 修复二：在挂载时同步拉取当前商家的信誉分
 onMounted(async () => {
   fetchData()
   try {
@@ -264,9 +320,7 @@ onMounted(async () => {
     if (userRes && userRes.data) {
       myCreditScore.value = userRes.data.creditScore || 100
     }
-  } catch (e) {
-    console.error('获取信誉分失败', e)
-  }
+  } catch (e) {}
 })
 </script>
 
@@ -282,7 +336,7 @@ onMounted(async () => {
 
 .glass-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-radius: 24px; padding: 25px 30px; box-shadow: 0 15px 35px rgba(0,0,0,0.06); border: 1px solid #fff; }
 
-/* 现代工具栏 */
+/* 工具栏 */
 .toolbar { display: flex; gap: 15px; margin-bottom: 25px; align-items: center; flex-wrap: wrap;}
 .search-box { flex: 1; min-width: 250px; position: relative; display: flex; align-items: center;}
 .search-icon { position: absolute; left: 16px; color: #94a3b8; font-size: 1.1rem;}
@@ -298,7 +352,7 @@ onMounted(async () => {
 .empty-state h3 { color: #1e293b; margin: 0 0 8px; font-size: 1.3rem; font-weight: 900;}
 .empty-state p { color: #64748b; font-size: 1rem; font-weight: bold;}
 
-/* 🚨 核心改造：卡片瀑布流 */
+/* 卡片瀑布流 */
 .card-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 24px; }
 .donate-card { background: #fff; border-radius: 20px; border: 1px solid #f1f5f9; box-shadow: 0 10px 25px rgba(0,0,0,0.03); overflow: hidden; display: flex; flex-direction: column; transition: 0.3s; }
 .donate-card:hover { transform: translateY(-4px); box-shadow: 0 15px 35px rgba(0,0,0,0.06); border-color: #e2e8f0; }
@@ -344,29 +398,64 @@ onMounted(async () => {
 .btn-revoke:hover { background: #fef2f2; transform: translateY(-2px); }
 .btn-success { background: #ecfdf5; color: #10b981; border: 1px solid #a7f3d0; }
 .btn-success:hover { background: #10b981; color: white; transform: translateY(-2px); box-shadow: 0 6px 15px rgba(16, 185, 129, 0.25); }
-
 .pagination-wrap { display: flex; justify-content: center; margin-top: 30px; padding-top: 20px; border-top: 1px dashed #e2e8f0; }
-
 .list-fade-enter-active, .list-fade-leave-active { transition: all 0.4s ease; }
 .list-fade-enter-from, .list-fade-leave-to { opacity: 0; transform: translateY(20px); }
 
 /* ================= 轨迹溯源弹窗专属 UI ================= */
 .trace-container { padding: 0 5px; }
-.trace-summary { background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 16px; padding: 20px; margin-bottom: 30px; display: flex; flex-direction: column; gap: 12px; }
+
+/* 顶层 Summary */
+.trace-summary { background: linear-gradient(to right, #f8fafc, #f1f5f9); border: 2px dashed #cbd5e1; border-radius: 16px; padding: 20px; margin-bottom: 30px; display: flex; flex-direction: column; gap: 12px; }
 .summary-item { display: flex; align-items: center; font-size: 0.95rem; }
 .summary-item .label { color: #64748b; width: 80px; font-weight: bold;}
 .summary-item .goods-name-trace { font-weight: 900; color: #1e293b; font-size: 1.15rem; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 12px;}
-.summary-item .goods-count { background: #fff7ed; color: #ea580c; padding: 4px 10px; border-radius: 8px; font-weight: 900; border: 1px solid #fdba74; }
+.summary-item .goods-count { background: #fff7ed; color: #ea580c; padding: 4px 10px; border-radius: 8px; font-weight: bold; border: 1px solid #fdba74; }
 
+/* 中层 Timeline */
 .custom-timeline { padding-left: 10px; margin-top: 10px;}
 .tl-title { margin: 0 0 6px 0; font-size: 1.1rem; color: #1e293b; font-weight: 900; }
 .tl-desc { margin: 0; font-size: 0.9rem; color: #64748b; line-height: 1.5; font-weight: bold;}
 .pending-text { color: #94a3b8 !important; }
 
+/* 底层：受助人名录列表 (全新 UI) */
+.distribution-details { margin-top: 30px; border-top: 2px dashed #e2e8f0; padding-top: 25px; }
+.dist-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding: 0 5px;}
+.dist-title { margin: 0; font-size: 1.1rem; color: #1e293b; font-weight: 900; display: flex; align-items: center; gap: 6px;}
+.dist-privacy-tip { font-size: 0.8rem; color: #10b981; background: #ecfdf5; padding: 4px 10px; border-radius: 8px; font-weight: bold; border: 1px solid #a7f3d0;}
+
+.dist-list { display: flex; flex-direction: column; gap: 15px; max-height: 350px; overflow-y: auto; padding-right: 8px; margin-right: -8px;}
+.dist-list::-webkit-scrollbar { width: 6px; }
+.dist-list::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+
+/* 空状态提示 */
+.dist-empty { text-align: center; padding: 30px 0; color: #94a3b8; background: #f8fafc; border-radius: 16px; border: 1px dashed #cbd5e1;}
+.dist-empty .empty-emoji { font-size: 3rem; margin-bottom: 10px; display: block; opacity: 0.8;}
+.dist-empty p { margin: 0; font-size: 0.95rem; font-weight: bold;}
+
+/* 单个用户卡片 */
+.dist-item { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 18px; transition: 0.2s; display: flex; align-items: center; justify-content: space-between; gap: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.02);}
+.dist-item:hover { border-color: #cbd5e1; box-shadow: 0 6px 15px rgba(0,0,0,0.05); transform: translateY(-2px);}
+
+.dist-user { display: flex; align-items: center; gap: 15px; flex: 1; overflow: hidden;}
+.dist-avatar { width: 44px; height: 44px; background: linear-gradient(135deg, #e0f2fe, #bae6fd); color: #0284c7; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; flex-shrink: 0; box-shadow: 0 2px 6px rgba(2, 132, 199, 0.15);}
+.dist-u-info { display: flex; flex-direction: column; overflow: hidden;}
+.dist-name { font-weight: 900; color: #334155; font-size: 1.05rem; display: flex; align-items: center; gap: 8px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden;}
+.dist-tag { font-size: 0.7rem; background: #eff6ff; color: #3b82f6; padding: 2px 8px; border-radius: 6px; font-weight: bold; border: 1px solid #bfdbfe; flex-shrink: 0;}
+.dist-time { font-size: 0.85rem; color: #64748b; margin-top: 4px;}
+.dist-time strong { color: #f97316; font-weight: 900; }
+
+.dist-rating-box { background: #f8fafc; padding: 10px 16px; border-radius: 12px; min-width: 140px; display: flex; flex-direction: column; justify-content: center; align-items: flex-end;}
+.rating-stars { font-size: 1.2rem; letter-spacing: 2px; line-height: 1; margin-bottom: 6px;}
+.rating-comment { font-size: 0.85rem; color: #475569; font-weight: bold; font-style: italic; max-width: 180px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden;}
+.rating-wait { font-size: 0.85rem; color: #94a3b8; font-weight: bold; display: flex; align-items: center; gap: 4px;}
+
+/* 深度覆写 Element UI 样式 */
 :deep(.el-timeline-item__node--large) { width: 16px; height: 16px; left: -2px; }
 :deep(.el-timeline-item__wrapper) { padding-left: 28px; top: -4px; }
-:deep(.el-dialog__header) { padding: 20px 25px; border-bottom: 1px solid #f1f5f9;}
-:deep(.el-dialog__title) { font-weight: 900; color: #1e293b; }
+:deep(.trace-dialog .el-dialog__header) { padding: 25px 30px; border-bottom: 1px solid #f1f5f9;}
+:deep(.trace-dialog .el-dialog__body) { padding: 30px; }
+:deep(.trace-dialog .el-dialog__title) { font-weight: 900; color: #1e293b; font-size: 1.3rem;}
 
 @media screen and (max-width: 768px) {
   .main-content { padding: 20px 15px; }
@@ -376,5 +465,10 @@ onMounted(async () => {
   .glass-panel { padding: 20px 15px; }
   .info-item { flex-direction: column; align-items: flex-start; gap: 4px;}
   .station-name { max-width: 100%;}
+
+  /* 移动端明细自适应 */
+  .dist-item { flex-direction: column; align-items: stretch; gap: 10px;}
+  .dist-rating-box { align-items: flex-start; background: #f1f5f9; min-width: unset;}
+  .rating-comment { max-width: 100%; }
 }
 </style>

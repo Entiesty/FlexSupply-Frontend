@@ -61,7 +61,7 @@ const routes: Array<RouteRecordRaw> = [
         path: '/volunteer/credit',
         name: 'CreditCenter',
         component: () => import('@/views/volunteer/CreditCenter.vue'),
-        meta: { requiresAuth: true, roles: [3] }
+        meta: { requiresAuth: true, roles: [2, 3] } // 🚨 核心修复：允许商家(2)和骑士(3)访问
     },
     // 👇 核心修改：个人设置也要允许受赠方(角色 1)进来，用来填健康档案
     {

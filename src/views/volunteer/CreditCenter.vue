@@ -14,7 +14,7 @@
             <div class="left-info">
               <div class="level-badge">🎖️ {{ dashboardData.levelName }}</div>
               <h2 class="score-number">{{ dashboardData.creditScore }} <span class="unit">分</span></h2>
-              <p class="beat-text">您当前的信誉分已击败全城 <strong>{{ dashboardData.beatPercentage }}%</strong> 的爱心志愿者</p>
+              <p class="beat-text">您当前的信誉分已超越全城 <strong>{{ dashboardData.beatPercentage }}%</strong> 的{{ userRole === 2 ? '爱心商铺' : '城市护航骑士' }}</p>
             </div>
             <div class="right-icon">🏆</div>
           </div>
@@ -32,7 +32,7 @@
 
         <div class="logs-section" v-loading="loading">
           <h3 class="section-title">📊 积分变动明细</h3>
-          <el-empty v-if="logs.length === 0" description="暂无积分流水，快去抢单大厅接单吧！" />
+          <el-empty v-if="logs.length === 0" description="暂无积分流水，快去参与爱心援助吧！" />
 
           <div class="log-list" v-else>
             <div class="log-item" v-for="log in logs" :key="log.logId">
@@ -70,11 +70,13 @@
 import { ref, computed, onMounted } from 'vue'
 import SideMenu from '@/views/dispatch/components/SideMenu.vue'
 import { getCreditDashboard, getCreditLogs } from '@/api/volunteer'
-import { Clock, Ticket } from '@element-plus/icons-vue' // 🚨 引入图标
+import { getUserProfile } from '@/api/user' // 🚨 新增引入：用于获取用户身份
+import { Clock, Ticket } from '@element-plus/icons-vue'
 
 const loading = ref(false)
 const dashboardData = ref({ creditScore: 100, beatPercentage: 0, levelName: '青铜微光' })
 const logs = ref([])
+const userRole = ref(3) // 🚨 新增：默认 3 为骑士，后续接口动态覆盖
 
 const nextLevelScore = computed(() => {
   const score = dashboardData.value.creditScore
@@ -91,7 +93,6 @@ const progressPercent = computed(() => {
   return Math.min(100, Math.max(0, (score / target) * 100))
 })
 
-// 🚨 优化时间格式：MM-DD HH:mm，看起来更清爽
 const formatDate = (dateStr) => {
   if (!dateStr) return '-'
   const d = new Date(dateStr)
@@ -105,6 +106,12 @@ const formatDate = (dateStr) => {
 const fetchData = async () => {
   loading.value = true
   try {
+    // 🚨 核心逻辑变更：先查出当前操作人的真实角色
+    const userRes = await getUserProfile()
+    if (userRes.data) {
+      userRole.value = userRes.data.role
+    }
+
     const dashRes = await getCreditDashboard()
     dashboardData.value = dashRes.data
 
@@ -129,7 +136,7 @@ onMounted(() => fetchData())
 
 .credit-container { max-width: 650px; width: 100%; margin: 50px auto; }
 
-/* 超炫酷的荣誉卡片 (保持不变) */
+/* 超炫酷的荣誉卡片 */
 .honor-card { position: relative; background: #1e293b; border-radius: 28px; padding: 35px; color: #fff; overflow: hidden; box-shadow: 0 20px 40px rgba(30, 41, 59, 0.25); margin-bottom: 35px; }
 .card-bg-glow { position: absolute; top: -50%; right: -20%; width: 350px; height: 350px; background: radial-gradient(circle, rgba(245,158,11,0.25) 0%, rgba(245,158,11,0) 70%); border-radius: 50%; }
 .honor-content { display: flex; justify-content: space-between; align-items: center; position: relative; z-index: 2; margin-bottom: 25px; }
@@ -145,7 +152,7 @@ onMounted(() => fetchData())
 .progress-bar { height: 10px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; }
 .progress-inner { height: 100%; background: linear-gradient(90deg, #fcd34d, #f59e0b); border-radius: 10px; transition: width 1s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 0 10px rgba(245,158,11,0.5);}
 
-/* 🚨 爆改后的流水列表样式 */
+/* 流水列表样式 */
 .logs-section { background: #fff; border-radius: 28px; padding: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.04); }
 .section-title { margin: 0 0 25px; font-size: 1.3rem; color: #0f172a; font-weight: 900; }
 .log-list { display: flex; flex-direction: column; gap: 16px; }
@@ -187,7 +194,6 @@ onMounted(() => fetchData())
 .log-meta { display: flex; align-items: center; gap: 15px; flex-wrap: wrap;}
 .log-time { font-size: 0.85rem; color: #64748b; font-weight: bold; display: flex; align-items: center; gap: 5px;}
 
-/* 炫酷的订单号徽章 */
 .log-order {
   font-size: 0.8rem;
   color: #2563eb;
