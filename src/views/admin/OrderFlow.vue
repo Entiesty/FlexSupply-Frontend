@@ -288,7 +288,7 @@
 <script setup>
 import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { Search } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { getAdminOrders, cancelOrder } from '@/api/trade'
 
 const queryParams = reactive({
@@ -365,70 +365,17 @@ const getBizText = (sn) => {
 }
 
 // ========================================================
-// 🚨 新增：WebSocket 实时通讯逻辑
+// 🎧 事件总线监听：响应全局 WebSocket 的刷新指令
 // ========================================================
-let socket = null
-
-const initWebSocket = () => {
-  // 获取当前登录管理员的 ID (防止空指针，默认给个 1)
-  const userId = localStorage.getItem('userId') || '1'
-
-  // ⚠️ 请将 localhost:8080 替换为你后端的真实运行端口
-  const wsUrl = `ws://localhost:8080/api/ws/sos/${userId}`
-
-  socket = new WebSocket(wsUrl)
-
-  socket.onopen = () => {
-    console.log('🟢 指挥中心大屏已成功接入实时调度通讯网')
-  }
-
-  socket.onmessage = (event) => {
-    try {
-      const data = JSON.parse(event.data)
-
-      if (data.type === 'NEW_SOS') {
-        // 弹出最高级别的红色警报通知
-        ElNotification({
-          title: '🚨 紧急呼救响应',
-          message: `捕获到高优紧急单号: ${data.orderSn}，雷达广播已开启！`,
-          type: 'error',
-          duration: 0 // 0 表示不自动关闭，必须手动点掉
-        })
-        // 🚨 收到新单，自动刷新大屏数据！
-        fetchData()
-      }
-      else if (data.type === 'NEW_REQ') {
-        // 弹出普通的日常绿单通知
-        ElNotification({
-          title: '🟢 新增日常申领',
-          message: `新订单 ${data.orderSn} 已落库，正在等待调度。`,
-          type: 'success',
-          duration: 5000
-        })
-        fetchData()
-      }
-    } catch (err) {
-      console.error('消息解析失败', err)
-    }
-  }
-
-  socket.onclose = () => {
-    console.log('🔴 通讯网断开，5秒后尝试重连...')
-    setTimeout(initWebSocket, 5000)
-  }
-}
-
-// 在组件挂载时，不仅拉取数据，还要启动 WebSocket
 onMounted(() => {
   fetchData()
-  initWebSocket()
+  // 一旦 App.vue 收到新订单广播并抛出该事件，立刻触发 fetchData 刷新表格数据
+  window.addEventListener('refresh-orders', fetchData)
 })
 
-// 组件销毁前断开连接
 onBeforeUnmount(() => {
-  if (socket) {
-    socket.close()
-  }
+  // 离开页面时注销监听器，防止内存泄漏与重复触发
+  window.removeEventListener('refresh-orders', fetchData)
 })
 </script>
 

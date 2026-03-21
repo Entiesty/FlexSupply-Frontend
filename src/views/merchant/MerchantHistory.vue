@@ -54,8 +54,10 @@
                     <span class="i-value stock-num">{{ row.stock }} <span class="unit">{{ row.unit || '份' }}</span></span>
                   </div>
                   <div class="info-item">
-                    <span class="i-label">定向流转驿站</span>
-                    <span class="i-value station-name">📍 {{ row.stationName || '大盘算力分配中...' }}</span>
+                    <span class="i-label">{{ row.stationName ? '目标流转驿站' : '物资流转去向' }}</span>
+                    <span class="i-value station-name" :class="{'p2p-highlight': !row.stationName && row.status >= 2}" :title="getDestinationText(row)">
+                      {{ getDestinationText(row) }}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -200,7 +202,6 @@ import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getMerchantGoodsPage, revokeGoods, startSelfDelivery, finishSelfDelivery } from '@/api/resource'
 import { getUserProfile } from '@/api/user'
-// 🚨 引入获取明细分布的 API 接口
 import { getGoodsDistribution } from '@/api/trade'
 
 const loading = ref(false)
@@ -217,8 +218,6 @@ const queryParams = ref({
 
 const traceVisible = ref(false)
 const currentTraceItem = ref(null)
-
-// 领取详情状态
 const distributionList = ref([])
 const distLoading = ref(false)
 
@@ -230,6 +229,19 @@ const getStatusText = (status) => {
 const cleanGoodsName = (name) => {
   if (!name) return '未知物资'
   return name.replace(/^急需：/, '').replace(/\[.*?\]\s*/, '')
+}
+
+// 🧠 核心新增：智能流转去向渲染器
+const getDestinationText = (row) => {
+  if (row.stationName) {
+    return `📍 ${row.stationName}`
+  }
+  // 如果没有驿站，且状态已经是“已入库(2)”或“已发完(3)”，绝对是 P2P 直供！
+  if (row.status === 2 || row.status === 3) {
+    return '🚀 定向直供 (跳过驿站直达市民)'
+  }
+  // 只有状态为 0 且没驿站，才是真的在分配
+  return '🧠 调度引擎分配中...'
 }
 
 const fetchData = async () => {
@@ -245,12 +257,10 @@ const fetchData = async () => {
   }
 }
 
-// 🚨 核心改造：打开溯源弹窗时同步拉取明细
 const openTrace = async (row) => {
   currentTraceItem.value = row
   traceVisible.value = true
 
-  // 如果状态大于等于2（入库以后），才去拉取受助人分配明细
   if (row.status >= 2) {
     distributionList.value = []
     distLoading.value = true
@@ -352,8 +362,9 @@ onMounted(async () => {
 .empty-state h3 { color: #1e293b; margin: 0 0 8px; font-size: 1.3rem; font-weight: 900;}
 .empty-state p { color: #64748b; font-size: 1rem; font-weight: bold;}
 
-/* 卡片瀑布流 */
-.card-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 24px; }
+/* 🚨 核心修复：强制一行只排两列（宽屏下），增大卡片宽度 */
+.card-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; }
+
 .donate-card { background: #fff; border-radius: 20px; border: 1px solid #f1f5f9; box-shadow: 0 10px 25px rgba(0,0,0,0.03); overflow: hidden; display: flex; flex-direction: column; transition: 0.3s; }
 .donate-card:hover { transform: translateY(-4px); box-shadow: 0 15px 35px rgba(0,0,0,0.06); border-color: #e2e8f0; }
 
@@ -381,11 +392,15 @@ onMounted(async () => {
 .goods-name { margin: 0 0 16px 0; font-size: 1.25rem; color: #1e293b; font-weight: 900; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .info-grid { display: flex; flex-direction: column; gap: 12px; }
 .info-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: #f8fafc; border-radius: 12px;}
-.i-label { font-size: 0.85rem; color: #64748b; font-weight: bold; }
-.i-value { font-size: 0.95rem; font-weight: 900; color: #1e293b; }
+.i-label { font-size: 0.85rem; color: #64748b; font-weight: bold; flex-shrink: 0;}
+.i-value { font-size: 0.95rem; font-weight: 900; color: #1e293b; text-align: right;}
 .stock-num { color: #ea580c; font-size: 1.1rem;}
 .stock-num .unit { font-size: 0.8rem; color: #94a3b8; }
-.station-name { color: #3b82f6; max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+
+/* 🚨 核心修复：放宽文字的最大宽度，防止截断 */
+.station-name { color: #3b82f6; max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+/* P2P 战时状态高亮样式 */
+.p2p-highlight { color: #10b981 !important; font-weight: 900; background: #ecfdf5; padding: 4px 10px; border-radius: 8px; border: 1px solid #a7f3d0;}
 
 .d-footer { padding: 15px 20px; border-top: 1px solid #f1f5f9; display: flex; flex-direction: column; gap: 10px; background: #fff;}
 .dynamic-actions { display: flex; gap: 10px; }
@@ -457,14 +472,18 @@ onMounted(async () => {
 :deep(.trace-dialog .el-dialog__body) { padding: 30px; }
 :deep(.trace-dialog .el-dialog__title) { font-weight: 900; color: #1e293b; font-size: 1.3rem;}
 
+/* 🚨 核心修复：当屏幕变小时（如平板、手机），自动变成一行一列，保证文字不挤压 */
+@media screen and (max-width: 900px) {
+  .card-list { grid-template-columns: 1fr; }
+}
+
 @media screen and (max-width: 768px) {
   .main-content { padding: 20px 15px; }
   .toolbar { flex-direction: column; align-items: stretch;}
   .search-box, .status-select { width: 100%; min-width: unset;}
-  .card-list { grid-template-columns: 1fr; }
   .glass-panel { padding: 20px 15px; }
   .info-item { flex-direction: column; align-items: flex-start; gap: 4px;}
-  .station-name { max-width: 100%;}
+  .station-name { max-width: 100%; text-align: left; }
 
   /* 移动端明细自适应 */
   .dist-item { flex-direction: column; align-items: stretch; gap: 10px;}

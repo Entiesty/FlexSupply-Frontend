@@ -23,7 +23,7 @@
         <span v-if="item.requiresAuth && currentUser.isVerified === 0" class="lock-icon">🔒</span>
       </div>
 
-      <div class="menu-item verify-btn" v-if="[2, 4].includes(currentUser.role)" @click="triggerVerifyPickup">
+      <div class="menu-item verify-btn" v-if="currentUser.role === 4" @click="triggerVerifyPickup">
         <div class="menu-content">
           <span class="m-icon">🎫</span>
           <span class="m-name">线下扫码 / 验码核销</span>

@@ -22,7 +22,6 @@ import SideMenu from '@/views/dispatch/components/SideMenu.vue'
 const route = useRoute()
 
 // 控制哪些页面不需要侧边栏 (登录页、老人求助页)
-// 只有登录页不需要侧边栏，其他所有角色页面都纳入系统大布局
 const showMenu = computed(() => {
   const noMenuPaths = ['/auth', '/']
   return !noMenuPaths.includes(route.path)
@@ -32,31 +31,70 @@ const showMenu = computed(() => {
 let ws = null
 
 const initGlobalWebSocket = () => {
-  // 从本地存储拿取登录用户信息
-  const userInfoStr = localStorage.getItem('userInfo')
-  if (!userInfoStr) return
+  // 兼容不同的获取 userId 的方式
+  const userId = localStorage.getItem('userId') ||
+      (localStorage.getItem('userInfo') ? JSON.parse(localStorage.getItem('userInfo')).userId : null)
 
-  const userInfo = JSON.parse(userInfoStr)
-  if (!userInfo.userId) return
+  if (!userId) return
 
-  // 动态拼接 WebSocket 地址连上后端
-  const wsUrl = `ws://localhost:8080/ws/sos/${userInfo.userId}`
+  // 🚨 核心修复：加上了 /api 前缀，并且支持动态域名获取
+  const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://'
+  const host = window.location.host // 获取当前运行的 IP 和端口
+  // 如果你前端没用代理，可以直接写死： ws://localhost:8080/api/ws/sos/${userId}
+  const wsUrl = `ws://localhost:8080/api/ws/sos/${userId}`
+
   ws = new WebSocket(wsUrl)
 
   ws.onopen = () => console.log('✅ 战时通讯雷达已全局连接')
 
   ws.onmessage = (event) => {
-    // 🚨 收到后端传来的喜报，立刻在右上角弹出不可忽视的绿色通知！
-    ElNotification({
-      title: '🚨 紧急调度大盘通知',
-      message: event.data,
-      type: 'success',
-      duration: 0, // 0 表示永不自动消失，确保老人一定能看到
-      position: 'top-right'
-    })
+    try {
+      // 后端发来的是 JSON 字符串，必须先解析
+      const data = JSON.parse(event.data)
+      const userRole = localStorage.getItem('userRole') // 1市民 2商家 3骑士 4管理
+
+      // 🚨 场景 A：紧急呼救 (仅向骑士和管理员弹窗)
+      if (data.type === 'NEW_SOS' && ['3', '4'].includes(userRole)) {
+        ElNotification({
+          title: '🚨 紧急呼救响应',
+          message: `捕获到高优紧急单号: ${data.orderSn}，请立即查看！`,
+          type: 'error',
+          duration: 0,
+          position: 'top-right'
+        })
+        // 关键：抛出一个全局事件，让 OrderFlow.vue 听到后自动刷新表格！
+        window.dispatchEvent(new Event('refresh-orders'))
+      }
+      // 🚨 场景 B：日常单据 (仅向骑士和管理员弹窗)
+      else if (data.type === 'NEW_REQ' && ['3', '4'].includes(userRole)) {
+        ElNotification({
+          title: '🟢 新增常规流转单',
+          message: `新订单 ${data.orderSn} 已入网等待调度。`,
+          type: 'success',
+          duration: 4000,
+          position: 'top-right'
+        })
+        window.dispatchEvent(new Event('refresh-orders'))
+      }
+      // 🚨 场景 C：送达通知 (发给求助市民的)
+      else if (data.type === 'DELIVERED') {
+        ElNotification({
+          title: '📦 物资已送达',
+          message: `单号 ${data.orderSn} 已安全送达/入库，请前往确认或核销！`,
+          type: 'success',
+          duration: 0,
+          position: 'top-right'
+        })
+      }
+    } catch (err) {
+      console.error('全局 WebSocket 解析失败，收到的非 JSON 数据:', event.data)
+    }
   }
 
-  ws.onclose = () => console.log('❌ 战时通讯雷达已断开')
+  ws.onclose = () => {
+    console.log('❌ 战时通讯雷达已断开，5秒后重连...')
+    setTimeout(initGlobalWebSocket, 5000)
+  }
 }
 
 onMounted(() => {
