@@ -82,7 +82,7 @@ const triggerVerifyPickup = () => {
     try {
       await verifyPickup(value)
       ElMessage.success({
-        message: `🎉 核销成功！凭证码 ${value} 已核销，系统已将积分计入您的账户。`,
+        message: `🎉 核销成功！凭证码 ${value} 对应的物资已物理交接完毕，订单已圆满闭环。`,
         duration: 4000
       })
     } catch (error) {}

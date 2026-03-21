@@ -89,12 +89,12 @@ export function getExceptionMonitorList() {
     })
 }
 
-// 受赠方确认收货并评价
-export function confirmReceiptOrder(data) {
+// 受赠方确认收货并评价 (名字必须和 Vue 里统一为 rateOrder)
+export function rateOrder(data) {
     return request({
         url: '/trade/order/confirm-receipt',
         method: 'post',
-        params: data // 包含 orderId, rating, comment
+        params: data // 后端用的是 @RequestParam，所以这里用 params 拼在 URL 后面
     })
 }
 
