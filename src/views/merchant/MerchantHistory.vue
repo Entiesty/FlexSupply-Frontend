@@ -28,15 +28,67 @@
           <button class="search-btn" @click="fetchData">检索</button>
         </div>
 
+        <div v-if="activeDeliveries.length > 0" class="active-delivery-section">
+          <h3 class="section-title"><span class="live-dot"></span> 我的自送护航任务</h3>
+          <div class="card-list">
+            <div class="donate-card active-card" v-for="row in activeDeliveries" :key="row.goodsId">
+              <div class="d-header bg-purple">
+                <div class="category-tag text-purple">{{ row.category }}</div>
+                <div class="status-node status-4">
+                  <span class="node-dot"></span> 驱车护送中
+                </div>
+              </div>
+
+              <div class="d-body">
+                <h3 class="goods-name">{{ cleanGoodsName(row.goodsName) }}</h3>
+                <div class="info-grid">
+                  <div class="info-item">
+                    <span class="i-label">护送数量</span>
+                    <span class="i-value stock-num">{{ row.stock }} <span class="unit">{{ row.unit || '份' }}</span></span>
+                  </div>
+                  <div class="info-item target-focus">
+                    <span class="i-label">导航终点</span>
+                    <span class="i-value target-name">{{ row.stationName ? `🏥 ${row.stationName}` : '🚀 P2P定向直供市民' }}</span>
+                  </div>
+                </div>
+
+                <div class="mini-progress-bar">
+                  <div class="step done">📦 在店打包</div>
+                  <div class="line done"></div>
+                  <div class="step active">🚗 驱车护送中</div>
+                  <div class="line"></div>
+                  <div class="step">🏥 抵达核销</div>
+                </div>
+              </div>
+
+              <div class="d-footer slide-footer">
+                <div class="slide-to-unlock" :class="{ 'unlocked': slideSuccessMap[row.goodsId] }">
+                  <div class="slide-bg" :style="{ width: slideProgressMap[row.goodsId] + 'px' }"></div>
+                  <span class="slide-text">{{ slideSuccessMap[row.goodsId] ? '✅ 正在提交入库...' : '滑动确认已送达 >>>' }}</span>
+                  <div class="slide-thumb"
+                       :style="{ transform: `translateX(${slideProgressMap[row.goodsId] || 0}px)` }"
+                       @mousedown="startSlide($event, row.goodsId)"
+                       @touchstart.passive="startSlide($event, row.goodsId)">
+                    <span class="thumb-icon" v-if="!slideSuccessMap[row.goodsId]">>></span>
+                    <span class="thumb-icon" v-else>✔</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="divider-line" v-if="activeDeliveries.length > 0 && historyDeliveries.length > 0"></div>
+
         <div class="card-list" v-loading="loading">
-          <div v-if="!loading && tableData.length === 0" class="empty-state">
+          <div v-if="!loading && historyDeliveries.length === 0" class="empty-state">
             <div class="empty-icon">💝</div>
             <h3>暂无捐赠记录</h3>
             <p>快去捐赠大厅传递您的第一份爱心吧！</p>
           </div>
 
           <transition-group name="list-fade">
-            <div class="donate-card" v-for="row in tableData" :key="row.goodsId">
+            <div class="donate-card" v-for="row in historyDeliveries" :key="row.goodsId">
 
               <div class="d-header">
                 <div class="category-tag">{{ row.category }}</div>
@@ -68,11 +120,8 @@
                 </button>
                 <div class="dynamic-actions">
                   <template v-if="row.status === 0">
-                    <button class="action-btn btn-primary" @click="handleStart(row)">🚗 自送</button>
+                    <button class="action-btn btn-primary" @click="handleStart(row)">🚗 开始自送</button>
                     <button class="action-btn btn-revoke" @click="handleRevoke(row)">撤销</button>
-                  </template>
-                  <template v-else-if="row.status === 4">
-                    <button class="action-btn btn-success" @click="handleFinish(row)">✅ 确认送达</button>
                   </template>
                 </div>
               </div>
@@ -198,7 +247,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getMerchantGoodsPage, revokeGoods, startSelfDelivery, finishSelfDelivery } from '@/api/resource'
 import { getUserProfile } from '@/api/user'
@@ -221,6 +270,22 @@ const currentTraceItem = ref(null)
 const distributionList = ref([])
 const distLoading = ref(false)
 
+// 🚨 剥离数据：分离出进行中和历史任务
+const activeDeliveries = computed(() => tableData.value.filter(item => item.status === 4))
+const historyDeliveries = computed(() => {
+  // 如果搜索条件指定了 4，说明只想看自送单，那就不要在下面隐藏它
+  if (queryParams.value.status === 4) return tableData.value
+  return tableData.value.filter(item => item.status !== 4)
+})
+
+// === 滑块控制状态 ===
+const slideProgressMap = ref({})
+const slideSuccessMap = ref({})
+let isDragging = false
+let startX = 0
+let currentGoodsId = null
+const maxSlideWidth = 240 // 滑块槽减去按钮的宽度大约值
+
 const getStatusText = (status) => {
   const map = { 0: '待取货', 1: '骑手运送中', 2: '已入库', 3: '已发完', 4: '商家自送中' }
   return map[status] || '未知'
@@ -231,16 +296,9 @@ const cleanGoodsName = (name) => {
   return name.replace(/^急需：/, '').replace(/\[.*?\]\s*/, '')
 }
 
-// 🧠 核心新增：智能流转去向渲染器
 const getDestinationText = (row) => {
-  if (row.stationName) {
-    return `📍 ${row.stationName}`
-  }
-  // 如果没有驿站，且状态已经是“已入库(2)”或“已发完(3)”，绝对是 P2P 直供！
-  if (row.status === 2 || row.status === 3) {
-    return '🚀 定向直供 (跳过驿站直达市民)'
-  }
-  // 只有状态为 0 且没驿站，才是真的在分配
+  if (row.stationName) return `📍 ${row.stationName}`
+  if (row.status === 2 || row.status === 3) return '🚀 定向直供 (跳过驿站直达市民)'
   return '🧠 调度引擎分配中...'
 }
 
@@ -250,6 +308,9 @@ const fetchData = async () => {
     const res = await getMerchantGoodsPage(queryParams.value)
     tableData.value = res.data.records || []
     total.value = res.data.total || 0
+    // 重置滑块状态
+    slideProgressMap.value = {}
+    slideSuccessMap.value = {}
   } catch (e) {
     console.error('获取溯源记录失败', e)
   } finally {
@@ -286,55 +347,103 @@ const handleRevoke = (row) => {
       await revokeGoods(row.goodsId)
       ElMessage.success('撤销成功，已从大盘移除')
       fetchData()
-    } catch (e) {
-    } finally {
-      loading.value = false
-    }
+    } catch (e) {} finally { loading.value = false }
   }).catch(() => {})
 }
 
 const handleStart = async (row) => {
-  try {
-    loading.value = true
-    await startSelfDelivery(row.goodsId)
-    ElMessage.success('物资已锁定防抢单！请注意交通安全')
-    await fetchData()
-  } catch (e) {
-  } finally {
-    loading.value = false
-  }
-}
-
-const handleFinish = async (row) => {
-  ElMessageBox.confirm(
-      `确认您已将【${cleanGoodsName(row.goodsName)}】亲自交到驿站工作人员手中了吗？`,
-      '安全核销确认',
-      { confirmButtonText: '确认入库', cancelButtonText: '取消', type: 'success' }
-  ).then(async () => {
+  ElMessageBox.confirm('确认亲自护送这批物资吗？系统将为您开启自送护航通道。', '启动自送', {
+    confirmButtonText: '开始自送', cancelButtonText: '取消', type: 'warning'
+  }).then(async () => {
     loading.value = true
     try {
-      await finishSelfDelivery(row.goodsId)
-      ElMessage.success('核销成功，感谢您的亲力亲为！')
+      await startSelfDelivery(row.goodsId)
+      ElMessage.success('自送通道已开启！请尽快护送物资前往终点。')
       await fetchData()
-    } catch (e) {
-    } finally {
-      loading.value = false
-    }
+    } catch (e) {} finally { loading.value = false }
   }).catch(() => {})
+}
+
+// === 🚨 滑动解锁逻辑 ===
+const startSlide = (e, goodsId) => {
+  if (slideSuccessMap.value[goodsId]) return // 已经成功的不允许再滑
+  isDragging = true
+  currentGoodsId = goodsId
+  startX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX
+
+  window.addEventListener('mousemove', onSlideMove)
+  window.addEventListener('touchmove', onSlideMove, { passive: false })
+  window.addEventListener('mouseup', endSlide)
+  window.addEventListener('touchend', endSlide)
+}
+
+const onSlideMove = (e) => {
+  if (!isDragging) return
+  if (e.type.includes('touch')) e.preventDefault() // 防止页面滚动
+  const currentX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX
+  let moveX = currentX - startX
+
+  if (moveX < 0) moveX = 0
+  if (moveX > maxSlideWidth) moveX = maxSlideWidth
+
+  slideProgressMap.value[currentGoodsId] = moveX
+}
+
+const endSlide = async () => {
+  if (!isDragging) return
+  isDragging = false
+
+  const finalProgress = slideProgressMap.value[currentGoodsId] || 0
+
+  // 必须滑到 95% 以上才算成功
+  if (finalProgress >= maxSlideWidth * 0.95) {
+    slideProgressMap.value[currentGoodsId] = maxSlideWidth
+    slideSuccessMap.value[currentGoodsId] = true
+    // 触发真实核销接口
+    await executeFinishDelivery(currentGoodsId)
+  } else {
+    // 失败回弹动画
+    let backStep = finalProgress
+    const anim = setInterval(() => {
+      backStep -= 15
+      if (backStep <= 0) {
+        slideProgressMap.value[currentGoodsId] = 0
+        clearInterval(anim)
+      } else {
+        slideProgressMap.value[currentGoodsId] = backStep
+      }
+    }, 16)
+  }
+
+  window.removeEventListener('mousemove', onSlideMove)
+  window.removeEventListener('touchmove', onSlideMove)
+  window.removeEventListener('mouseup', endSlide)
+  window.removeEventListener('touchend', endSlide)
+}
+
+const executeFinishDelivery = async (goodsId) => {
+  try {
+    await finishSelfDelivery(goodsId)
+    ElMessage.success('核销成功，感谢您的亲力亲为！')
+    await fetchData()
+  } catch (e) {
+    // 失败了重置滑块
+    slideSuccessMap.value[goodsId] = false
+    slideProgressMap.value[goodsId] = 0
+  }
 }
 
 onMounted(async () => {
   fetchData()
   try {
     const userRes = await getUserProfile()
-    if (userRes && userRes.data) {
-      myCreditScore.value = userRes.data.creditScore || 100
-    }
+    if (userRes && userRes.data) myCreditScore.value = userRes.data.creditScore || 100
   } catch (e) {}
 })
 </script>
 
 <style scoped>
+/* 保持你的原有全局样式不变 */
 .main-content { flex: 1; display: flex; flex-direction: column; position: relative; padding: 40px 30px; background: #f8fafc; min-height: 100vh; overflow-y: auto;}
 .top-status { position: absolute; top: 20px; right: 30px; z-index: 100; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); padding: 8px 16px; border-radius: 20px; font-size: 0.85rem; color: #64748b; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05); font-weight: bold;}
 .pulse-dot { width: 8px; height: 8px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; animation: pulse-green 2s infinite; }
@@ -346,7 +455,6 @@ onMounted(async () => {
 
 .glass-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-radius: 24px; padding: 25px 30px; box-shadow: 0 15px 35px rgba(0,0,0,0.06); border: 1px solid #fff; }
 
-/* 工具栏 */
 .toolbar { display: flex; gap: 15px; margin-bottom: 25px; align-items: center; flex-wrap: wrap;}
 .search-box { flex: 1; min-width: 250px; position: relative; display: flex; align-items: center;}
 .search-icon { position: absolute; left: 16px; color: #94a3b8; font-size: 1.1rem;}
@@ -356,14 +464,43 @@ onMounted(async () => {
 .search-btn { background: #1e293b; color: #fff; border: none; padding: 0 30px; height: 48px; border-radius: 14px; font-weight: 900; font-size: 1rem; cursor: pointer; transition: 0.2s; white-space: nowrap;}
 .search-btn:hover { background: #0f172a; transform: translateY(-2px); box-shadow: 0 6px 15px rgba(15, 23, 42, 0.2); }
 
-/* 空状态 */
 .empty-state { text-align: center; padding: 60px 0; }
 .empty-icon { font-size: 5rem; margin-bottom: 15px; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1));}
 .empty-state h3 { color: #1e293b; margin: 0 0 8px; font-size: 1.3rem; font-weight: 900;}
 .empty-state p { color: #64748b; font-size: 1rem; font-weight: bold;}
 
-/* 🚨 核心修复：强制一行只排两列（宽屏下），增大卡片宽度 */
 .card-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; }
+
+/* 🚨 置顶高亮区域 */
+.divider-line { height: 1px; background: #e2e8f0; margin: 30px 0; }
+.active-delivery-section { background: #faf5ff; border: 2px dashed #d8b4fe; border-radius: 20px; padding: 20px; margin-bottom: 30px; }
+.section-title { margin: 0 0 15px; font-size: 1.1rem; color: #7e22ce; font-weight: 900; display: flex; align-items: center; gap: 8px; }
+.live-dot { width: 10px; height: 10px; background: #a855f7; border-radius: 50%; animation: pulse-purple 1.5s infinite; }
+.active-card { border: 2px solid #e9d5ff !important; box-shadow: 0 8px 25px rgba(168, 85, 247, 0.15) !important; transform: scale(1.01); }
+.bg-purple { background: #f3e8ff !important; border-bottom: 1px solid #e9d5ff !important;}
+.text-purple { background: #d8b4fe !important; color: #581c87 !important; }
+
+/* 🚨 目标地点放大版 */
+.target-focus { background: #eff6ff !important; border: 1px solid #bfdbfe !important; }
+.target-focus .target-name { font-size: 1.1rem !important; color: #2563eb !important; }
+
+/* 🚨 微型进度条 */
+.mini-progress-bar { display: flex; align-items: center; justify-content: space-between; margin-top: 15px; background: #f8fafc; padding: 12px 15px; border-radius: 12px; }
+.mini-progress-bar .step { font-size: 0.8rem; font-weight: bold; color: #94a3b8; }
+.mini-progress-bar .step.done { color: #10b981; }
+.mini-progress-bar .step.active { color: #a855f7; font-weight: 900; }
+.mini-progress-bar .line { flex: 1; height: 2px; background: #e2e8f0; margin: 0 8px; }
+.mini-progress-bar .line.done { background: #10b981; }
+
+/* 🚨 滑动解锁容器 */
+.slide-footer { padding: 15px 20px !important; background: #f8fafc !important; }
+.slide-to-unlock { position: relative; width: 100%; height: 48px; background: #e2e8f0; border-radius: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center; user-select: none; }
+.slide-text { position: relative; z-index: 2; font-weight: 900; color: #64748b; font-size: 0.95rem; pointer-events: none; transition: 0.3s;}
+.slide-bg { position: absolute; left: 0; top: 0; height: 100%; background: #10b981; z-index: 1; transition: background-color 0.3s;}
+.slide-thumb { position: absolute; left: 4px; top: 4px; width: 40px; height: 40px; background: #fff; border-radius: 8px; z-index: 3; display: flex; align-items: center; justify-content: center; cursor: grab; box-shadow: 0 2px 6px rgba(0,0,0,0.1); color: #94a3b8; font-weight: 900; }
+.slide-thumb:active { cursor: grabbing; background: #f8fafc; }
+.slide-to-unlock.unlocked .slide-text { color: #fff; }
+.slide-to-unlock.unlocked .slide-thumb { background: #ecfdf5; color: #10b981; pointer-events: none; }
 
 .donate-card { background: #fff; border-radius: 20px; border: 1px solid #f1f5f9; box-shadow: 0 10px 25px rgba(0,0,0,0.03); overflow: hidden; display: flex; flex-direction: column; transition: 0.3s; }
 .donate-card:hover { transform: translateY(-4px); box-shadow: 0 15px 35px rgba(0,0,0,0.06); border-color: #e2e8f0; }
@@ -371,7 +508,6 @@ onMounted(async () => {
 .d-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; background: #f8fafc; border-bottom: 1px dashed #e2e8f0;}
 .category-tag { display: inline-block; font-size: 0.8rem; background: #e0f2fe; color: #0284c7; padding: 4px 10px; border-radius: 8px; font-weight: 900; letter-spacing: 0.5px;}
 
-/* 状态节点设计 */
 .status-node { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 10px; font-weight: 900; font-size: 0.85rem; }
 .node-dot { width: 8px; height: 8px; border-radius: 50%; }
 .status-0 { background: #fff7ed; color: #ea580c; border: 1px solid #ffedd5; }
@@ -386,7 +522,7 @@ onMounted(async () => {
 .status-3 .node-dot { background: #ef4444; }
 
 @keyframes pulse-blue { 0% { box-shadow: 0 0 0 0 rgba(59,130,246, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(59,130,246, 0); } 100% { box-shadow: 0 0 0 0 rgba(59,130,246, 0); } }
-@keyframes pulse-purple { 0% { box-shadow: 0 0 0 0 rgba(168,85,247, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(168,85,247, 0); } 100% { box-shadow: 0 0 0 0 rgba(168,85,247, 0); } }
+@keyframes pulse-purple { 0% { box-shadow: 0 0 0 0 rgba(168,85,247, 0.4); } 70% { box-shadow: 0 0 0 8px rgba(168,85,247, 0); } 100% { box-shadow: 0 0 0 0 rgba(168,85,247, 0); } }
 
 .d-body { padding: 20px; flex: 1;}
 .goods-name { margin: 0 0 16px 0; font-size: 1.25rem; color: #1e293b; font-weight: 900; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -397,9 +533,7 @@ onMounted(async () => {
 .stock-num { color: #ea580c; font-size: 1.1rem;}
 .stock-num .unit { font-size: 0.8rem; color: #94a3b8; }
 
-/* 🚨 核心修复：放宽文字的最大宽度，防止截断 */
 .station-name { color: #3b82f6; max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
-/* P2P 战时状态高亮样式 */
 .p2p-highlight { color: #10b981 !important; font-weight: 900; background: #ecfdf5; padding: 4px 10px; border-radius: 8px; border: 1px solid #a7f3d0;}
 
 .d-footer { padding: 15px 20px; border-top: 1px solid #f1f5f9; display: flex; flex-direction: column; gap: 10px; background: #fff;}
@@ -411,29 +545,23 @@ onMounted(async () => {
 .btn-primary:hover { background: #3b82f6; color: white; transform: translateY(-2px); box-shadow: 0 6px 15px rgba(59, 130, 246, 0.25); }
 .btn-revoke { background: #fff; color: #ef4444; border: 1px solid #fecaca; flex: 0.6;}
 .btn-revoke:hover { background: #fef2f2; transform: translateY(-2px); }
-.btn-success { background: #ecfdf5; color: #10b981; border: 1px solid #a7f3d0; }
-.btn-success:hover { background: #10b981; color: white; transform: translateY(-2px); box-shadow: 0 6px 15px rgba(16, 185, 129, 0.25); }
 .pagination-wrap { display: flex; justify-content: center; margin-top: 30px; padding-top: 20px; border-top: 1px dashed #e2e8f0; }
 .list-fade-enter-active, .list-fade-leave-active { transition: all 0.4s ease; }
 .list-fade-enter-from, .list-fade-leave-to { opacity: 0; transform: translateY(20px); }
 
-/* ================= 轨迹溯源弹窗专属 UI ================= */
+/* 保持你原本的轨迹弹窗样式完全不变 */
 .trace-container { padding: 0 5px; }
-
-/* 顶层 Summary */
 .trace-summary { background: linear-gradient(to right, #f8fafc, #f1f5f9); border: 2px dashed #cbd5e1; border-radius: 16px; padding: 20px; margin-bottom: 30px; display: flex; flex-direction: column; gap: 12px; }
 .summary-item { display: flex; align-items: center; font-size: 0.95rem; }
 .summary-item .label { color: #64748b; width: 80px; font-weight: bold;}
 .summary-item .goods-name-trace { font-weight: 900; color: #1e293b; font-size: 1.15rem; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 12px;}
 .summary-item .goods-count { background: #fff7ed; color: #ea580c; padding: 4px 10px; border-radius: 8px; font-weight: bold; border: 1px solid #fdba74; }
 
-/* 中层 Timeline */
 .custom-timeline { padding-left: 10px; margin-top: 10px;}
 .tl-title { margin: 0 0 6px 0; font-size: 1.1rem; color: #1e293b; font-weight: 900; }
 .tl-desc { margin: 0; font-size: 0.9rem; color: #64748b; line-height: 1.5; font-weight: bold;}
 .pending-text { color: #94a3b8 !important; }
 
-/* 底层：受助人名录列表 (全新 UI) */
 .distribution-details { margin-top: 30px; border-top: 2px dashed #e2e8f0; padding-top: 25px; }
 .dist-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding: 0 5px;}
 .dist-title { margin: 0; font-size: 1.1rem; color: #1e293b; font-weight: 900; display: flex; align-items: center; gap: 6px;}
@@ -443,12 +571,10 @@ onMounted(async () => {
 .dist-list::-webkit-scrollbar { width: 6px; }
 .dist-list::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
 
-/* 空状态提示 */
 .dist-empty { text-align: center; padding: 30px 0; color: #94a3b8; background: #f8fafc; border-radius: 16px; border: 1px dashed #cbd5e1;}
 .dist-empty .empty-emoji { font-size: 3rem; margin-bottom: 10px; display: block; opacity: 0.8;}
 .dist-empty p { margin: 0; font-size: 0.95rem; font-weight: bold;}
 
-/* 单个用户卡片 */
 .dist-item { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 18px; transition: 0.2s; display: flex; align-items: center; justify-content: space-between; gap: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.02);}
 .dist-item:hover { border-color: #cbd5e1; box-shadow: 0 6px 15px rgba(0,0,0,0.05); transform: translateY(-2px);}
 
@@ -465,18 +591,13 @@ onMounted(async () => {
 .rating-comment { font-size: 0.85rem; color: #475569; font-weight: bold; font-style: italic; max-width: 180px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden;}
 .rating-wait { font-size: 0.85rem; color: #94a3b8; font-weight: bold; display: flex; align-items: center; gap: 4px;}
 
-/* 深度覆写 Element UI 样式 */
 :deep(.el-timeline-item__node--large) { width: 16px; height: 16px; left: -2px; }
 :deep(.el-timeline-item__wrapper) { padding-left: 28px; top: -4px; }
 :deep(.trace-dialog .el-dialog__header) { padding: 25px 30px; border-bottom: 1px solid #f1f5f9;}
 :deep(.trace-dialog .el-dialog__body) { padding: 30px; }
 :deep(.trace-dialog .el-dialog__title) { font-weight: 900; color: #1e293b; font-size: 1.3rem;}
 
-/* 🚨 核心修复：当屏幕变小时（如平板、手机），自动变成一行一列，保证文字不挤压 */
-@media screen and (max-width: 900px) {
-  .card-list { grid-template-columns: 1fr; }
-}
-
+@media screen and (max-width: 900px) { .card-list { grid-template-columns: 1fr; } }
 @media screen and (max-width: 768px) {
   .main-content { padding: 20px 15px; }
   .toolbar { flex-direction: column; align-items: stretch;}
@@ -484,8 +605,6 @@ onMounted(async () => {
   .glass-panel { padding: 20px 15px; }
   .info-item { flex-direction: column; align-items: flex-start; gap: 4px;}
   .station-name { max-width: 100%; text-align: left; }
-
-  /* 移动端明细自适应 */
   .dist-item { flex-direction: column; align-items: stretch; gap: 10px;}
   .dist-rating-box { align-items: flex-start; background: #f1f5f9; min-width: unset;}
   .rating-comment { max-width: 100%; }

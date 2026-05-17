@@ -364,10 +364,29 @@ onUnmounted(() => {
 
 const handleGrab = async (item) => {
   try {
+    // 1. 立即开启全屏 Loading，不让用户乱点
+    loading.value = true
+
+    // 2. 发送抢单请求 (底层会把请求丢给 RabbitMQ)
     await grabTask(item.orderId)
-    ElNotification({ title: '护航指令已确认', message: `单号 ${item.orderSn} 已接入履约序列，请立即启程。`, type: 'success' })
-    switchTab('progress')
-  } catch (err) {}
+
+    ElNotification({
+      title: '护航指令已确认',
+      message: `单号 ${item.orderSn} 抢单成功！正在同步调度引擎...`,
+      type: 'success'
+    })
+
+    // 3. 🚨 核心架构修复：引入“异步平滑补偿”延迟
+    // 强制前端等待 600 毫秒，让后台的 RabbitMQ 消费者有充足的时间把任务写入 MySQL
+    setTimeout(() => {
+      switchTab('progress')
+      // switchTab 内部会自动调用 loadData() 并最终关闭 loading.value
+    }, 600)
+
+  } catch (err) {
+    // 如果抢单失败（比如 Redis 锁拦截了超卖），关闭 Loading
+    loading.value = false
+  }
 }
 
 const handlePickup = async (item) => {
