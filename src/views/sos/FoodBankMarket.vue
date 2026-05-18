@@ -96,50 +96,62 @@
       </div>
     </div>
 
-    <el-drawer v-model="drawerVisible" direction="btt" size="auto" :with-header="false" custom-class="sos-drawer">
-      <div class="drawer-content">
-        <div class="drawer-handler"></div>
-        <template v-if="!pickupResult">
-          <h3 class="drawer-title" style="color: #059669;">确认预约自提吗？</h3>
-          <div class="reserve-confirm-card">
-            <div class="rc-icon">{{ getCategoryIcon(currentSelectGoods?.category) }}</div>
-            <div class="rc-details">
-              <div class="rc-goods">{{ currentSelectGoods?.goodsName }}</div>
-              <div class="rc-station">📍 取货点：{{ currentSelectStation?.stationName }}</div>
-            </div>
+    <!-- ===== 预约自提模态框 ===== -->
+    <el-dialog
+      v-model="drawerVisible"
+      :title="pickupResult ? '✅ 预约成功' : '🛒 确认预约物资'"
+      width="420px"
+      :append-to-body="true"
+      align-center
+      :show-close="true"
+      :close-on-click-modal="false"
+      destroy-on-close
+      class="reserve-dialog"
+    >
+      <!-- 待确认状态 -->
+      <template v-if="!pickupResult">
+        <div class="reserve-confirm-card">
+          <div class="rc-icon">{{ getCategoryIcon(currentSelectGoods?.category) }}</div>
+          <div class="rc-details">
+            <div class="rc-goods">{{ currentSelectGoods?.goodsName }}</div>
+            <div class="rc-station">📍 取货点：{{ currentSelectStation?.stationName }}</div>
           </div>
-          <div class="confirm-zone">
-            <button class="apple-btn ready-green" :disabled="submitting" @click="confirmSubmit">
-              <span class="btn-text" v-if="!submitting">确定预约并生成取件码</span>
-              <span class="btn-text" v-else>锁定库存中...</span>
-            </button>
-            <p class="press-tip">预约后请在 2 小时内前往提取，逾期将退回公池</p>
+        </div>
+        <div class="reserve-tip">
+          <span class="tip-icon">💡</span>
+          预约后请在 2 小时内前往提取，逾期将退回公池
+        </div>
+      </template>
+
+      <!-- 成功状态 -->
+      <template v-else>
+        <div class="success-result-box">
+          <div class="pickup-code-box">
+            <span class="pickup-label">专属提货码</span>
+            <span class="pickup-code">{{ pickupResult.pickupCode }}</span>
           </div>
-        </template>
 
-        <template v-else>
-          <div class="success-result-box">
-            <div class="success-icon pulse-glow-green">✅</div>
-            <h3 style="color: #10b981; margin-bottom: 5px;">物资已为您锁定</h3>
-            <p style="color: #64748b; font-weight: bold; margin-bottom: 25px;">请凭下方凭证码前往驿站核销提取</p>
-
-            <div class="pickup-code-box">
-              <span class="pickup-label">专属提货码</span>
-              <span class="pickup-code">{{ pickupResult.pickupCode }}</span>
-            </div>
-
-            <div class="station-guide">
-              <div class="sg-row"><span class="sg-label">提货点：</span><span class="sg-value">{{ currentSelectStation?.stationName }}</span></div>
-              <div class="sg-row"><span class="sg-label">地&nbsp;&nbsp;&nbsp;址：</span><span class="sg-value">{{ currentSelectStation?.address }}</span></div>
-            </div>
-
-            <button class="apple-btn outline-green" style="margin-top: 25px;" @click="closeAndRefresh">
-              <span class="btn-text">我已截图保存，返回大厅</span>
-            </button>
+          <div class="station-guide">
+            <div class="sg-row"><span class="sg-label">提货点：</span><span class="sg-value">{{ currentSelectStation?.stationName }}</span></div>
+            <div class="sg-row"><span class="sg-label">地&nbsp;&nbsp;&nbsp;址：</span><span class="sg-value">{{ currentSelectStation?.address }}</span></div>
           </div>
-        </template>
-      </div>
-    </el-drawer>
+        </div>
+      </template>
+
+      <template #footer>
+        <div class="dialog-footer">
+          <template v-if="!pickupResult">
+            <el-button @click="drawerVisible = false" class="btn-cancel">暂不预约</el-button>
+            <el-button type="primary" :loading="submitting" @click="confirmSubmit" class="btn-confirm">
+              {{ submitting ? '锁定库存中...' : '确认生成取件码' }}
+            </el-button>
+          </template>
+          <template v-else>
+            <el-button type="primary" @click="closeAndRefresh" class="btn-confirm">我已截图保存，返回大厅</el-button>
+          </template>
+        </div>
+      </template>
+    </el-dialog>
   </main>
 </template>
 
@@ -313,6 +325,9 @@ onMounted(() => fetchData())
 .t-label { color: #10b981; font-size: 0.9rem; font-weight: bold; margin-bottom: 8px; letter-spacing: 1px;}
 .t-code { font-family: 'Courier New', Courier, monospace; font-size: 2.8rem; font-weight: 900; color: #059669; line-height: 1; letter-spacing: 2px; }
 
+.pulse-glow-green { animation: icon-pulse-green 2s infinite; border-radius: 50%; }
+@keyframes icon-pulse-green { 0% { box-shadow: 0 0 0 0 rgba(16,185,129,0.4); } 70% { box-shadow: 0 0 0 20px rgba(16,185,129,0); } 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); } }
+
 /* 主体内容区 */
 .glass-panel { background: transparent; }
 
@@ -385,40 +400,63 @@ onMounted(() => fetchData())
 
 .no-goods-tip { text-align: center; color: #94a3b8; padding: 10px 0; font-size: 0.9rem; font-weight: bold; }
 
-/* 🍎 Apple 风格抽屉 */
-.drawer-content { padding: 0 30px 40px 30px; display: flex; flex-direction: column; max-width: 500px; margin: 0 auto; height: auto;}
-.drawer-handler { width: 40px; height: 5px; background: #e2e8f0; border-radius: 5px; margin: 15px auto 25px auto; }
-.drawer-title { font-size: 1.5rem; font-weight: 900; margin: 0 0 25px 0; text-align: center; }
+/* ===== 预约弹窗 ===== */
+.reserve-confirm-card {
+  background: #f8fafc; border-radius: 18px; padding: 18px 20px;
+  display: flex; align-items: center; gap: 18px; margin-bottom: 14px;
+}
+.rc-icon {
+  font-size: 2.6rem; background: #fff; width: 60px; height: 60px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 16px; box-shadow: 0 4px 10px rgba(0,0,0,0.04); flex-shrink: 0;
+}
+.rc-details { flex: 1; text-align: left; min-width: 0; }
+.rc-goods { font-size: 1.1rem; font-weight: 900; color: #1e293b; margin-bottom: 4px; }
+.rc-station {
+  font-size: 0.9rem; color: #64748b; font-weight: bold;
+  white-space: normal; line-height: 1.5; word-break: break-all;
+}
 
-.reserve-confirm-card { background: #f8fafc; border-radius: 20px; padding: 20px; margin-bottom: 30px; display: flex; align-items: center; gap: 20px;}
-.rc-icon { font-size: 3rem; background: #fff; width: 70px; height: 70px; display: flex; align-items: center; justify-content: center; border-radius: 16px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);}
-.rc-details { flex: 1; text-align: left;}
-.rc-goods { font-size: 1.2rem; font-weight: 900; color: #1e293b; margin-bottom: 6px;}
-.rc-station { font-size: 0.95rem; color: #64748b; font-weight: bold;}
+.reserve-tip {
+  display: flex; align-items: flex-start; gap: 6px;
+  font-size: 0.8rem; color: #64748b; font-weight: 500;
+  background: #fffbeb; border: 1px solid #fef3c7; border-radius: 14px;
+  padding: 10px 14px; line-height: 1.5;
+}
+.tip-icon { flex-shrink: 0; }
 
-.confirm-zone { text-align: center; width: 100%;}
-.apple-btn { width: 100%; height: 56px; border-radius: 100px; border: none; font-size: 1.15rem; font-weight: 900; color: #fff; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center;}
-.apple-btn.ready-green { background: #10b981; box-shadow: 0 8px 20px rgba(16, 185, 129, 0.2); }
-.apple-btn.ready-green:hover:not(:disabled) { background: #059669; transform: translateY(-2px); box-shadow: 0 12px 25px rgba(16, 185, 129, 0.3);}
-.apple-btn.outline-green { background: #ecfdf5; color: #059669; border: 2px solid #34d399; }
-.apple-btn.outline-green:hover { background: #d1fae5; transform: translateY(-2px); }
-.apple-btn:disabled { background: #cbd5e1; cursor: not-allowed; box-shadow: none; transform: none;}
-.press-tip { font-size: 0.85rem; color: #ef4444; margin-top: 15px; font-weight: bold;}
+.success-result-box { text-align: center; padding: 0; }
 
-.success-result-box { text-align: center; padding-top: 10px;}
-.success-icon { font-size: 4rem; margin-bottom: 10px; display: inline-block;}
-.pulse-glow-green { animation: icon-pulse-green 2s infinite; border-radius: 50%;}
-@keyframes icon-pulse-green { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); } 70% { box-shadow: 0 0 0 20px rgba(16, 185, 129, 0); } 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
+.pickup-code-box {
+  background: #ecfdf5; border-radius: 20px; padding: 24px;
+  text-align: center; margin-bottom: 20px;
+}
+.pickup-label { color: #059669; font-size: 0.95rem; font-weight: bold; margin-bottom: 8px; display: block; }
+.pickup-code {
+  color: #10b981; font-size: 3.2rem; font-weight: 900; letter-spacing: 6px;
+  font-family: 'Courier New', Courier, monospace; line-height: 1;
+}
 
-.pickup-code-box { margin-top: 15px; background: #ecfdf5; border-radius: 20px; padding: 25px; text-align: center; margin-bottom: 25px;}
-.pickup-label { color: #059669; font-size: 1rem; font-weight: bold; margin-bottom: 8px; display: block; }
-.pickup-code { color: #10b981; font-size: 3.5rem; font-weight: 900; letter-spacing: 6px; font-family: 'Courier New', Courier, monospace; line-height: 1;}
-
-.station-guide { background: #f8fafc; padding: 20px; border-radius: 16px; text-align: left;}
-.sg-row { display: flex; margin-bottom: 8px; font-size: 0.95rem;}
+.station-guide { background: #f8fafc; padding: 18px; border-radius: 16px; text-align: left; }
+.sg-row { display: flex; margin-bottom: 8px; font-size: 0.9rem; }
 .sg-row:last-child { margin-bottom: 0; }
-.sg-label { color: #94a3b8; width: 70px; flex-shrink: 0; font-weight: bold;}
+.sg-label { color: #94a3b8; width: 65px; flex-shrink: 0; font-weight: bold; }
 .sg-value { color: #1e293b; font-weight: bold; flex: 1; }
+
+.btn-cancel {
+  border: 1px solid #e2e8f0; color: #64748b; background: #fff; font-weight: bold;
+}
+.btn-cancel:hover { color: #1e293b; border-color: #cbd5e1; background: #f8fafc; }
+
+.btn-confirm {
+  font-weight: 900;
+  --el-button-bg-color: #10b981;
+  --el-button-border-color: #10b981;
+  --el-button-hover-bg-color: #059669;
+  --el-button-hover-border-color: #059669;
+  --el-button-active-bg-color: #047857;
+  --el-button-active-border-color: #047857;
+}
 
 @media screen and (max-width: 768px) {
   .main-content { padding: 20px 15px; }
@@ -432,6 +470,13 @@ onMounted(() => fetchData())
 }
 </style>
 <style>
-.sos-drawer .el-drawer__body { padding: 0; background: #fff; overflow-y: visible;}
-.sos-drawer { border-radius: 32px 32px 0 0 !important; box-shadow: 0 -10px 40px rgba(0,0,0,0.15) !important; background: #fff !important;}
+.reserve-dialog .el-dialog__header { padding: 24px 28px 0; border-bottom: none; }
+.reserve-dialog .el-dialog__title { font-size: 1.15rem; font-weight: 900; color: #1e293b; }
+.reserve-dialog .el-dialog__body { padding: 16px 28px 8px; }
+.reserve-dialog .el-dialog__footer { padding: 12px 28px 24px; }
+.reserve-dialog .el-dialog { border-radius: 28px; }
+
+.dialog-footer {
+  display: flex; justify-content: flex-end; gap: 12px; margin-top: 10px;
+}
 </style>
