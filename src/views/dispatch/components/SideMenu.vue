@@ -116,7 +116,7 @@ const allMenus = [
   { name: '我的受赠档案', icon: '📜', path: '/recipient/history', roles: [1], requiresAuth: true },
 
   // 🟢 资产与信誉 (低频查看，靠后)
-  { name: '城市信誉资产', icon: '🏆', path: '/volunteer/credit', roles: [2, 3], requiresAuth: true },
+  { name: '城市信誉资产', icon: '🏆', path: '/volunteer/credit', roles: [3], requiresAuth: true },
 
   // 🔵 指挥中心管理模块 (管理员专属区块，聚拢在一起)
   { name: '全局订单流转', icon: '📊', path: '/flow', roles: [4], requiresAuth: true },
