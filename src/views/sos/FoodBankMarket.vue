@@ -77,7 +77,10 @@
                   <h5 :title="goods.goodsName">{{ goods.goodsName }}</h5>
                   <div class="g-tags">
                     <span class="g-cat">{{ goods.category }}</span>
-                    <span class="g-stock">仅剩 {{ goods.stock }} {{ goods.unit || '件' }}</span>
+                    <span class="g-stock" :class="{ 'stock-low': goods.stock < 10, 'stock-ok': goods.stock >= 10 }">
+                      <span v-if="goods.stock < 10" class="stock-warn-icon">⚠️</span>
+                      {{ goods.stock < 10 ? '仅剩' : '库存' }} {{ goods.stock }} {{ goods.unit || '件' }}
+                    </span>
                   </div>
                 </div>
                 <button class="pill-btn reserve" :disabled="activePickupOrder != null" @click="handleReserve(station, goods)">
@@ -335,19 +338,50 @@ onMounted(() => fetchData())
 .sh-addr { margin: 0; font-size: 0.85rem; color: #64748b; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px;}
 .sh-dist { font-size: 0.85rem; background: #f1f5f9; color: #475569; padding: 4px 10px; border-radius: 100px; font-weight: 900;}
 
-.goods-list { padding: 20px 25px; display: flex; flex-direction: column; gap: 16px; background: #fff;}
-.goods-item { display: flex; align-items: center; gap: 15px; }
+.goods-list {
+  padding: 20px 25px; display: flex; flex-direction: column; gap: 0;
+  background: #fff;
+  max-height: 400px; overflow-y: auto;
+  scrollbar-width: thin; scrollbar-color: #e2e8f0 transparent;
+}
+.goods-list::-webkit-scrollbar { width: 4px; }
+.goods-list::-webkit-scrollbar-track { background: transparent; }
+.goods-list::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 4px; }
+.goods-list::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
+
+.goods-item {
+  display: flex; align-items: center; gap: 15px;
+  padding: 18px 0;
+  border-bottom: 1px dashed #e2e8f0;
+}
+.goods-item:last-child { border-bottom: none; padding-bottom: 0; }
+.goods-item:first-child { padding-top: 0; }
 .g-icon-box { font-size: 2.2rem; background: #f8fafc; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; border-radius: 16px; flex-shrink: 0; border: 1px solid #f1f5f9;}
 .g-content { flex: 1; min-width: 0;}
 .g-content h5 { margin: 0 0 8px 0; font-size: 1.1rem; color: #1e293b; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .g-tags { display: flex; gap: 8px; align-items: center;}
 .g-cat { font-size: 0.75rem; background: #f1f5f9; color: #64748b; padding: 4px 8px; border-radius: 6px; font-weight: bold;}
-.g-stock { font-size: 0.75rem; color: #ea580c; font-weight: 900;}
+.g-stock { font-size: 0.75rem; font-weight: 900; transition: color 0.3s;}
+.g-stock.stock-low  { color: #ea580c; }
+.g-stock.stock-ok   { color: #94a3b8; }
+.stock-warn-icon { margin-right: 2px; }
 
-.pill-btn.reserve { background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 100px; font-weight: 900; font-size: 0.95rem; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); white-space: nowrap; flex-shrink: 0;}
-.pill-btn.reserve:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(16, 185, 129, 0.3); }
-.pill-btn.reserve:active:not(:disabled) { transform: scale(0.95); }
-.pill-btn.reserve:disabled { background: #e2e8f0; color: #94a3b8; cursor: not-allowed; box-shadow: none; }
+.pill-btn.reserve {
+  background: transparent; color: #10b981;
+  border: 1.5px solid #10b981;
+  padding: 10px 20px; border-radius: 100px;
+  font-weight: 900; font-size: 0.95rem; cursor: pointer;
+  transition: 0.25s; white-space: nowrap; flex-shrink: 0;
+}
+.pill-btn.reserve:hover:not(:disabled) {
+  background: #ecfdf5; color: #059669; border-color: #059669;
+  transform: translateY(-1px);
+}
+.pill-btn.reserve:active:not(:disabled) { transform: scale(0.96); }
+.pill-btn.reserve:disabled {
+  background: transparent; color: #94a3b8; border-color: #e2e8f0;
+  cursor: not-allowed;
+}
 
 .no-goods-tip { text-align: center; color: #94a3b8; padding: 10px 0; font-size: 0.9rem; font-weight: bold; }
 
