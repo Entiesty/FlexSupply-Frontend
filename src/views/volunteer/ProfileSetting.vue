@@ -40,10 +40,7 @@
             <div class="data-card"><div class="card-icon">📦</div><div class="card-info"><p>护航履约单数</p><h3>{{ stats.totalDeliveredOrders || 0 }} <span>单</span></h3></div></div>
             <div class="data-card score-card"><div class="card-icon">🏆</div><div class="card-info"><p>城市信誉星级评分</p><h3>{{ stats.creditScore || 100 }} <span>分</span></h3></div></div>
           </div>
-          <div v-else-if="stats.role === 2" class="dashboard-cards merchant-board">
-            <div class="data-card"><div class="card-icon">🏅</div><div class="card-info"><p>CSR 社会责任荣誉</p><h3>{{ csrLevelName }}</h3></div></div>
-            <div class="data-card"><div class="card-icon">🏪</div><div class="card-info"><p>查看完整战报</p><h3 @click="$router.push('/merchant/csr')" style="cursor:pointer;text-decoration:underline;font-size:1.1rem;">CSR 战报 →</h3></div></div>
-          </div>
+          <!-- 商家无内嵌看板: 核心指标已迁移至 CSR 社会责任战报页 -->
           <div v-else-if="stats.role === 1" class="dashboard-cards recipient-board">
             <div class="data-card"><div class="card-icon">🛡️</div><div class="card-info"><p>专属人群关怀标签</p><h3>{{ formatUserTag(stats.userTag) }}</h3></div></div>
             <div class="data-card"><div class="card-icon">🤝</div><div class="card-info"><p>累计获得援助次数</p><h3>{{ stats.totalReceivedTimes || 0 }} <span>次</span></h3></div></div>
@@ -326,21 +323,6 @@ const handleSubmitAudit = async () => {
   }
 }
 
-const csrLevelName = computed(() => {
-  const map = { 0: '未评级', 1: '🥉 铜牌爱心企业', 2: '🥈 银牌爱心企业', 3: '🥇 金牌爱心企业' }
-  return map[stats.value.csrLevel] || '未评级'
-})
-const csrLevelSub = computed(() => {
-  const level = stats.value.csrLevel || 0
-  if (level === 3) return '最高荣誉'
-  if (level >= 1) return `距下一级还差${(level === 1 ? 400 : 1500) - (stats.value.totalDonations || 0)}件`
-  return '继续捐赠解锁'
-})
-const formatDonatedValue = computed(() => {
-  const val = parseFloat(stats.value.totalDonatedValue) || 0
-  return val >= 10000 ? (val / 10000).toFixed(1) + '万' : val.toFixed(0)
-})
-
 const unverifiedTip = computed(() => {
   const currentRole = stats.value?.role;
   if (currentRole === 1) return { title: "【求助与关怀档案】尚未激活", desc: "请向下滚动完善门牌号并上传身份证明，以便调度网络为您精准送货上门！" };
@@ -373,7 +355,7 @@ onMounted(() => { fetchAllData(); window.addEventListener('resize', () => { if(m
 .locked-dashboard p { margin: 0; font-size: 0.9rem; opacity: 0.8; }
 
 .profile-container { max-width: 900px; width: 100%; margin: 0 auto; padding-bottom: 50px; }
-.hero-section { position: relative; border-radius: 20px; padding: 24px 30px; color: #fff; overflow: hidden; margin-bottom: 24px; box-shadow: 0 8px 20px rgba(0,0,0,0.08); }
+.hero-section { position: relative; border-radius: 20px; padding: 20px 28px; color: #fff; overflow: hidden; margin-bottom: 28px; box-shadow: 0 6px 16px rgba(0,0,0,0.06); }
 .theme-volunteer { background: linear-gradient(135deg, #f97316, #ea580c); }
 .theme-merchant { background: linear-gradient(135deg, #10b981, #059669); }
 .theme-recipient { background: linear-gradient(135deg, #3b82f6, #2563eb); }
@@ -403,18 +385,19 @@ onMounted(() => { fetchAllData(); window.addEventListener('resize', () => { if(m
 .card-info h3 { margin: 0; font-size: 1.8rem; font-weight: 900; }
 .card-info h3 span { font-size: 1rem; opacity: 0.8; font-weight: normal; }
 
-.radar-section { background: #fff; border-radius: 28px; padding: 30px; margin-bottom: 30px; box-shadow: 0 15px 35px rgba(0,0,0,0.04); border: 1px solid #fff; }
+.radar-section { background: #fff; border-radius: 20px; padding: 26px 28px; margin-bottom: 22px; box-shadow: 0 4px 16px rgba(0,0,0,0.03); border: 1px solid #f1f5f9; }
 .radar-header h3 { margin: 0 0 5px 0; color: #1e293b; font-size: 1.4rem; font-weight: 900; }
 .radar-header p { margin: 0; color: #64748b; font-size: 0.95rem; }
 .radar-chart-box { width: 100%; height: 350px; margin-top: 10px; }
 
-.settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
+.settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
 @media (max-width: 768px) { .settings-grid { grid-template-columns: 1fr; } }
 
-.setting-card { background: #fff; border-radius: 24px; padding: 30px; box-shadow: 0 15px 35px rgba(0,0,0,0.04); border: 1px solid #fff; display: flex; flex-direction: column; }
-.card-header h3 { margin: 0 0 20px 0; color: #334155; font-size: 1.2rem; font-weight: 800; border-bottom: 2px dashed #f1f5f9; padding-bottom: 15px; }
+.setting-card { background: #fff; border-radius: 20px; padding: 26px 28px; box-shadow: 0 4px 16px rgba(0,0,0,0.03); border: 1px solid #f1f5f9; display: flex; flex-direction: column; }
+.card-header h3 { margin: 0 0 18px 0; color: #334155; font-size: 1.15rem; font-weight: 800; border-bottom: 2px dashed #e2e8f0; padding-bottom: 14px; }
 
-.info-row { margin-bottom: 20px; display: flex; flex-direction: column; gap: 8px; }
+.info-row { margin-bottom: 22px; display: flex; flex-direction: column; gap: 8px; }
+.info-row:last-child { margin-bottom: 0; }
 .info-row label { font-size: 0.85rem; color: #64748b; font-weight: bold; }
 
 .input-normal, .input-disabled { width: 100%; box-sizing: border-box; padding: 14px 18px; border-radius: 14px; border: 2px solid #e2e8f0; font-size: 1rem; transition: all 0.3s; outline: none; background: #f8fafc; color: #1e293b; }
@@ -427,7 +410,7 @@ onMounted(() => { fetchAllData(); window.addEventListener('resize', () => { if(m
 .warning-btn:hover { background: #ef4444; color: #fff; box-shadow: 0 10px 25px rgba(239, 68, 68, 0.25); border-color: transparent; }
 
 /* 资质照片与卡片 */
-.auth-card { border: 2px dashed #cbd5e1; background: #f8fafc; }
+.auth-card { border: 2px dashed #e2e8f0; background: #fafbfc; }
 .auth-status-box { display: flex; align-items: center; gap: 15px; padding: 18px; border-radius: 16px; margin-bottom: 25px; }
 .status-pending { background: #fff7ed; border: 1px solid #fdba74; }
 .status-pending .auth-icon { background: #ffedd5; text-shadow: 0 2px 4px rgba(249, 115, 22, 0.3); }
@@ -445,7 +428,7 @@ onMounted(() => { fetchAllData(); window.addEventListener('resize', () => { if(m
 .auth-btn:hover { box-shadow: 0 12px 25px rgba(249, 115, 22, 0.3); }
 .auth-btn:disabled { background: #cbd5e1; cursor: not-allowed; box-shadow: none; color: #fff; }
 
-.inner-divider { height: 1px; background: #e2e8f0; margin: 10px 0 25px 0; }
+.inner-divider { height: 1px; background: #e2e8f0; margin: 6px 0 22px 0; }
 .location-picker-box { display: flex; align-items: stretch; gap: 15px; margin-top: 5px; }
 .loc-display { flex: 1; background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 14px; padding: 12px 18px; display: flex; flex-direction: column; justify-content: center; transition: 0.3s;}
 .loc-display.has-val { background: #f0fdf4; border: 2px solid #86efac; border-style: solid;}
