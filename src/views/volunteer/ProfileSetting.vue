@@ -4,7 +4,7 @@
       <span class="pulse-dot"></span> 千人千面成就系统渲染中
     </div>
 
-    <div class="alert-box warning-status" v-if="userInfo && userInfo.isVerified !== 1 && userInfo.role !== 4">
+    <div class="alert-box warning-status" v-if="stats.isVerified !== 1 && stats.role !== 4">
       <span class="alert-icon">⚠️</span>
       您的{{ unverifiedTip.title }}。&nbsp;{{ unverifiedTip.desc }}
     </div>
@@ -224,7 +224,7 @@ const handleSelectPoi = (poi) => { if(poi&&poi.location){ updateMapByLocation(po
 const handleSearchAddress = () => { if(!searchKeyword.value.trim())return ElMessage.warning('请输入'); geocoderInstance.getLocation(searchKeyword.value, (s, r)=>{ if(s==='complete'&&r.info==='OK'&&r.geocodes.length>0){ const b=r.geocodes[0]; updateMapByLocation(b.location.getLng(),b.location.getLat(),b.formattedAddress); ElMessage.success('定位成功')} }) }
 const updateMapByLocation = (lng, lat, addr) => { tempLoc.lng=lng; tempLoc.lat=lat; tempLoc.address=addr; mapInstance.setZoomAndCenter(16, [lng,lat], false, 1000); if(markerInstance) markerInstance.setPosition([lng,lat]); else { markerInstance=new AMap.Marker({position:[lng,lat]}); mapInstance.add(markerInstance); } }
 const resolveAddressFromCoords = (lng, lat) => { window._AMapSecurityConfig = { securityJsCode: import.meta.env.VITE_AMAP_SECURITY_CODE }; AMapLoader.load({ key: import.meta.env.VITE_AMAP_KEY, version: "2.0", plugins: ['AMap.Geocoder'] }).then((AMap) => { new AMap.Geocoder({radius:1000,extensions:"all"}).getAddress([lng, lat], (s, r) => { profileForm.addressName = s==='complete'&&r.info==='OK' ? r.regeocode.formattedAddress : '已绑定卫星坐标' }) }) }
-const initMap = () => { window._AMapSecurityConfig = { securityJsCode: import.meta.env.VITE_AMAP_SECURITY_CODE }; AMapLoader.load({ key: import.meta.env.VITE_AMAP_KEY, version: "2.0", plugins: ['AMap.Geocoder','AMap.AutoComplete','AMap.Geolocation'] }).then((AMap) => { const hasSaved = tempLoc.lng&&tempLoc.lat; mapInstance = new AMap.Map("amap-container", {viewMode:"2D",zoom:15,center:hasSaved?[tempLoc.lng,tempLoc.lat]:[118.8334,24.9806]}); geocoderInstance = new AMap.Geocoder({radius:1000,extensions:"all"}); autoCompleteInstance = new AMap.AutoComplete({}); if(hasSaved){ markerInstance = new AMap.Marker({position:[tempLoc.lng,tempLoc.lat]}); mapInstance.add(markerInstance); } else { const geolocation = new AMap.Geolocation({enableHighAccuracy:true,timeout:5000,buttonPosition:'RB',buttonOffset:new AMap.Pixel(10,20),zoomToAccuracy:true}); mapInstance.addControl(geolocation); geolocation.getCurrentPosition((s,r)=>{ if(s==='complete'){ ElMessage.success('📍 自动吸附至当前位置'); geocoderInstance.getAddress([r.position.lng,r.position.lat], (gs,gr)=>{ updateMapByLocation(r.position.lng,r.position.lat, gs==='complete'?gr.regeocode.formattedAddress:'坐标'); }) } }); } mapInstance.on('click', (e)=>{ geocoderInstance.getAddress([e.lnglat.getLng(),e.lnglat.getLat()], (s,r)=>{ updateMapByLocation(e.lnglat.getLng(),e.lnglat.getLat(), s==='complete'?r.regeocode.formattedAddress:'未知区域'); }) }) }) }
+const initMap = () => { window._AMapSecurityConfig = { securityJsCode: import.meta.env.VITE_AMAP_SECURITY_CODE }; AMapLoader.load({ key: import.meta.env.VITE_AMAP_KEY, version: "2.0", plugins: ['AMap.Geocoder','AMap.AutoComplete','AMap.Geolocation'] }).then((AMap) => { const hasSaved = tempLoc.lng&&tempLoc.lat; mapInstance = new AMap.Map("amap-container", {viewMode:"2D",zoom:15,center:hasSaved?[tempLoc.lng,tempLoc.lat]:[118.084761,24.620538]}); geocoderInstance = new AMap.Geocoder({radius:1000,extensions:"all"}); autoCompleteInstance = new AMap.AutoComplete({}); if(hasSaved){ markerInstance = new AMap.Marker({position:[tempLoc.lng,tempLoc.lat]}); mapInstance.add(markerInstance); } else { const geolocation = new AMap.Geolocation({enableHighAccuracy:true,timeout:5000,buttonPosition:'RB',buttonOffset:new AMap.Pixel(10,20),zoomToAccuracy:true}); mapInstance.addControl(geolocation); geolocation.getCurrentPosition((s,r)=>{ if(s==='complete'){ ElMessage.success('📍 自动吸附至当前位置'); geocoderInstance.getAddress([r.position.lng,r.position.lat], (gs,gr)=>{ updateMapByLocation(r.position.lng,r.position.lat, gs==='complete'?gr.regeocode.formattedAddress:'坐标'); }) } }); } mapInstance.on('click', (e)=>{ geocoderInstance.getAddress([e.lnglat.getLng(),e.lnglat.getLat()], (s,r)=>{ updateMapByLocation(e.lnglat.getLng(),e.lnglat.getLat(), s==='complete'?r.regeocode.formattedAddress:'未知区域'); }) }) }) }
 const confirmLocation = () => { profileForm.currentLon=tempLoc.lng; profileForm.currentLat=tempLoc.lat; profileForm.addressName=tempLoc.address; mapVisible.value=false }
 
 // ================= 数据获取与通用方法 =================
@@ -250,15 +250,15 @@ const fetchAllData = async () => {
 
     if (profileForm.currentLon && profileForm.currentLat) { profileForm.addressName = '正在解析...'; resolveAddressFromCoords(profileForm.currentLon, profileForm.currentLat) }
     if (stats.value.role === 3 && stats.value.isVerified === 1) nextTick(() => initRadarChart())
-  } catch (e) { } finally { loading.value = false }
+  } catch (e) { ElMessage.error('数据加载失败，请刷新重试') } finally { loading.value = false }
 }
 
 const initRadarChart = () => { if (!radarChartRef.value) return; if (!myRadarChart) myRadarChart = echarts.init(radarChartRef.value); const credit=stats.value.creditScore||100; const orders=stats.value.totalDeliveredOrders||0; const mileage=parseFloat(stats.value.runningMileage||0); myRadarChart.setOption({ color: ['#f97316'], tooltip: {trigger:'item'}, radar: { indicator: [{name:'信誉可靠度',max:150}, {name:'运力活跃度',max:Math.max(orders+10,50)}, {name:'减脂贡献',max:Math.max(mileage+10,50)}, {name:'履约率',max:100}, {name:'高难工单',max:100}], name: {textStyle:{color:'#475569',fontWeight:'bold'}} }, series: [{ type: 'radar', data: [{ value: [credit,orders,mileage,Math.min(credit,100),Math.min(orders*5,95)], name: '综合评估', areaStyle: {color:'rgba(249, 115, 22, 0.4)'}, lineStyle: {width:2,color:'#ea580c'}, itemStyle: {color:'#ea580c'} }] }] }) }
 
 const triggerAvatarUpload = () => { if(avatarInput.value) avatarInput.value.click() }
-const handleAvatarChange = async(e) => { const f=e.target.files[0]; if(!f)return; loading.value=true; try{ const r=await uploadFile(f); await updateAvatar(r.data); stats.value.avatar=r.data; ElMessage.success('头像上传成功') }catch(err){}finally{loading.value=false;e.target.value=''} }
+const handleAvatarChange = async(e) => { const f=e.target.files[0]; if(!f)return; loading.value=true; try{ const r=await uploadFile(f); await updateAvatar(r.data); stats.value.avatar=r.data; ElMessage.success('头像上传成功') }catch(err){ ElMessage.error('头像上传失败') }finally{loading.value=false;e.target.value=''} }
 const triggerProofUpload = () => { if(stats.value.isVerified===1) return ElMessage.info('资质已通过，无需重复上传'); if(proofInput.value) proofInput.value.click() }
-const handleProofChange = async(e) => { const f=e.target.files[0]; if(!f)return; loading.value=true; try{ const r=await uploadFile(f); profileForm.identityProofUrl=r.data; ElMessage.success('凭证照片暂存成功！请点击下方按钮提交。') }catch(err){}finally{loading.value=false;e.target.value=''} }
+const handleProofChange = async(e) => { const f=e.target.files[0]; if(!f)return; loading.value=true; try{ const r=await uploadFile(f); profileForm.identityProofUrl=r.data; ElMessage.success('凭证照片暂存成功！请点击下方按钮提交。') }catch(err){ ElMessage.error('凭证上传失败') }finally{loading.value=false;e.target.value=''} }
 
 const handleUpdateProfile = async (isSubmitAudit = false) => {
   const payload = { username: profileForm.username }
@@ -316,14 +316,14 @@ const handleSubmitAudit = async () => {
 }
 
 const unverifiedTip = computed(() => {
-  const currentRole = userInfo.value?.role;
+  const currentRole = stats.value?.role;
   if (currentRole === 1) return { title: "【求助与关怀档案】尚未激活", desc: "请向下滚动完善门牌号并上传身份证明，以便调度网络为您精准送货上门！" };
   if (currentRole === 2) return { title: "【爱心商铺入驻资质】审核中", desc: "请补充商铺定位、主营类目与营业执照，解锁物资捐赠大厅权限！" };
   if (currentRole === 3) return { title: "【城市护航者接单权限】受限", desc: "请完善载具信息并上传身份凭证，解锁实时抢单与信誉系统！" };
   return { title: "【系统权限】受限", desc: "请向下滚动完善基础资料并上传资质凭证。" };
 })
 
-const handleUpdatePassword = async () => { if (!pwdForm.oldPassword || !pwdForm.newPassword) return ElMessage.warning('密码填写不完整'); if (pwdForm.newPassword !== pwdForm.confirmPassword) return ElMessage.warning('两次新密码不一致'); try { await updatePassword({ oldPassword: pwdForm.oldPassword, newPassword: pwdForm.newPassword }); ElMessage.success('密码修改成功！'); pwdForm.oldPassword = ''; pwdForm.newPassword = ''; pwdForm.confirmPassword = ''; } catch (e) { } }
+const handleUpdatePassword = async () => { if (!pwdForm.oldPassword || !pwdForm.newPassword) return ElMessage.warning('密码填写不完整'); if (pwdForm.newPassword !== pwdForm.confirmPassword) return ElMessage.warning('两次新密码不一致'); try { await updatePassword({ oldPassword: pwdForm.oldPassword, newPassword: pwdForm.newPassword }); ElMessage.success('密码修改成功！'); pwdForm.oldPassword = ''; pwdForm.newPassword = ''; pwdForm.confirmPassword = ''; } catch (e) { ElMessage.error('密码修改失败，请检查旧密码是否正确') } }
 
 onMounted(() => { fetchAllData(); window.addEventListener('resize', () => { if(myRadarChart) myRadarChart.resize() }) })
 </script>
@@ -389,7 +389,7 @@ onMounted(() => { fetchAllData(); window.addEventListener('resize', () => { if(m
 .info-row label { font-size: 0.85rem; color: #64748b; font-weight: bold; }
 
 .input-normal, .input-disabled { width: 100%; box-sizing: border-box; padding: 14px 18px; border-radius: 14px; border: 2px solid #e2e8f0; font-size: 1rem; transition: all 0.3s; outline: none; background: #f8fafc; color: #1e293b; }
-.input-normal:focus { background: #fff; border-color: #3b82f6; box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1); }
+.input-normal:focus { background: #fff; border-color: #f97316; box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.1); }
 .input-disabled { color: #94a3b8; cursor: not-allowed; opacity: 0.7; }
 
 .save-btn { margin-top: auto; width: 100%; padding: 16px; border: none; border-radius: 14px; background: #1e293b; color: white; font-weight: 900; font-size: 1.05rem; cursor: pointer; transition: all 0.3s; box-shadow: 0 8px 20px rgba(30, 41, 59, 0.2); }
@@ -408,12 +408,12 @@ onMounted(() => { fetchAllData(); window.addEventListener('resize', () => { if(m
 .status-pass h4 { color: #059669; }
 
 .proof-upload-area { border: 2px dashed #cbd5e1; border-radius: 16px; height: 160px; display: flex; align-items: center; justify-content: center; background: #fff; cursor: pointer; overflow: hidden; transition: 0.3s; position: relative; }
-.proof-upload-area:hover { border-color: #3b82f6; background: #eff6ff; }
+.proof-upload-area:hover { border-color: #f97316; background: #fff7ed; }
 .proof-img { width: 100%; height: 100%; object-fit: contain; background: #f1f5f9; }
 .upload-placeholder { display: flex; flex-direction: column; align-items: center; color: #94a3b8; font-weight: bold; }
 .upload-icon { font-size: 2.5rem; margin-bottom: 10px; opacity: 0.8; }
-.auth-btn { background: linear-gradient(135deg, #3b82f6, #2563eb); }
-.auth-btn:hover { box-shadow: 0 12px 25px rgba(59, 130, 246, 0.3); }
+.auth-btn { background: linear-gradient(135deg, #f97316, #ea580c); }
+.auth-btn:hover { box-shadow: 0 12px 25px rgba(249, 115, 22, 0.3); }
 .auth-btn:disabled { background: #cbd5e1; cursor: not-allowed; box-shadow: none; color: #fff; }
 
 .inner-divider { height: 1px; background: #e2e8f0; margin: 10px 0 25px 0; }
@@ -423,16 +423,16 @@ onMounted(() => { fetchAllData(); window.addEventListener('resize', () => { if(m
 .loc-address { font-size: 0.95rem; color: #64748b; font-weight: bold; }
 .loc-display.has-val .loc-address { color: #166534; font-size: 1rem;}
 .loc-coords { font-family: monospace; font-size: 0.8rem; color: #10b981; margin-top: 4px; font-weight: bold;}
-.pick-map-btn { background: #fff; border: 2px solid #3b82f6; color: #3b82f6; font-weight: 900; border-radius: 14px; padding: 0 20px; cursor: pointer; transition: 0.2s; white-space: nowrap; box-shadow: 0 4px 10px rgba(59,130,246,0.1); }
-.pick-map-btn:hover { background: #3b82f6; color: #fff; transform: translateY(-2px); box-shadow: 0 6px 15px rgba(59,130,246,0.25);}
+.pick-map-btn { background: #fff; border: 2px solid #f97316; color: #f97316; font-weight: 900; border-radius: 14px; padding: 0 20px; cursor: pointer; transition: 0.2s; white-space: nowrap; box-shadow: 0 4px 10px rgba(249,115,22,0.1); }
+.pick-map-btn:hover { background: #f97316; color: #fff; transform: translateY(-2px); box-shadow: 0 6px 15px rgba(249,115,22,0.25);}
 .map-search-bar { display: flex; gap: 10px; margin-bottom: 15px; }
 .map-search-input-wrap { flex: 1; }
 :deep(.map-search-input-wrap .el-input__wrapper) { border-radius: 10px; box-shadow: 0 0 0 2px #e2e8f0 inset; padding: 4px 15px; }
-:deep(.map-search-input-wrap .el-input__wrapper.is-focus) { box-shadow: 0 0 0 2px #3b82f6 inset !important; }
-.map-search-btn { padding: 0 20px; background: #3b82f6; color: #fff; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; transition: 0.2s;}
-.map-search-btn:hover { background: #2563eb; }
+:deep(.map-search-input-wrap .el-input__wrapper.is-focus) { box-shadow: 0 0 0 2px #f97316 inset !important; }
+.map-search-btn { padding: 0 20px; background: #f97316; color: #fff; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; transition: 0.2s;}
+.map-search-btn:hover { background: #ea580c; }
 .map-top-tip { background: #fff7ed; color: #ea580c; padding: 10px 15px; border-radius: 8px; font-size: 0.9rem; font-weight: bold; margin-bottom: 15px; }
-.selected-address-bar { background: #f1f5f9; padding: 12px 15px; border-radius: 8px; margin-bottom: 15px; color: #1e293b; font-size: 0.95rem; border-left: 4px solid #3b82f6;}
+.selected-address-bar { background: #f1f5f9; padding: 12px 15px; border-radius: 8px; margin-bottom: 15px; color: #1e293b; font-size: 0.95rem; border-left: 4px solid #f97316;}
 .amap-box { width: 100%; height: 380px; border-radius: 12px; overflow: hidden; border: 2px solid #e2e8f0; }
 .custom-poi-item { line-height: 1.4; padding: 5px 0; }
 .poi-name { font-weight: bold; color: #1e293b; font-size: 0.95rem; text-overflow: ellipsis; overflow: hidden; }

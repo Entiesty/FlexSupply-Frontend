@@ -286,6 +286,7 @@ const handleSendCode = async () => {
 }
 
 const handleSubmit = async () => {
+  if (loading.value) return
   if (isRegister.value && !form.agree) return ElMessage.warning('请先勾选同意服务协议')
   if (!phoneRegex.test(form.phone)) return ElMessage.warning('手机号码格式不正确')
   if (!form.password) return ElMessage.warning('请输入密码')
