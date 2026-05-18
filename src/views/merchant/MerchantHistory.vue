@@ -88,7 +88,7 @@
       </div>
     </main>
 
-    <el-dialog v-model="traceVisible" title="📦 捐赠物资履约追踪" width="90%" style="max-width: 650px; border-radius: 24px;" custom-class="trace-dialog">
+    <el-dialog v-model="traceVisible" title="📦 捐赠物资履约追踪" width="90%" style="max-width: 650px;" custom-class="trace-dialog" append-to-body>
       <div class="trace-container" v-if="currentTraceItem">
 
         <div class="trace-summary">
@@ -474,5 +474,19 @@ onMounted(async () => {
   .toolbar-select { width: 100%; }
   .card-list { grid-template-columns: 1fr; }
   .dist-item { flex-direction: column; align-items: stretch; }
+}
+</style>
+
+<style>
+.el-overlay:has(~ .trace-dialog) {
+  background-color: rgba(30, 41, 59, 0.4) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+}
+
+.trace-dialog {
+  border-radius: 20px !important;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.12) !important;
+  border: none !important;
 }
 </style>

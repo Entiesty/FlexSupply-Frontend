@@ -399,10 +399,27 @@ const drawRoute = async (data, targetPos, isDonation) => {
   const dropoffPos = isDonation ? stationLoc : targetPos
   const ptC = new AMap.LngLat(dropoffPos[0], dropoffPos[1]) // C: 送达点
 
-  // 2. 绘制高质感的点位 Marker
-  new AMap.Marker({ map: map.value, position: ptA, content: '<div class="pb-mini-marker" style="background:#3b82f6; width:18px; height:18px; border:3px solid #fff; box-shadow:0 0 15px rgba(59,130,246,0.6)"></div>', offset: new AMap.Pixel(-9, -9), title: '骑士当前位置', zIndex: 110 })
-  new AMap.Marker({ map: map.value, position: ptB, content: '<div class="don-pulse-marker" style="background:#f97316;"></div>', offset: new AMap.Pixel(-8, -8), title: '取货点', zIndex: 100 })
-  new AMap.Marker({ map: map.value, position: ptC, content: '<div class="station-mini-marker">🏥</div>', offset: new AMap.Pixel(-14, -14), title: '送达点', zIndex: 100 })
+  // 2. 绘制带文字标签的高区分度 Marker（骑手一眼可辨）
+  const pickupName = isDonation
+    ? (pendingOrder.value.sourceName || '爱心商家')
+    : (data?.station?.stationName || '物资站')
+  const dropoffName = isDonation
+    ? (data?.station?.stationName || '社区驿站')
+    : (pendingOrder.value.targetName || '求助市民')
+
+  const pillStyle = 'color:#fff;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:900;white-space:nowrap;border:2px solid #fff;'
+
+  new AMap.Marker({ map: map.value, position: ptA,
+    content: `<div style="background:#1e40af;${pillStyle}box-shadow:0 3px 12px rgba(30,64,175,0.45);">🚴 我</div>`,
+    offset: new AMap.Pixel(-30, -16), zIndex: 110 })
+
+  new AMap.Marker({ map: map.value, position: ptB,
+    content: `<div style="background:#f97316;${pillStyle}box-shadow:0 3px 12px rgba(249,115,22,0.45);">📦 取: ${pickupName}</div>`,
+    offset: new AMap.Pixel(-60, -16), zIndex: 100 })
+
+  new AMap.Marker({ map: map.value, position: ptC,
+    content: `<div style="background:#10b981;${pillStyle}box-shadow:0 3px 12px rgba(16,185,129,0.45);">🚩 送: ${dropoffName}</div>`,
+    offset: new AMap.Pixel(-60, -16), zIndex: 100 })
 
   // 3. 初始化极其纯净的骑行引擎 (不绑定 map，完全手动接管渲染)
   const riding = new AMap.Riding({ policy: 0 })

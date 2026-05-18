@@ -57,7 +57,7 @@
             </el-form-item>
 
             <el-form-item label="物资名称" prop="goodsName" class="no-margin-bottom">
-              <el-input v-model="form.goodsName" size="large" placeholder="如：东北五常大米 5kg装" maxlength="50" show-word-limit />
+              <el-input v-model="form.goodsName" size="large" :placeholder="goodsNamePlaceholder" maxlength="50" show-word-limit />
             </el-form-item>
           </div>
 
@@ -79,14 +79,23 @@
                 </el-form-item>
               </el-col>
               <el-col :span="8">
-                <el-form-item label="市场估值(元)">
+                <el-form-item>
+                  <template #label>
+                    <span>批次总估值 (元)
+                      <span v-if="estimatedValuePerUnit !== null" style="color:#f97316;font-weight:900;margin-left:4px;">
+                        ≈ ¥{{ estimatedValuePerUnit }}/{{ form.unit }}
+                      </span>
+                    </span>
+                  </template>
                   <el-input-number v-model="form.estimatedValue" :min="0" :precision="2" controls-position="right"
-                    style="width:100%;" placeholder="生成专属CSR社会责任战报" />
+                    style="width:100%;" placeholder="整批物资的市场总价" />
                 </el-form-item>
               </el-col>
             </el-row>
 
-            <div class="valuation-hint">💡 累计捐赠金额可作为企业所得税税前扣除申报佐证</div>
+            <div class="valuation-hint" v-if="form.estimatedValue > 0 && form.stock > 0">
+              💡 本批 {{ form.stock }} {{ form.unit }} × 约 ¥{{ estimatedValuePerUnit }}/{{ form.unit }} = 总估值 ¥{{ form.estimatedValue }}
+            </div>
 
             <el-row :gutter="16">
               <el-col :span="16">
@@ -110,25 +119,13 @@
           <div class="form-card">
             <div class="card-title">⚙️ 调度配置</div>
 
-            <el-form-item label="物理形态 (影响运力匹配与超载校验)">
-              <el-row :gutter="20">
-                <el-col :span="12">
-                  <div class="radio-label">📦 体积等级</div>
-                  <el-radio-group v-model="form.volumeLevel">
-                    <el-radio-button :value="1">🛍️ 手提袋</el-radio-button>
-                    <el-radio-button :value="2">🎒 外卖箱</el-radio-button>
-                    <el-radio-button :value="3">🚙 后备箱</el-radio-button>
-                  </el-radio-group>
-                </el-col>
-                <el-col :span="12">
-                  <div class="radio-label">⚖️ 重量等级</div>
-                  <el-radio-group v-model="form.weightLevel">
-                    <el-radio-button :value="1">🪶 轻便 &lt;5kg</el-radio-button>
-                    <el-radio-button :value="2">🧱 偏重 5-15kg</el-radio-button>
-                    <el-radio-button :value="3">🏋️ 极重 &gt;15kg</el-radio-button>
-                  </el-radio-group>
-                </el-col>
-              </el-row>
+            <el-form-item label="运力需求 (决定匹配骑手类型与配送工具)">
+              <div class="radio-label">根据整批物资的重量选择，系统将据此匹配合适配送运力</div>
+              <el-radio-group v-model="form.deliveryTier">
+                <el-radio-button :value="1">🛍️ 轻量 &lt;5kg — 手提/步行配送</el-radio-button>
+                <el-radio-button :value="2">🛵 标准 5-20kg — 电动车外卖箱取件</el-radio-button>
+                <el-radio-button :value="3">🚗 重载 &gt;20kg — 汽车上门装运</el-radio-button>
+              </el-radio-group>
             </el-form-item>
 
             <template v-if="sysMode !== 'EMERGENCY'">
@@ -207,8 +204,7 @@ const form = reactive({
   unit: '件',
   expirationDate: '',
   currentStationId: null,
-  volumeLevel: 1,
-  weightLevel: 1,
+  deliveryTier: 1,
   goodsImageUrl: '',
   estimatedValue: 0
 })
@@ -259,6 +255,38 @@ const isFormValid = computed(() => {
   if (!form.goodsName || !form.category || !form.stock || !form.expirationDate || !form.goodsImageUrl) return false
   if (sysMode.value !== 'EMERGENCY' && !form.currentStationId) return false
   return true
+})
+
+const estimatedValuePerUnit = computed(() => {
+  if (!form.stock || !form.estimatedValue || form.stock <= 0) return null
+  return (form.estimatedValue / form.stock).toFixed(2)
+})
+
+const goodsNamePlaceholder = computed(() => {
+  const map = {
+    '米面粮油': '如：品牌 + 品名 + 重量，金龙鱼大米 5kg',
+    '方便速食': '如：品牌 + 品名 + 规格，康师傅红烧牛肉面 箱装',
+    '烘焙糕点': '如：品牌 + 品名 + 规格，达利园软面包 1kg',
+    '生鲜果蔬': '如：品名 + 规格，烟台红富士苹果 5kg',
+    '冷冻食品': '如：品牌 + 品名 + 规格，思念水饺 500g',
+    '乳制品': '如：品牌 + 品名 + 规格，伊利纯牛奶 250ml×12',
+    '饮用水': '如：品牌 + 品名 + 规格，农夫山泉 550ml×24',
+    '热食盒饭': '如：品名 + 份数，红烧牛肉饭 50份',
+    '卫生护理': '如：品牌 + 品名 + 规格，舒肤佳沐浴露 500ml',
+    '防寒保暖': '如：品牌 + 品名 + 规格，南极人冬被 2m×1.8m',
+    '寝具家纺': '如：品牌 + 品名 + 规格，水星家纺枕头 一对装',
+    '洗漱用品': '如：品牌 + 品名 + 规格，佳洁士牙膏 180g',
+    '纸品耗材': '如：品牌 + 品名 + 数量，维达抽纸 3层×6包',
+    '常备药品': '如：品牌 + 品名 + 规格，泰诺感冒片 12片/盒',
+    '外用急救': '如：品牌 + 品名 + 规格，云南白药创可贴 100片',
+    '医疗器械': '如：品名 + 规格，一次性医用口罩 50只/盒',
+    '营养补品': '如：品牌 + 品名 + 规格，汤臣倍健维生素C 60片',
+    '应急食品': '如：品名 + 规格，压缩饼干 500g×10',
+    '应急照明': '如：品名 + 场景，强光手电筒 + 电池套装',
+    '防护装备': '如：品名 + 规格，救灾应急帐篷 3m×4m',
+    '保暖物资': '如：品名 + 规格，军用棉大衣 均码'
+  }
+  return map[form.category] || '如：品牌 + 品名 + 规格/数量'
 })
 
 const isColdChainNeeded = computed(() =>
@@ -339,8 +367,8 @@ const handleDonate = async () => {
       stock: form.stock,
       unit: form.unit,
       expirationDate: expDate,
-      volumeLevel: form.volumeLevel,
-      weightLevel: form.weightLevel,
+      volumeLevel: form.deliveryTier,
+      weightLevel: form.deliveryTier,
       goodsImageUrl: form.goodsImageUrl,
       estimatedValue: form.estimatedValue,
       currentStationId: sysMode.value === 'EMERGENCY' ? null : form.currentStationId,
@@ -349,7 +377,7 @@ const handleDonate = async () => {
 
     ElNotification.success({ title: '✅ 发布成功', message: '已同步至调度大盘，运力测算与匹配中...' })
     form.goodsName = ''; form.stock = 1; form.category = ''; form.expirationDate = ''
-    form.currentStationId = null; form.volumeLevel = 1; form.weightLevel = 1; form.goodsImageUrl = ''; form.estimatedValue = 0
+    form.currentStationId = null; form.deliveryTier = 1; form.goodsImageUrl = ''; form.estimatedValue = 0
     sysMode.value = 'NORMAL'; targetOrderId.value = null; activeTargetCategory.value = ''
   } catch (e) { } finally { submitting.value = false }
 }
