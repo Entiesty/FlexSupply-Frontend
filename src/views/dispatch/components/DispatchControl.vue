@@ -59,10 +59,10 @@
 
           <div class="res-stats">
             <div class="stat-item">
-              🚴 骑行距离 <strong>{{ result?.distance ? (result.distance / 1000).toFixed(2) : '1.50' }}</strong> km
+              🚴 骑行距离 <strong>{{ totalDistance }}</strong> km
             </div>
             <div class="stat-item">
-              ⏱️ 预计耗时 <strong>{{ result?.duration ? Math.ceil(result.duration / 60) : 10 }}</strong> 分钟
+              ⏱️ 预计耗时 <strong>{{ totalDuration }}</strong> 分钟
             </div>
 
             <div class="stat-item goods-highlight">
@@ -98,6 +98,8 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+
 const props = defineProps({
   userRole: Number,
   pendingOrder: Object,
@@ -111,6 +113,20 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['dispatch', 'grab', 'finish', 'notify-pickup', 'switch-pickup'])
+
+const totalDistance = computed(() => {
+  const r = props.result
+  if (!r) return '1.50'
+  const d = (r.distance || 0) + (r.riderDistance || 0)
+  return d > 0 ? (d / 1000).toFixed(2) : '1.50'
+})
+
+const totalDuration = computed(() => {
+  const r = props.result
+  if (!r) return 10
+  const d = (r.duration || 0) + (r.riderDuration || 0)
+  return d > 0 ? Math.ceil(d / 60) : 10
+})
 
 const emitGrabBatch = () => {
   const batchIds = [props.pendingOrder.orderId]
