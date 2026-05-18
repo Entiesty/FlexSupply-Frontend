@@ -108,7 +108,8 @@
                 <el-form-item v-if="form.category" label="快捷设置" class="no-margin-bottom">
                   <div class="quick-date-row">
                     <el-button v-for="opt in quickDateOptions" :key="opt.label" size="small"
-                      :disabled="opt.disabled" @click="applyQuickDate(opt)" round>{{ opt.label }}</el-button>
+                      :type="activeQuickDate === opt.label ? 'primary' : 'default'"
+                      @click="applyQuickDate(opt)" round>{{ opt.label }}</el-button>
                   </div>
                 </el-form-item>
               </el-col>
@@ -339,6 +340,9 @@ const availableStations = computed(() =>
   isColdChainNeeded.value ? stations.value.filter(s => s.hasFreezer === 1 || s.hasFreezer === true) : stations.value
 )
 
+const activeQuickDate = ref(null)
+watch(() => form.category, () => { activeQuickDate.value = null })
+
 watch(availableStations, (newSts) => {
   if (form.currentStationId && !newSts.find(s => s.stationId === form.currentStationId)) {
     form.currentStationId = null
@@ -346,25 +350,48 @@ watch(availableStations, (newSts) => {
   }
 })
 
-// 保质期快捷 — 适配新分类
+// 保质期智能推荐矩阵
 const quickDateOptions = computed(() => {
   const cat = form.category
   if (!cat) return []
-  if (['热食盒饭'].includes(cat)) return [{ label: '4小时内', hours: 4 }, { label: '今晚前', hours: 'tonight' }]
-  if (['生鲜果蔬', '冷冻食品', '烘焙糕点', '乳制品'].includes(cat)) return [{ label: '剩1天', days: 1 }, { label: '剩3天', days: 3 }, { label: '剩1周', days: 7 }]
-  if (['米面粮油', '方便速食', '饮用水', '常备药品', '营养补品', '应急食品'].includes(cat)) return [{ label: '剩1月', months: 1 }, { label: '半年', months: 6 }, { label: '1年+', years: 1 }]
-  return [{ label: '1年有效', years: 1 }, { label: '长期', years: 10 }]
+  // 极易腐
+  if (['热食盒饭'].includes(cat))
+    return [{ label: '4小时后', hours: 4 }, { label: '今日24点', hours: 'tonight' }]
+  // 短保生鲜
+  if (['生鲜果蔬', '烘焙糕点', '冷冻食品', '乳制品'].includes(cat))
+    return [{ label: '明日24点', days: 1, endOfDay: true }, { label: '3天后', days: 3 }, { label: '1周后', days: 7 }]
+  // 长保食品与药品
+  if (['米面粮油', '方便速食', '饮用水', '常备药品', '营养补品', '应急食品'].includes(cat))
+    return [{ label: '半年后', months: 6 }, { label: '1年后', years: 1 }]
+  // 耐用物资：无保质期
+  return [{ label: '长期有效 (无保质期)', isPermanent: true }]
 })
 
+// 时间计算引擎
 const applyQuickDate = (opt) => {
+  activeQuickDate.value = opt.label
+
+  if (opt.isPermanent) {
+    form.expirationDate = '2099-12-31 23:59:59'
+    return
+  }
+
   const d = new Date()
-  if (opt.hours === 'tonight') d.setHours(23, 59, 59)
-  else if (opt.hours) d.setHours(d.getHours() + opt.hours)
-  else if (opt.days) d.setDate(d.getDate() + opt.days)
-  else if (opt.months) d.setMonth(d.getMonth() + opt.months)
-  else if (opt.years) d.setFullYear(d.getFullYear() + opt.years)
-  const tz = d.getTimezoneOffset() * 60000
-  form.expirationDate = new Date(d - tz).toISOString().slice(0, 19).replace('T', ' ')
+  if (opt.hours === 'tonight') {
+    d.setHours(23, 59, 59, 0)
+  } else if (opt.hours) {
+    d.setHours(d.getHours() + opt.hours)
+  } else if (opt.days) {
+    d.setDate(d.getDate() + opt.days)
+    if (opt.endOfDay) d.setHours(23, 59, 59, 0)
+  } else if (opt.months) {
+    d.setMonth(d.getMonth() + opt.months)
+  } else if (opt.years) {
+    d.setFullYear(d.getFullYear() + opt.years)
+  }
+
+  const pad = (n) => String(n).padStart(2, '0')
+  form.expirationDate = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
 const triggerUpload = () => fileInput.value?.click()
@@ -511,33 +538,60 @@ onUnmounted(() => { if (pollTimer) { clearInterval(pollTimer); pollTimer = null 
   font-size: 0.82rem; font-weight: 900; color: #64748b;
   margin-bottom: 10px; display: block;
 }
-.spec-cards { display: flex; gap: 10px; }
+
+/* Step 1: 增加卡片间距 */
+.spec-cards { display: flex; gap: 16px; }
+
+/* Step 1+2: 宽裕内边距 + 平滑过渡 */
 .spec-card {
   flex: 1; position: relative;
-  display: flex; align-items: center; gap: 12px;
-  padding: 14px 16px; border-radius: 14px;
+  display: flex; align-items: center; gap: 14px;
+  padding: 16px 18px; border-radius: 14px;
   background: #f8fafc; border: 1.5px solid #e2e8f0;
-  cursor: pointer; transition: all 0.2s;
+  cursor: pointer;
+  transition: all 0.3s ease;
 }
 .spec-card:hover { border-color: #fdba74; background: #fff; }
+
+/* Step 3: 选中状态 — 微光 + 上浮 */
 .spec-card.active {
-  border-color: #f97316; background: #fff7ed;
-  box-shadow: 0 4px 12px rgba(249,115,22,0.12);
+  border-color: #f97316; background: #fffcf9;
+  box-shadow: 0 8px 24px rgba(249, 115, 22, 0.12);
+  transform: translateY(-2px);
 }
-.spec-icon { font-size: 1.5rem; flex-shrink: 0; }
-.spec-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+
+/* Step 1: 副标题加大字宽、加行高 */
+.spec-desc { font-size: 0.78rem; color: #94a3b8; font-weight: 500; line-height: 1.4; }
+.spec-card.active .spec-desc { color: #c2410c; }
+
+/* Step 2: 图标弹性过渡 */
+.spec-icon {
+  font-size: 1.5rem; flex-shrink: 0;
+  transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.spec-card:hover .spec-icon,
+.spec-card.active .spec-icon { transform: scale(1.15); }
+
+.spec-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .spec-title { font-size: 0.9rem; font-weight: 900; color: #1e293b; }
 .spec-card.active .spec-title { color: #ea580c; }
-.spec-desc { font-size: 0.72rem; color: #94a3b8; font-weight: 500; }
-.spec-card.active .spec-desc { color: #c2410c; }
+
+/* Step 4: 水滴弹出角标 */
 .spec-check {
-  position: absolute; top: -6px; right: -6px;
-  width: 22px; height: 22px; border-radius: 50%;
-  background: #f97316; color: #fff;
-  font-size: 0.65rem; font-weight: 900;
+  position: absolute; top: -8px; right: -8px;
+  width: 24px; height: 24px; border-radius: 50%;
+  background: linear-gradient(135deg, #f97316, #ea580c);
+  color: #fff; font-size: 0.7rem; font-weight: 900; line-height: 1;
   display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 2px 8px rgba(249,115,22,0.3);
+  box-shadow: 0 3px 10px rgba(249, 115, 22, 0.35);
+  animation: badge-pop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
+@keyframes badge-pop {
+  0%   { transform: scale(0); }
+  60%  { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
 .spec-footer-hint {
   margin-top: 20px; font-size: 0.78rem; color: #94a3b8;
   font-weight: 500; text-align: center;
@@ -557,10 +611,4 @@ onUnmounted(() => { if (pollTimer) { clearInterval(pollTimer); pollTimer = null 
 :deep(.el-checkbox__input.is-checked .el-checkbox__inner) { background-color: #f97316; border-color: #f97316; }
 :deep(.el-checkbox__input.is-checked + .el-checkbox__label) { color: #f97316; }
 :deep(.el-date-picker) { --el-color-primary: #f97316; }
-
-@media screen and (max-width: 768px) {
-  .main-content { padding: 12px; }
-  .form-card { padding: 20px; }
-  .spec-cards { flex-direction: column; }
-}
 </style>
