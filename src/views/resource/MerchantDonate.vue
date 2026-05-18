@@ -115,18 +115,47 @@
             </el-row>
           </div>
 
-          <!-- ====== 区块三：调度配置 ====== -->
+          <!-- ====== 区块三：双维物理规格 ====== -->
           <div class="form-card">
-            <div class="card-title">⚙️ 调度配置</div>
+            <div class="card-title">📦 物理规格与运力调度</div>
 
-            <el-form-item label="运力需求 (决定匹配骑手类型与配送工具)">
-              <div class="radio-label">根据整批物资的重量选择，系统将据此匹配合适配送运力</div>
-              <el-radio-group v-model="form.deliveryTier">
-                <el-radio-button :value="1">🛍️ 轻量 &lt;5kg — 手提/步行配送</el-radio-button>
-                <el-radio-button :value="2">🛵 标准 5-20kg — 电动车外卖箱取件</el-radio-button>
-                <el-radio-button :value="3">🚗 重载 &gt;20kg — 汽车上门装运</el-radio-button>
-              </el-radio-group>
-            </el-form-item>
+            <!-- 重量维度 -->
+            <div class="spec-group">
+              <div class="spec-group-label">⚖️ 物资重量评估</div>
+              <div class="spec-cards">
+                <div v-for="(opt, idx) in weightOptions" :key="'w'+idx"
+                  class="spec-card" :class="{ active: form.weightLevel === opt.value }"
+                  @click="form.weightLevel = opt.value">
+                  <span class="spec-icon">{{ opt.icon }}</span>
+                  <div class="spec-body">
+                    <span class="spec-title">{{ opt.title }}</span>
+                    <span class="spec-desc">{{ opt.desc }}</span>
+                  </div>
+                  <span v-if="form.weightLevel === opt.value" class="spec-check">✓</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 体积维度 -->
+            <div class="spec-group">
+              <div class="spec-group-label">📐 空间体积评估</div>
+              <div class="spec-cards">
+                <div v-for="(opt, idx) in volumeOptions" :key="'v'+idx"
+                  class="spec-card" :class="{ active: form.volumeLevel === opt.value }"
+                  @click="form.volumeLevel = opt.value">
+                  <span class="spec-icon">{{ opt.icon }}</span>
+                  <div class="spec-body">
+                    <span class="spec-title">{{ opt.title }}</span>
+                    <span class="spec-desc">{{ opt.desc }}</span>
+                  </div>
+                  <span v-if="form.volumeLevel === opt.value" class="spec-check">✓</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="spec-footer-hint">
+              💡 精准的物理规格评估，有助于系统算法为您秒级匹配最优运力
+            </div>
 
             <template v-if="sysMode !== 'EMERGENCY'">
               <el-form-item label="目标履约驿站" prop="currentStationId" class="no-margin-bottom">
@@ -204,12 +233,25 @@ const form = reactive({
   unit: '件',
   expirationDate: '',
   currentStationId: null,
-  deliveryTier: 1,
+  weightLevel: 1,
+  volumeLevel: 1,
   goodsImageUrl: '',
   estimatedValue: 0
 })
 
 const emergencyDialog = reactive({ visible: false, data: null })
+
+const weightOptions = [
+  { value: 1, icon: '🛍️', title: '轻量 <5kg', desc: '适合手提 / 步行配送' },
+  { value: 2, icon: '🛵', title: '标准 5–20kg', desc: '单人搬运 / 电动车取件' },
+  { value: 3, icon: '🚗', title: '重载 >20kg', desc: '需推车或多人协助搬运' }
+]
+
+const volumeOptions = [
+  { value: 1, icon: '👜', title: '小件', desc: '手提袋 / 塑料袋可装' },
+  { value: 2, icon: '📦', title: '中件', desc: '外卖保温箱可容纳' },
+  { value: 3, icon: '🚛', title: '大件', desc: '需汽车后备箱或货厢装运' }
+]
 
 const rules = {
   goodsName: [{ required: true, message: '请输入物资名称', trigger: 'blur' }],
@@ -367,8 +409,8 @@ const handleDonate = async () => {
       stock: form.stock,
       unit: form.unit,
       expirationDate: expDate,
-      volumeLevel: form.deliveryTier,
-      weightLevel: form.deliveryTier,
+      volumeLevel: form.volumeLevel,
+      weightLevel: form.weightLevel,
       goodsImageUrl: form.goodsImageUrl,
       estimatedValue: form.estimatedValue,
       currentStationId: sysMode.value === 'EMERGENCY' ? null : form.currentStationId,
@@ -377,7 +419,7 @@ const handleDonate = async () => {
 
     ElNotification.success({ title: '✅ 发布成功', message: '已同步至调度大盘，运力测算与匹配中...' })
     form.goodsName = ''; form.stock = 1; form.category = ''; form.expirationDate = ''
-    form.currentStationId = null; form.deliveryTier = 1; form.goodsImageUrl = ''; form.estimatedValue = 0
+    form.currentStationId = null; form.weightLevel = 1; form.volumeLevel = 1; form.goodsImageUrl = ''; form.estimatedValue = 0
     sysMode.value = 'NORMAL'; targetOrderId.value = null; activeTargetCategory.value = ''
   } catch (e) { } finally { submitting.value = false }
 }
@@ -462,8 +504,44 @@ onUnmounted(() => { if (pollTimer) { clearInterval(pollTimer); pollTimer = null 
 /* ===== 快捷日期 ===== */
 .quick-date-row { display: flex; flex-wrap: wrap; gap: 6px; }
 
-/* ===== 物理形态 radio ===== */
-.radio-label { font-size: 0.8rem; color: #94a3b8; font-weight: bold; margin-bottom: 8px; }
+/* ===== 双维规格选择卡片 ===== */
+.spec-group { margin-bottom: 20px; }
+.spec-group:last-of-type { margin-bottom: 0; }
+.spec-group-label {
+  font-size: 0.82rem; font-weight: 900; color: #64748b;
+  margin-bottom: 10px; display: block;
+}
+.spec-cards { display: flex; gap: 10px; }
+.spec-card {
+  flex: 1; position: relative;
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px; border-radius: 14px;
+  background: #f8fafc; border: 1.5px solid #e2e8f0;
+  cursor: pointer; transition: all 0.2s;
+}
+.spec-card:hover { border-color: #fdba74; background: #fff; }
+.spec-card.active {
+  border-color: #f97316; background: #fff7ed;
+  box-shadow: 0 4px 12px rgba(249,115,22,0.12);
+}
+.spec-icon { font-size: 1.5rem; flex-shrink: 0; }
+.spec-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.spec-title { font-size: 0.9rem; font-weight: 900; color: #1e293b; }
+.spec-card.active .spec-title { color: #ea580c; }
+.spec-desc { font-size: 0.72rem; color: #94a3b8; font-weight: 500; }
+.spec-card.active .spec-desc { color: #c2410c; }
+.spec-check {
+  position: absolute; top: -6px; right: -6px;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: #f97316; color: #fff;
+  font-size: 0.65rem; font-weight: 900;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 8px rgba(249,115,22,0.3);
+}
+.spec-footer-hint {
+  margin-top: 20px; font-size: 0.78rem; color: #94a3b8;
+  font-weight: 500; text-align: center;
+}
 
 /* ===== 内联 alert ===== */
 .inline-alert { margin-top: 12px; }
@@ -473,10 +551,6 @@ onUnmounted(() => { if (pollTimer) { clearInterval(pollTimer); pollTimer = null 
 .submit-btn-cta:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 12px 30px rgba(249, 115, 22, 0.4); }
 
 /* ===== 全局覆盖 Element Plus 蓝色 → 橙色 ===== */
-:deep(.el-radio-group) { width: 100%; display: flex; }
-:deep(.el-radio-button) { flex: 1; }
-:deep(.el-radio-button__inner) { width: 100%; text-align: center; font-weight: bold; font-size: 0.85rem; }
-:deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { background-color: #f97316; border-color: #ea580c; box-shadow: none; }
 :deep(.el-input-number__increase:hover), :deep(.el-input-number__decrease:hover) { color: #f97316; }
 :deep(.el-select .el-input.is-focus .el-input__wrapper) { box-shadow: 0 0 0 1px #f97316 inset; }
 :deep(.el-input__wrapper.is-focus) { box-shadow: 0 0 0 1px #f97316 inset; }
@@ -487,5 +561,6 @@ onUnmounted(() => { if (pollTimer) { clearInterval(pollTimer); pollTimer = null 
 @media screen and (max-width: 768px) {
   .main-content { padding: 12px; }
   .form-card { padding: 20px; }
+  .spec-cards { flex-direction: column; }
 }
 </style>

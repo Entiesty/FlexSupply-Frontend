@@ -71,25 +71,15 @@
             </div>
           </div>
 
-          <div v-if="piggybackOrders && piggybackOrders.length > 0 && userRole === 3" class="piggyback-pool">
-            <div class="pb-header">📦 空间探测：发现附近有 {{ piggybackOrders.length }} 个顺路订单</div>
-            <div class="pb-list">
-              <div v-for="po in piggybackOrders" :key="po.orderId" class="pb-item">
-                <span class="pb-cat">{{ po.goodsName || po.requiredCategory || '急需物资' }}</span>
-                <span class="count-badge" v-if="po.goodsCount">x {{ po.goodsCount }}</span>
-                <span class="pb-dist">距主线 {{ po.relativeDistance }}</span>
-              </div>
-            </div>
-          </div>
         </div>
 
         <div class="res-action">
           <div v-if="userRole === 4" class="admin-monitor-status">
             <span class="status-dot blink"></span> 算法已完成波次打包，正在呼叫运力...
           </div>
-          <button v-else class="grab-btn pb-grab-btn" @click="emitGrabBatch">
+          <button v-else class="grab-btn" @click="$emit('grab')">
             <span class="bolt-icon">⚡</span>
-            {{ piggybackOrders.length > 0 ? `一键打包接单 (共 ${piggybackOrders.length + 1} 单)` : '确认响应 · 立即接单' }}
+            确认响应 · 立即接单
           </button>
         </div>
       </div>
@@ -108,8 +98,7 @@ const props = defineProps({
   isMissionActive: Boolean,
   activeOrder: Object,
   isError: Boolean,
-  fallbackCountdown: Number,
-  piggybackOrders: { type: Array, default: () => [] }
+  fallbackCountdown: Number
 })
 
 const emit = defineEmits(['dispatch', 'grab', 'finish', 'notify-pickup', 'switch-pickup'])
@@ -127,14 +116,6 @@ const totalDuration = computed(() => {
   const d = (r.duration || 0) + (r.riderDuration || 0)
   return d > 0 ? Math.ceil(d / 60) : 10
 })
-
-const emitGrabBatch = () => {
-  const batchIds = [props.pendingOrder.orderId]
-  props.piggybackOrders.forEach(o => {
-    batchIds.push(o.orderId)
-  })
-  emit('grab', batchIds)
-}
 </script>
 
 <style scoped>
@@ -192,17 +173,9 @@ const emitGrabBatch = () => {
 }
 
 /* 🌟 顺路单池 UI 设计 */
-.piggyback-pool { margin-top: 15px; padding-top: 15px; border-top: 1px dashed #e2e8f0; }
-.pb-header { font-size: 0.8rem; color: #3b82f6; font-weight: 900; margin-bottom: 10px; }
-.pb-list { display: flex; flex-wrap: wrap; gap: 10px; }
-.pb-item { background: #eff6ff; border: 1px solid #bfdbfe; padding: 6px 12px; border-radius: 12px; display: flex; align-items: center; gap: 8px; }
-.pb-cat { font-size: 0.85rem; font-weight: bold; color: #1e293b; }
-.pb-item .count-badge { background: #3b82f6; margin-left: 2px; box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3); }
-.pb-dist { font-size: 0.75rem; color: #3b82f6; background: #fff; padding: 2px 6px; border-radius: 6px; font-family: monospace; font-weight: bold;}
-
-/* 打包抢单大按钮 */
-.pb-grab-btn { padding: 18px 30px; background: linear-gradient(135deg, #f97316, #ea580c); color: #fff; border: none; border-radius: 18px; font-weight: 900; cursor: pointer; transition: 0.3s; font-size: 1.1rem; box-shadow: 0 10px 25px rgba(249, 115, 22, 0.3); display: flex; align-items: center; gap: 10px;}
-.pb-grab-btn:hover { transform: translateY(-3px) scale(1.02); box-shadow: 0 15px 35px rgba(249, 115, 22, 0.4); }
+/* 抢单按钮 */
+.grab-btn { padding: 18px 30px; background: linear-gradient(135deg, #f97316, #ea580c); color: #fff; border: none; border-radius: 18px; font-weight: 900; cursor: pointer; transition: 0.3s; font-size: 1.1rem; box-shadow: 0 10px 25px rgba(249, 115, 22, 0.3); display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;}
+.grab-btn:hover { transform: translateY(-3px); box-shadow: 0 15px 35px rgba(249, 115, 22, 0.4); }
 .bolt-icon { font-size: 1.4rem; }
 
 @keyframes shake { 0%, 100% { transform: translate(-50%, 0); } 25% { transform: translate(-52%, 0); } 75% { transform: translate(-48%, 0); } }

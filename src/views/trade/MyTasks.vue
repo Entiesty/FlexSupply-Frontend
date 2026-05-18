@@ -42,7 +42,7 @@
       </div>
 
       <transition-group name="list" tag="div" class="task-list-animator">
-        <div class="task-card" v-for="item in taskList" :key="item.orderId || item.taskId">
+        <div class="task-card" v-for="item in taskList" :key="item.orderId || item.taskId" :class="{ overloaded: activeTab === 'available' && isOverCapacity(item) }">
 
           <!-- ===== Step 2a: 卡片顶部条带 ===== -->
           <div class="card-strip">
@@ -111,17 +111,25 @@
               </div>
 
               <div class="goods-capsule" v-if="item.goodsName || item.requiredCategory">
-                📦 {{ item.goodsName || item.requiredCategory }}<span class="goods-qty"> × {{ item.goodsCount || 0 }}</span>
+                <span class="capsule-name">📦 {{ item.goodsName || item.requiredCategory }}</span>
+                <span class="goods-qty">× {{ item.goodsCount || 0 }}</span>
               </div>
 
               <div class="card-actions">
-                <button class="btn-tool" @click="openMapPreview(item)" :disabled="!isValidCoordinate(item.sourceLon, item.sourceLat) || !isValidCoordinate(item.targetLon, item.targetLat)">
-                  <el-icon><MapLocation /></el-icon> 路线推演
-                </button>
-                <button v-if="activeTab === 'available'" class="btn-main grab" @click="handleGrab(item)">⚡ 立即响应</button>
-                <template v-if="activeTab === 'progress'">
-                  <button v-if="item.taskStatus === 1" class="btn-main pickup" @click="handlePickup(item)">📦 我已取货</button>
-                  <button v-else-if="item.taskStatus === 2" class="btn-main finish" @click="openCheckoutDialog(item)">📸 送达核销</button>
+                <!-- 超载订单：语义状态说明牌 -->
+                <div v-if="activeTab === 'available' && isOverCapacity(item)" class="overload-plaque">
+                  <span class="overload-title">🧳 超出当前载具承载上限</span>
+                  <span class="overload-sub">{{ capacitySubtitle(item) }}</span>
+                </div>
+                <template v-else>
+                  <button class="btn-tool" @click="openMapPreview(item)" :disabled="!isValidCoordinate(item.sourceLon, item.sourceLat) || !isValidCoordinate(item.targetLon, item.targetLat)">
+                    <el-icon><MapLocation /></el-icon> 路线推演
+                  </button>
+                  <button v-if="activeTab === 'available'" class="btn-main grab" @click="handleGrab(item)">⚡ 立即响应</button>
+                  <template v-if="activeTab === 'progress'">
+                    <button v-if="item.taskStatus === 1" class="btn-main pickup" @click="handlePickup(item)">📦 我已取货</button>
+                    <button v-else-if="item.taskStatus === 2" class="btn-main finish" @click="openCheckoutDialog(item)">📸 送达核销</button>
+                  </template>
                 </template>
               </div>
             </div>
@@ -195,6 +203,7 @@ const router = useRouter()
 const activeTab = ref(route.query.tab || 'available')
 
 const currentCredit = ref(0)
+const vehicleType = ref(1) // 载具类型，默认步行
 const loading = ref(false)
 const taskList = ref([])
 let pollingTimer = null
@@ -235,6 +244,36 @@ const uploadRef = ref(null)
 
 const isDonation = (sn) => sn?.startsWith('DON-')
 const isValidCoordinate = (lon, lat) => lon && lat && !isNaN(lon) && !isNaN(lat) && lon > 0 && lat > 0
+
+// ===== 双维载具容量校验 (重量 vs 体积，绝对阈值，1对1履约) =====
+const toWeightPoints = (level) => level === 3 ? 20 : (level === 2 ? 5 : 1)
+const toVolumePoints = (level) => level === 3 ? 40 : (level === 2 ? 5 : 1)
+
+const vehicleCapacity = (vType) => {
+  if (vType === 1) return { maxW: 2, maxV: 2 }
+  if (vType === 2) return { maxW: 4, maxV: 5 }
+  if (vType === 3) return { maxW: 10, maxV: 15 }
+  return { maxW: 100, maxV: 100 }
+}
+
+const isOverCapacity = (item) => {
+  const wl = item.weightLevel || 1
+  const vl = item.volumeLevel || 1
+  const { maxW, maxV } = vehicleCapacity(vehicleType.value)
+  return toWeightPoints(wl) > maxW || toVolumePoints(vl) > maxV
+}
+
+// 超载语义诊断：人类可读，拒绝生硬数值
+const capacitySubtitle = (item) => {
+  const wl = item.weightLevel || 1
+  const vl = item.volumeLevel || 1
+  const { maxW, maxV } = vehicleCapacity(vehicleType.value)
+  const overW = toWeightPoints(wl) > maxW
+  const overV = toVolumePoints(vl) > maxV
+  if (overW && overV) return '❌ 物资超重且超容，推荐使用汽车配送'
+  if (overW) return '🧳 物资过重，超出当前载具承重上限'
+  return '📦 物资体积过大，当前载具空间不足'
+}
 
 const formatUrgency = (level) => {
   const map = {
@@ -278,6 +317,7 @@ const initLocationStrategy = async () => {
     const res = await getUserProfile()
     if (res?.data) {
       currentCredit.value = res.data.creditScore || 0
+      vehicleType.value = res.data.vehicleType || 1
       dbLon = res.data.currentLon; dbLat = res.data.currentLat;
     }
   } catch (e) { console.warn('获取个人资料失败') }
@@ -905,11 +945,15 @@ onMounted(() => { initLocationStrategy() })
 .goods-capsule {
   background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;
   padding: 10px 14px; font-size: 13px; font-weight: 800; color: #334155;
-  display: flex; align-items: center; gap: 4px;
+  display: flex; align-items: center; gap: 6px;
+}
+.goods-capsule .capsule-name {
+  flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .goods-qty {
   color: #3b82f6; font-family: Impact, monospace;
-  font-size: 18px; font-weight: 900; margin-left: auto;
+  font-size: 18px; font-weight: 900; flex-shrink: 0;
 }
 
 /* 操作按钮区 */
@@ -925,6 +969,23 @@ onMounted(() => { initLocationStrategy() })
 }
 .btn-tool:hover:not(:disabled) { background: #e2e8f0; color: #0f172a; }
 .btn-tool:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* 超载状态说明牌 — 纯展示，无交互 */
+.overload-plaque {
+  width: 100%; padding: 14px 12px; border-radius: 12px;
+  background: #f8fafc; border: 1px solid #e2e8f0;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+}
+.overload-title {
+  font-size: 0.95rem; font-weight: bold; color: #94a3b8;
+}
+.overload-sub {
+  font-size: 0.8rem; font-weight: 600; color: #cbd5e1;
+}
+
+/* 超载卡片视觉降权 */
+.task-card.overloaded .card-body { opacity: 0.5; pointer-events: none; }
+.task-card.overloaded .card-strip { opacity: 1; }
 
 .btn-main {
   padding: 12px 0; border: none; border-radius: 10px; color: white; font-weight: 900;

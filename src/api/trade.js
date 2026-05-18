@@ -2,9 +2,9 @@ import request from '@/utils/request'
 
 // ================= 订单源头 (Order) =================
 
-// 获取大屏待抢订单 (供大屏扫描)
-export function getPendingOrders() {
-    return request({ url: '/trade/order/pending-list', method: 'get' })
+// 获取大屏待抢订单 (供大屏扫描，传入骑手坐标用于个性化排序)
+export function getPendingOrders(params) {
+    return request({ url: '/trade/order/pending-list', method: 'get', params })
 }
 
 // 志愿者获取抢单大厅列表

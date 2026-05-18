@@ -39,7 +39,6 @@
             :activeOrder="activeOrder"
             :isError="isError"
             :fallbackCountdown="fallbackCountdown"
-            :piggybackOrders="piggybackOrders"
             @dispatch="handleDispatchAction"
             @grab="handleBatchGrab"
             @finish="handleFinishMission"
@@ -97,8 +96,6 @@ const isMissionActive = ref(false)
 const activeOrder = ref({})
 const pendingOrder = ref(null)
 const autoDispatchedOrderId = ref(null)
-
-const piggybackOrders = ref([])
 
 const fallbackCountdown = ref(0)
 const dynamicThreshold = ref(30)
@@ -206,7 +203,10 @@ const toggleSysMode = () => {
 
 const fetchMapOrders = async () => {
   try {
-    const res = await getPendingOrders()
+    const res = await getPendingOrders({
+      currentLon: userLocation.value[0],
+      currentLat: userLocation.value[1]
+    })
     if (res?.data && res.data.length > 0) {
       const mainOrder = res.data[0]
       pendingOrder.value = mainOrder
@@ -217,40 +217,8 @@ const fetchMapOrders = async () => {
       const mainTgtLon = mainOrder.targetLon || userLocation.value[0]
 
       const isDonation = mainOrder.orderSn?.startsWith('DON')
-      const pbArr = []
 
-      for (let i = 1; i < res.data.length; i++) {
-        const subOrder = res.data[i]
-        if (subOrder.status !== 0) continue
-
-        const isSubDonation = subOrder.orderSn?.startsWith('DON')
-        const subSrcLat = subOrder.sourceLat || userLocation.value[1]
-        const subSrcLon = subOrder.sourceLon || userLocation.value[0]
-        const subTgtLat = subOrder.targetLat || userLocation.value[1]
-        const subTgtLon = subOrder.targetLon || userLocation.value[0]
-
-        if (isDonation && isSubDonation) {
-          const srcDist = calculateDistance(mainSrcLat, mainSrcLon, subSrcLat, subSrcLon)
-          const tgtDist = calculateDistance(mainTgtLat, mainTgtLon, subTgtLat, subTgtLon)
-
-          if (srcDist < 1.0 && tgtDist < 0.5) {
-            subOrder.relativeDistance = '同网点集货'
-            pbArr.push(subOrder)
-          }
-        }
-        else if (!isDonation && !isSubDonation) {
-          const srcDist = calculateDistance(mainSrcLat, mainSrcLon, subSrcLat, subSrcLon)
-          const tgtDist = calculateDistance(mainTgtLat, mainTgtLon, subTgtLat, subTgtLon)
-
-          if (srcDist < 0.5 && tgtDist < 2.5) {
-            subOrder.relativeDistance = tgtDist.toFixed(2) + ' km'
-            pbArr.push(subOrder)
-          }
-        }
-      }
-
-      piggybackOrders.value = pbArr
-      drawMarker(isDonation, [mainTgtLon, mainTgtLat], pbArr)
+      drawMarker(isDonation, [mainTgtLon, mainTgtLat])
 
       if (currentUserRole.value === 3
           && pendingOrder.value.deliveryMethod === 1
@@ -265,7 +233,6 @@ const fetchMapOrders = async () => {
     } else {
       pendingOrder.value = null
       result.value = null
-      piggybackOrders.value = []
       if (map.value) map.value.clearMap()
       clearFallbackTimer()
     }
@@ -289,7 +256,7 @@ const initMap = () => {
   })
 }
 
-const drawMarker = (isDonation, position, pbArr = []) => {
+const drawMarker = (isDonation, position) => {
   if (!AMap || !map.value) return
   map.value.clearMap()
   map.value.setCenter(position)
@@ -297,14 +264,6 @@ const drawMarker = (isDonation, position, pbArr = []) => {
   const markerClass = isDonation ? 'don-pulse-marker' : 'sos-pulse-marker'
   new AMap.Marker({
     map: map.value, position: position, content: `<div class="${markerClass}"></div>`, offset: new AMap.Pixel(-8, -8)
-  })
-
-  pbArr.forEach(po => {
-    const lon = po.targetLon || userLocation.value[0]
-    const lat = po.targetLat || userLocation.value[1]
-    new AMap.Marker({
-      map: map.value, position: [lon, lat], content: `<div class="pb-mini-marker"></div>`, offset: new AMap.Pixel(-5, -5)
-    })
   })
 }
 
@@ -518,52 +477,27 @@ const handleNotifyPickup = () => {
   })
 }
 
-const handleBatchGrab = async (batchIds) => {
-  let ids = Array.isArray(batchIds) ? batchIds : [pendingOrder.value?.orderId]
-  if (!ids || ids.length === 0 || !ids[0]) return ElMessage.error("订单状态异常")
+const handleBatchGrab = async () => {
+  const orderId = pendingOrder.value?.orderId
+  if (!orderId) return ElMessage.error('订单状态异常')
 
   loading.value = true
-  let successCount = 0
-  let failCount = 0
-
   try {
-    for (const id of ids) {
-      try {
-        await grabTask(id)
-        successCount++
-      } catch (innerE) {
-        // 捕获到后端抛出的“CVRP装载爆仓/距离超限”拦截
-        failCount++
-        console.warn(`订单 ${id} 抢单被底层物理引擎拦截`);
-      }
-    }
-
-    if (successCount > 0) {
-      // 🚨 高级反馈：部分成功，部分被熔断
-      ElNotification.success({
-        title: '⚡ 运力集约编排完成',
-        message: `
-          <div style="font-size: 1.05rem; line-height: 1.6; margin-top: 5px;">
-            ✅ 成功锁定路线: <strong>${successCount}</strong> 单<br/>
-            ${failCount > 0 ? `<span style="color:#ef4444; font-weight: bold;">🚨 物理熔断拦截: ${failCount} 单 (防超载/超距保护已触发)</span>` : ''}
-          </div>
-        `,
-        dangerouslyUseHTMLString: true,
-        duration: 8000
-      })
-      router.push({ path: '/my-tasks', query: { tab: 'progress' } })
-    } else if (failCount > 0) {
-      // 🚨 高级反馈：全军覆没
-      ElNotification.error({
-        title: '⛔ 运单分配已被系统驳回',
-        message: '顺路订单已超出您当前载具的【最大物理承重极限】或【跨区续航极限】，引擎已切断派发！请更换机动载具或只接单件。',
-        duration: 6000
-      })
-    }
+    await grabTask(orderId)
+    ElNotification.success({
+      title: '⚡ 抢单成功',
+      message: `单号 ${pendingOrder.value.orderSn} 已被您锁定，请尽快前往取货`,
+      type: 'success',
+      duration: 6000
+    })
+    result.value = null
+    isMissionActive.value = true
+    activeOrder.value = pendingOrder.value
+    fetchMapOrders()
+  } catch (e) {
+    ElMessage.error(e.response?.data?.message || '抢单失败，请重试')
   } finally {
     loading.value = false
-    fetchMapOrders()
-    result.value = null
   }
 }
 
