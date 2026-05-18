@@ -19,11 +19,7 @@
         </template>
       </el-alert>
 
-      <div class="hero-section" :class="roleThemeClass">
-        <div class="hero-bg-shapes">
-          <div class="shape s1"></div><div class="shape s2"></div>
-        </div>
-
+      <div class="hero-section mini" :class="roleThemeClass">
         <div class="hero-content">
           <div class="avatar-wrapper" @click="triggerAvatarUpload">
             <img v-if="stats.avatar" :src="stats.avatar" class="avatar-img" />
@@ -45,9 +41,8 @@
             <div class="data-card score-card"><div class="card-icon">🏆</div><div class="card-info"><p>城市信誉星级评分</p><h3>{{ stats.creditScore || 100 }} <span>分</span></h3></div></div>
           </div>
           <div v-else-if="stats.role === 2" class="dashboard-cards merchant-board">
-            <div class="data-card"><div class="card-icon">💝</div><div class="card-info"><p>累计捐赠物资批次</p><h3>{{ stats.totalDonatedGoods || 0 }} <span>批</span></h3></div></div>
-            <div class="data-card heart-card"><div class="card-icon">🏅</div><div class="card-info"><p>CSR 社会责任荣誉</p><h3>{{ csrLevelName }} <span>{{ csrLevelSub }}</span></h3></div></div>
-            <div class="data-card score-card"><div class="card-icon">💰</div><div class="card-info"><p>累计捐赠总价值</p><h3>{{ formatDonatedValue }} <span>元</span></h3></div></div>
+            <div class="data-card"><div class="card-icon">🏅</div><div class="card-info"><p>CSR 社会责任荣誉</p><h3>{{ csrLevelName }}</h3></div></div>
+            <div class="data-card"><div class="card-icon">🏪</div><div class="card-info"><p>查看完整战报</p><h3 @click="$router.push('/merchant/csr')" style="cursor:pointer;text-decoration:underline;font-size:1.1rem;">CSR 战报 →</h3></div></div>
           </div>
           <div v-else-if="stats.role === 1" class="dashboard-cards recipient-board">
             <div class="data-card"><div class="card-icon">🛡️</div><div class="card-info"><p>专属人群关怀标签</p><h3>{{ formatUserTag(stats.userTag) }}</h3></div></div>
@@ -378,31 +373,27 @@ onMounted(() => { fetchAllData(); window.addEventListener('resize', () => { if(m
 .locked-dashboard p { margin: 0; font-size: 0.9rem; opacity: 0.8; }
 
 .profile-container { max-width: 900px; width: 100%; margin: 0 auto; padding-bottom: 50px; }
-.hero-section { position: relative; border-radius: 28px; padding: 40px; color: #fff; overflow: hidden; margin-bottom: 30px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); transition: all 0.5s ease; }
+.hero-section { position: relative; border-radius: 20px; padding: 24px 30px; color: #fff; overflow: hidden; margin-bottom: 24px; box-shadow: 0 8px 20px rgba(0,0,0,0.08); }
 .theme-volunteer { background: linear-gradient(135deg, #f97316, #ea580c); }
 .theme-merchant { background: linear-gradient(135deg, #10b981, #059669); }
 .theme-recipient { background: linear-gradient(135deg, #3b82f6, #2563eb); }
 .theme-admin { background: linear-gradient(135deg, #1e293b, #0f172a); }
 
-.hero-bg-shapes .shape { position: absolute; border-radius: 50%; background: rgba(255,255,255,0.1); filter: blur(40px); }
-.hero-bg-shapes .s1 { width: 300px; height: 300px; top: -100px; right: -50px; }
-.hero-bg-shapes .s2 { width: 200px; height: 200px; bottom: -50px; left: 10%; }
-
-.hero-content { position: relative; z-index: 10; display: flex; align-items: center; gap: 30px; margin-bottom: 35px; }
-.avatar-wrapper { position: relative; width: 100px; height: 100px; border-radius: 50%; border: 4px solid rgba(255,255,255,0.3); cursor: pointer; overflow: hidden; background: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2); transition: 0.3s; flex-shrink: 0; }
+.hero-content { position: relative; z-index: 10; display: flex; align-items: center; gap: 18px; }
+.avatar-wrapper { position: relative; width: 64px; height: 64px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.3); cursor: pointer; overflow: hidden; background: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 15px rgba(0,0,0,0.15); transition: 0.3s; flex-shrink: 0; }
 .avatar-wrapper:hover { border-color: #fff; transform: scale(1.05); }
 .avatar-img { width: 100%; height: 100%; object-fit: cover; }
-.avatar-placeholder { font-size: 3rem; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+.avatar-placeholder { font-size: 1.8rem; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
 .avatar-placeholder.role-1 { background: linear-gradient(135deg, #dbeafe, #bfdbfe); }
 .avatar-placeholder.role-2 { background: linear-gradient(135deg, #d1fae5, #a7f3d0); }
 .avatar-placeholder.role-3 { background: linear-gradient(135deg, #ffedd5, #fed7aa); }
 .avatar-placeholder.role-4 { background: linear-gradient(135deg, #e2e8f0, #cbd5e1); }
 .avatar-mask { position: absolute; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; opacity: 0; transition: 0.3s; }
 .avatar-wrapper:hover .avatar-mask { opacity: 1; }
-.camera-icon { font-size: 1.5rem; }
+.camera-icon { font-size: 1.2rem; }
 
-.user-intro .greeting { margin: 0 0 10px 0; font-size: 2.2rem; font-weight: 900; letter-spacing: 1px; }
-.role-badge-glow { display: inline-block; padding: 6px 16px; background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); border-radius: 20px; font-weight: bold; font-size: 0.95rem; border: 1px solid rgba(255,255,255,0.4); }
+.user-intro .greeting { margin: 0 0 2px 0; font-size: 1.2rem; font-weight: 900; }
+.role-badge-glow { display: inline-block; padding: 3px 12px; background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); border-radius: 20px; font-weight: bold; font-size: 0.78rem; border: 1px solid rgba(255,255,255,0.4); }
 
 .dashboard-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; position: relative; z-index: 10; }
 .data-card { background: rgba(255,255,255,0.15); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2); border-radius: 20px; padding: 20px; display: flex; align-items: center; gap: 15px; transition: 0.3s; }

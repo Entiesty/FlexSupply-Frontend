@@ -13,29 +13,29 @@
           <p>基于《企业会计准则第13号》公益捐赠披露规范的审计级数据凭证</p>
         </header>
 
-        <!-- 核心指标：两个大号 el-statistic -->
+        <!-- 核心指标：三张高光卡片 -->
         <div class="hero-stats">
           <div class="hero-card">
-            <el-statistic title="累计捐赠件数" :value="report.totalDonations || 0">
-              <template #suffix>
-                <span style="font-size:1.2rem;color:#94a3b8;">件</span>
-              </template>
-              <template #prefix>
-                <span style="font-size:2rem;">📦</span>
-              </template>
+            <el-statistic title="累计捐赠物资批次" :value="report.totalDonations || 0">
+              <template #suffix><span class="stat-unit">批</span></template>
+              <template #prefix><span class="stat-icon">📦</span></template>
             </el-statistic>
           </div>
           <div class="hero-card">
-            <el-statistic title="累计捐赠总额" :value="report.totalValue || 0" :value-style="{ color: '#d97706' }">
-              <template #suffix>
-                <span style="font-size:1.2rem;color:#94a3b8;">元</span>
-              </template>
-              <template #prefix>
-                <span style="font-size:2rem;">💰</span>
-              </template>
+            <el-statistic title="CSR 社会责任荣誉" :value="report.csrLevel || 0" :value-style="{ color: '#d97706' }">
+              <template #suffix><span class="stat-unit">{{ report.csrLevelName || '爱心贡献者' }}</span></template>
+              <template #prefix><span class="stat-icon">🏅</span></template>
+            </el-statistic>
+          </div>
+          <div class="hero-card">
+            <el-statistic title="累计捐赠总价值" :value="report.totalValue || 0" :value-style="{ color: '#059669' }">
+              <template #suffix><span class="stat-unit">元</span></template>
+              <template #prefix><span class="stat-icon">💰</span></template>
             </el-statistic>
           </div>
         </div>
+
+        <p class="audit-notice">📋 基于《企业会计准则第13号》公益捐赠披露规范的审计级数据凭证</p>
 
         <!-- 数字荣誉证书 — 独立一行居中放大 -->
         <div class="certificate-wrapper">
@@ -153,18 +153,23 @@ onMounted(() => fetchData())
 .page-header p { color: #64748b; font-size: 1rem; margin: 0; }
 
 /* 核心指标 */
-.hero-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
-.hero-card { background: #fff; border-radius: 20px; padding: 28px 32px; box-shadow: 0 8px 25px rgba(0,0,0,0.03); border: 1px solid #f1f5f9; text-align: center; }
-:deep(.hero-card .el-statistic__head) { font-weight: 900; color: #64748b; font-size: 0.9rem; margin-bottom: 8px; }
-:deep(.hero-card .el-statistic__number) { font-size: 2.8rem; font-weight: 900; }
-:deep(.hero-card .el-statistic__prefix) { margin-right: 8px; }
+.hero-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 12px; }
+.hero-card { background: #fff; border-radius: 20px; padding: 24px 20px; box-shadow: 0 8px 25px rgba(0,0,0,0.03); border: 1px solid #f1f5f9; text-align: center; transition: transform 0.3s; }
+.hero-card:hover { transform: translateY(-3px); box-shadow: 0 12px 30px rgba(0,0,0,0.06); }
+:deep(.hero-card .el-statistic__head) { font-weight: 900; color: #64748b; font-size: 0.85rem; margin-bottom: 6px; }
+:deep(.hero-card .el-statistic__number) { font-size: 2.2rem; font-weight: 900; }
+:deep(.hero-card .el-statistic__prefix) { margin-right: 6px; }
+.stat-unit { font-size: 0.85rem; color: #94a3b8; font-weight: normal; }
+.stat-icon { font-size: 1.8rem; }
+
+.audit-notice { text-align: center; color: #94a3b8; font-size: 0.78rem; margin: 0 0 24px 0; font-weight: 500; }
 
 /* 证书 */
 .certificate-wrapper { margin-bottom: 30px; }
-.certificate { background: linear-gradient(160deg, #fffbeb 0%, #fefce8 30%, #fff7ed 70%, #fef2f2 100%); border: 3px solid #fcd34d; border-radius: 24px; overflow: hidden; box-shadow: 0 15px 40px rgba(217, 119, 6, 0.1); }
-.cert-ribbon { background: linear-gradient(135deg, #b45309, #d97706); color: #fff; padding: 16px 0; text-align: center; font-weight: 900; font-size: 1.15rem; letter-spacing: 3px; }
-.cert-body { padding: 40px 50px; text-align: center; position: relative; }
-.cert-seal { position: absolute; top: 30px; right: 35px; width: 70px; height: 70px; border: 3px solid #d97706; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #d97706; font-weight: 900; font-size: 1.4rem; transform: rotate(-15deg); opacity: 0.4; }
+.certificate { background: linear-gradient(160deg, #fffbeb 0%, #fefce8 30%, #fff7ed 70%, #fef2f2 100%); border: 4px solid #fbbf24; border-radius: 24px; overflow: hidden; box-shadow: 0 20px 50px rgba(217, 119, 6, 0.12); }
+.cert-ribbon { background: linear-gradient(135deg, #92400e, #b45309); color: #fff; padding: 18px 0; text-align: center; font-weight: 900; font-size: 1.2rem; letter-spacing: 4px; box-shadow: 0 4px 12px rgba(146, 64, 14, 0.3); }
+.cert-body { padding: 44px 54px; text-align: center; position: relative; }
+.cert-seal { position: absolute; top: 28px; right: 32px; width: 80px; height: 80px; border: 4px solid #d97706; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #d97706; font-weight: 900; font-size: 1.6rem; transform: rotate(-15deg); opacity: 0.5; }
 .cert-to { color: #94a3b8; font-size: 0.9rem; margin: 0 0 8px; }
 .cert-body h3 { margin: 0 0 20px; font-size: 1.6rem; color: #1e293b; font-weight: 900; letter-spacing: 2px; }
 .cert-desc { color: #475569; font-size: 0.95rem; line-height: 2; margin: 0 0 16px; }
@@ -172,8 +177,8 @@ onMounted(() => fetchData())
 .cert-honor { margin: 0 0 20px; color: #64748b; font-size: 0.95rem; font-weight: bold; }
 .cert-honor span { color: #d97706; font-size: 1.1rem; font-weight: 900; }
 
-.cert-thanks { border-top: 1px dashed #fcd34d; border-bottom: 1px dashed #fcd34d; padding: 16px 0; margin-bottom: 16px; }
-.cert-thanks p { margin: 4px 0; color: #92400e; font-size: 0.95rem; font-style: italic; font-weight: bold; }
+.cert-thanks { border-top: 2px solid #fcd34d; border-bottom: 2px solid #fcd34d; padding: 18px 0; margin-bottom: 18px; }
+.cert-thanks p { margin: 4px 0; color: #92400e; font-size: 1rem; font-style: italic; font-weight: bold; line-height: 1.6; }
 
 .cert-legal { margin: 3px 0 0; font-size: 0.75rem; color: #94a3b8; }
 
@@ -190,7 +195,7 @@ onMounted(() => fetchData())
 .cat-bar { flex: 1; height: 8px; background: #f1f5f9; border-radius: 4px; overflow: hidden; }
 .cat-bar-inner { height: 100%; background: linear-gradient(90deg, #f59e0b, #ea580c); border-radius: 4px; transition: width 0.6s; }
 
-@media screen and (max-width: 600px) {
+@media screen and (max-width: 768px) {
   .hero-stats { grid-template-columns: 1fr; }
   .cert-body { padding: 30px 25px; }
 }
