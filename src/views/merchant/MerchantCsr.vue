@@ -14,33 +14,37 @@
         </header>
 
         <!-- 核心指标：三张高光卡片 -->
-        <div class="hero-stats">
-          <div class="hero-card">
-            <el-statistic title="累计捐赠物资批次" :value="report.totalDonations || 0">
-              <template #suffix><span class="stat-unit">批</span></template>
-              <template #prefix><span class="stat-icon">📦</span></template>
-            </el-statistic>
+        <div class="kpi-block">
+          <div class="kpi-row">
+            <div class="kpi-card">
+              <span class="kpi-icon">📦</span>
+              <div class="kpi-body">
+                <span class="kpi-label">累计捐赠物资批次</span>
+                <span class="kpi-value">{{ report.totalDonations || 0 }} <small>批</small></span>
+              </div>
+            </div>
+            <div class="kpi-card" :class="'csr-lv-' + (report.csrLevel || 0)">
+              <span class="kpi-icon">{{ csrMedal }}</span>
+              <div class="kpi-body">
+                <span class="kpi-label">CSR 社会责任荣誉</span>
+                <span class="kpi-value csr-value">{{ report.csrLevelName || '爱心贡献者' }}</span>
+              </div>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-icon">💰</span>
+              <div class="kpi-body">
+                <span class="kpi-label">累计捐赠总价值</span>
+                <span class="kpi-value value-green">{{ formatMoney(report.totalValue || 0) }} <small>元</small></span>
+              </div>
+            </div>
           </div>
-          <div class="hero-card">
-            <el-statistic title="CSR 社会责任荣誉" :value="report.csrLevel || 0" :value-style="{ color: '#d97706' }">
-              <template #suffix><span class="stat-unit">{{ report.csrLevelName || '爱心贡献者' }}</span></template>
-              <template #prefix><span class="stat-icon">🏅</span></template>
-            </el-statistic>
-          </div>
-          <div class="hero-card">
-            <el-statistic title="累计捐赠总价值" :value="report.totalValue || 0" :value-style="{ color: '#059669' }">
-              <template #suffix><span class="stat-unit">元</span></template>
-              <template #prefix><span class="stat-icon">💰</span></template>
-            </el-statistic>
-          </div>
+          <p class="audit-notice">📋 基于《企业会计准则第13号》公益捐赠披露规范的审计级数据凭证</p>
         </div>
 
-        <p class="audit-notice">📋 基于《企业会计准则第13号》公益捐赠披露规范的审计级数据凭证</p>
-
-        <!-- 数字荣誉证书 — 独立一行居中放大 -->
+        <!-- 数字荣誉证书 -->
         <div class="certificate-wrapper">
-          <div class="certificate">
-            <div class="cert-ribbon">🏆 爱心企业电子捐赠荣誉证书</div>
+          <div class="certificate" :class="'cert-lv-' + (report.csrLevel || 0)">
+            <div class="cert-ribbon" :class="'ribbon-lv-' + (report.csrLevel || 0)">🏆 爱心企业电子捐赠荣誉证书</div>
             <div class="cert-body">
               <div class="cert-seal">印</div>
               <p class="cert-to">兹证明</p>
@@ -111,6 +115,10 @@ const maxCatCount = computed(() => {
 })
 const barWidth = (count) => (count / maxCatCount.value) * 100
 const formatMoney = (val) => Number(val).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const csrMedal = computed(() => {
+  const level = report.value.csrLevel || 0
+  return level === 3 ? '🥇' : level === 2 ? '🥈' : level === 1 ? '🥉' : '🎖️'
+})
 
 const handleExport = () => {
   ElMessage.success('证书生成中，PDF文件将在后台生成后推送至您的注册邮箱')
@@ -148,26 +156,44 @@ onMounted(() => fetchData())
 @keyframes pulse-gold { 0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); } 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); } }
 
 .csr-container { max-width: 720px; width: 100%; margin: 40px auto; }
-.page-header { text-align: center; margin-bottom: 30px; }
+.page-header { text-align: center; margin-bottom: 28px; }
 .page-header h2 { color: #1e293b; font-size: 1.8rem; margin: 0 0 8px; font-weight: 900; }
 .page-header p { color: #64748b; font-size: 1rem; margin: 0; }
 
-/* 核心指标 */
-.hero-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 12px; }
-.hero-card { background: #fff; border-radius: 20px; padding: 24px 20px; box-shadow: 0 8px 25px rgba(0,0,0,0.03); border: 1px solid #f1f5f9; text-align: center; transition: transform 0.3s; }
-.hero-card:hover { transform: translateY(-3px); box-shadow: 0 12px 30px rgba(0,0,0,0.06); }
-:deep(.hero-card .el-statistic__head) { font-weight: 900; color: #64748b; font-size: 0.85rem; margin-bottom: 6px; }
-:deep(.hero-card .el-statistic__number) { font-size: 2.2rem; font-weight: 900; }
-:deep(.hero-card .el-statistic__prefix) { margin-right: 6px; }
-.stat-unit { font-size: 0.85rem; color: #94a3b8; font-weight: normal; }
-.stat-icon { font-size: 1.8rem; }
+/* KPI 指标区块 */
+.kpi-block { background: #fff; border-radius: 20px; padding: 28px 28px 16px; box-shadow: 0 4px 16px rgba(0,0,0,0.03); border: 1px solid #f1f5f9; margin-bottom: 24px; }
+.kpi-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.kpi-card { display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-radius: 14px; background: #f8fafc; transition: transform 0.2s; }
+.kpi-card:hover { transform: translateY(-2px); }
+.kpi-icon { font-size: 2rem; flex-shrink: 0; }
+.kpi-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.kpi-label { font-size: 0.8rem; color: #64748b; font-weight: 700; }
+.kpi-value { font-size: 1.3rem; font-weight: 900; color: #1e293b; }
+.kpi-value small { font-size: 0.8rem; color: #94a3b8; font-weight: 500; }
+.csr-value { color: #d97706; font-size: 1rem; font-weight: 900; white-space: nowrap; }
+.value-green { color: #059669; }
 
-.audit-notice { text-align: center; color: #94a3b8; font-size: 0.78rem; margin: 0 0 24px 0; font-weight: 500; }
+/* CSR 等级卡片左侧色条 */
+.kpi-card.csr-lv-3 { border-left: 3px solid #f59e0b; }
+.kpi-card.csr-lv-2 { border-left: 3px solid #94a3b8; }
+.kpi-card.csr-lv-1 { border-left: 3px solid #d97706; }
+.kpi-card.csr-lv-0 { border-left: 3px solid #e2e8f0; }
+
+.audit-notice { text-align: center; color: #94a3b8; font-size: 0.75rem; margin: 14px 0 0 0; font-weight: 500; letter-spacing: 0.5px; }
 
 /* 证书 */
-.certificate-wrapper { margin-bottom: 30px; }
+.certificate-wrapper { margin-bottom: 24px; }
 .certificate { background: linear-gradient(160deg, #fffbeb 0%, #fefce8 30%, #fff7ed 70%, #fef2f2 100%); border: 4px solid #fbbf24; border-radius: 24px; overflow: hidden; box-shadow: 0 20px 50px rgba(217, 119, 6, 0.12); }
+.certificate.cert-lv-3 { border-color: #f59e0b; box-shadow: 0 20px 50px rgba(245, 158, 11, 0.18); }
+.certificate.cert-lv-2 { border-color: #94a3b8; box-shadow: 0 20px 50px rgba(148, 163, 184, 0.15); }
+.certificate.cert-lv-1 { border-color: #d97706; }
+.certificate.cert-lv-0 { border-color: #e2e8f0; }
+
 .cert-ribbon { background: linear-gradient(135deg, #92400e, #b45309); color: #fff; padding: 18px 0; text-align: center; font-weight: 900; font-size: 1.2rem; letter-spacing: 4px; box-shadow: 0 4px 12px rgba(146, 64, 14, 0.3); }
+.cert-ribbon.ribbon-lv-3 { background: linear-gradient(135deg, #b45309, #f59e0b); }
+.cert-ribbon.ribbon-lv-2 { background: linear-gradient(135deg, #64748b, #94a3b8); }
+.cert-ribbon.ribbon-lv-1 { background: linear-gradient(135deg, #92400e, #d97706); }
+.cert-ribbon.ribbon-lv-0 { background: linear-gradient(135deg, #94a3b8, #cbd5e1); }
 .cert-body { padding: 44px 54px; text-align: center; position: relative; }
 .cert-seal { position: absolute; top: 28px; right: 32px; width: 80px; height: 80px; border: 4px solid #d97706; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #d97706; font-weight: 900; font-size: 1.6rem; transform: rotate(-15deg); opacity: 0.5; }
 .cert-to { color: #94a3b8; font-size: 0.9rem; margin: 0 0 8px; }
@@ -186,7 +212,7 @@ onMounted(() => fetchData())
 :deep(.export-btn .el-icon) { font-size: 1.2rem; }
 
 /* 品类分布 */
-.category-section { background: #fff; border-radius: 24px; padding: 28px 32px; box-shadow: 0 8px 25px rgba(0,0,0,0.03); border: 1px solid #f1f5f9; }
+.category-section { background: #fff; border-radius: 20px; padding: 24px 28px; box-shadow: 0 4px 16px rgba(0,0,0,0.03); border: 1px solid #f1f5f9; }
 .section-title { margin: 0 0 20px; font-size: 1.1rem; color: #1e293b; font-weight: 900; }
 .category-list { display: flex; flex-direction: column; gap: 14px; }
 .cat-item { display: flex; align-items: center; gap: 12px; }
