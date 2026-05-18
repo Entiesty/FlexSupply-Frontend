@@ -11,7 +11,14 @@
       </header>
 
       <div class="glass-panel" v-loading="loading">
-        <el-table :data="tableData" style="width: 100%" class="custom-table" :empty-text="'✨ 当前所有用户资质均已审核完毕'">
+        <el-table :data="tableData" style="width: 100%" class="custom-table">
+          <template #empty>
+            <div class="empty-state">
+              <span class="empty-icon">✅</span>
+              <p>所有用户资质均已审核完毕</p>
+              <span class="empty-sub">新注册用户将自动出现在此队列中</span>
+            </div>
+          </template>
 
           <el-table-column prop="userId" label="入驻ID" min-width="90" align="center">
             <template #default="scope"><span class="id-badge"># {{ scope.row.userId }}</span></template>
@@ -22,6 +29,12 @@
               <el-tag v-if="scope.row.role === 1" type="warning" effect="dark" round>受赠方</el-tag>
               <el-tag v-else-if="scope.row.role === 2" type="success" effect="dark" round>爱心商家</el-tag>
               <el-tag v-else-if="scope.row.role === 3" type="info" effect="dark" round>志愿者</el-tag>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="审核状态" width="110" align="center">
+            <template #default>
+              <el-tag type="warning" effect="plain" size="small">⏳ 待审核</el-tag>
             </template>
           </el-table-column>
 
@@ -146,7 +159,7 @@ const fetchData = async () => {
     const res = await getAuditPage(queryParams.value)
     tableData.value = res.data.records || []
     total.value = res.data.total || 0
-  } catch (e) {} finally { loading.value = false }
+  } catch (e) { ElMessage.error('操作失败，请重试') } finally { loading.value = false }
 }
 
 // 🚨 核心重写：拦截通过操作，针对受赠方唤起模态框
@@ -165,7 +178,7 @@ const handlePass = (row) => {
         await submitAudit(row.userId, true)
         ElMessage.success('指令已下达，权限已开通！')
         fetchData()
-      } catch (e) {} finally { loading.value = false }
+      } catch (e) { ElMessage.error('操作失败，请重试') } finally { loading.value = false }
     }).catch(() => {})
   }
 }
@@ -198,7 +211,7 @@ const handleReject = (userId) => {
       await submitAudit(userId, false)
       ElMessage.success('已驳回申请，任务已移出队列。')
       fetchData()
-    } catch (e) {} finally { loading.value = false }
+    } catch (e) { ElMessage.error('操作失败，请重试') } finally { loading.value = false }
   }).catch(() => {})
 }
 
@@ -208,8 +221,8 @@ onMounted(() => fetchData())
 <style scoped>
 .main-content { flex: 1; display: flex; flex-direction: column; position: relative; padding: 40px; background: #f8fafc; }
 .top-status { position: absolute; top: 20px; right: 30px; z-index: 100; background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); padding: 8px 16px; border-radius: 20px; font-size: 0.75rem; color: #64748b; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05); }
-.pulse-dot { width: 8px; height: 8px; background: #3b82f6; border-radius: 50%; box-shadow: 0 0 8px #3b82f6; animation: pulse-blue 2s infinite; }
-@keyframes pulse-blue { 0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); } 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); } }
+.pulse-dot { width: 8px; height: 8px; background: #f97316; border-radius: 50%; box-shadow: 0 0 8px #f97316; animation: pulse-orange 2s infinite; }
+@keyframes pulse-orange { 0% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(249, 115, 22, 0); } 100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0); } }
 
 .admin-wrapper { max-width: 1200px; margin: 20px auto 0; width: 100%; }
 .page-header h2 { color: #1e293b; font-size: 2.2rem; margin: 0 0 8px 0; font-weight: 900; letter-spacing: 1px; }
@@ -228,11 +241,11 @@ onMounted(() => fetchData())
 .phone-text { font-family: monospace; font-size: 0.9rem; color: #94a3b8; font-weight: bold; }
 
 /* 🚨 详情信息块样式 */
-.detail-box { text-align: left; background: #f8fafc; padding: 10px 15px; border-radius: 12px; border: 1px solid #e2e8f0; display: inline-block; min-width: 200px; }
-.d-row { font-size: 0.85rem; color: #475569; margin-bottom: 4px; font-weight: bold; }
+.detail-box { text-align: left; background: #f8fafc; padding: 12px 16px; border-radius: 12px; border: 1px solid #e2e8f0; width: 100%; box-sizing: border-box; }
+.d-row { font-size: 0.85rem; color: #475569; margin-bottom: 6px; font-weight: bold; display: flex; align-items: center; gap: 6px; }
 .d-row:last-child { margin-bottom: 0; }
-.d-icon { opacity: 0.8; margin-right: 4px; }
-.d-alert { color: #ef4444; background: #fef2f2; padding: 2px 6px; border-radius: 6px; display: inline-block; margin-top: 4px; }
+.d-icon { opacity: 0.8; flex-shrink: 0; }
+.d-alert { color: #ef4444; background: #fef2f2; padding: 4px 10px; border-radius: 8px; margin-top: 6px; display: block; border: 1px solid #fecaca; }
 
 .proof-thumb { width: 60px; height: 60px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); cursor: zoom-in; transition: 0.3s; }
 .proof-thumb:hover { transform: scale(1.1); box-shadow: 0 6px 16px rgba(0,0,0,0.15); }
@@ -245,6 +258,11 @@ onMounted(() => fetchData())
 .btn-reject:hover { background: #fef2f2; transform: translateY(-2px); box-shadow: 0 6px 15px rgba(239, 68, 68, 0.25); }
 
 .pagination-wrap { display: flex; justify-content: center; margin-top: 25px; padding-top: 15px; border-top: 1px solid #f1f5f9; }
+
+.empty-state { text-align: center; padding: 40px 0; }
+.empty-icon { font-size: 3rem; display: block; margin-bottom: 12px; }
+.empty-state p { margin: 0 0 6px; font-size: 1rem; font-weight: 900; color: #475569; }
+.empty-sub { font-size: 0.8rem; color: #94a3b8; }
 </style>
 
 <style>

@@ -4,12 +4,20 @@
       <span class="pulse-dot"></span> 千人千面成就系统渲染中
     </div>
 
-    <div class="alert-box warning-status" v-if="stats.isVerified !== 1 && stats.role !== 4">
-      <span class="alert-icon">⚠️</span>
-      您的{{ unverifiedTip.title }}。&nbsp;{{ unverifiedTip.desc }}
-    </div>
-
     <div class="profile-container" v-loading="loading">
+
+      <el-alert
+        v-if="stats.isVerified !== 1 && stats.role !== 4"
+        :title="unverifiedTip.title"
+        type="warning"
+        :closable="false"
+        show-icon
+        class="unverified-banner"
+      >
+        <template #default>
+          {{ unverifiedTip.desc }}
+        </template>
+      </el-alert>
 
       <div class="hero-section" :class="roleThemeClass">
         <div class="hero-bg-shapes">
@@ -19,7 +27,7 @@
         <div class="hero-content">
           <div class="avatar-wrapper" @click="triggerAvatarUpload">
             <img v-if="stats.avatar" :src="stats.avatar" class="avatar-img" />
-            <div v-else class="avatar-placeholder">{{ stats.username?.charAt(0) || 'U' }}</div>
+            <div v-else class="avatar-placeholder" :class="'role-' + stats.role">{{ defaultAvatar }}</div>
             <div class="avatar-mask"><span class="camera-icon">📷</span></div>
             <input type="file" ref="avatarInput" hidden @change="handleAvatarChange" accept="image/*" />
           </div>
@@ -38,8 +46,8 @@
           </div>
           <div v-else-if="stats.role === 2" class="dashboard-cards merchant-board">
             <div class="data-card"><div class="card-icon">💝</div><div class="card-info"><p>累计捐赠物资批次</p><h3>{{ stats.totalDonatedGoods || 0 }} <span>批</span></h3></div></div>
-            <div class="data-card heart-card"><div class="card-icon">🌟</div><div class="card-info"><p>累计温暖城市人次</p><h3>{{ stats.totalHelpCount || 0 }} <span>人次</span></h3></div></div>
-            <div class="data-card score-card"><div class="card-icon">🏆</div><div class="card-info"><p>商铺信誉星级评分</p><h3>{{ stats.creditScore || 100 }} <span>分</span></h3></div></div>
+            <div class="data-card heart-card"><div class="card-icon">🏅</div><div class="card-info"><p>CSR 社会责任荣誉</p><h3>{{ csrLevelName }} <span>{{ csrLevelSub }}</span></h3></div></div>
+            <div class="data-card score-card"><div class="card-icon">💰</div><div class="card-info"><p>累计捐赠总价值</p><h3>{{ formatDonatedValue }} <span>元</span></h3></div></div>
           </div>
           <div v-else-if="stats.role === 1" class="dashboard-cards recipient-board">
             <div class="data-card"><div class="card-icon">🛡️</div><div class="card-info"><p>专属人群关怀标签</p><h3>{{ formatUserTag(stats.userTag) }}</h3></div></div>
@@ -210,6 +218,14 @@ const loading = ref(false); const profile = ref({}); const stats = ref({})
 const avatarInput = ref(null); const proofInput = ref(null); const radarChartRef = ref(null); let myRadarChart = null
 const roleNameMap = { 1: '👴 重点关怀对象', 2: '🏪 城市爱心合伙人', 3: '🚴 核心护航骑手', 4: '👨‍💻 指挥中心 Root' }
 const roleThemeClass = computed(() => { const map = { 1: 'theme-recipient', 2: 'theme-merchant', 3: 'theme-volunteer', 4: 'theme-admin' }; return map[stats.value.role] || 'theme-volunteer' })
+const defaultAvatar = computed(() => {
+  const role = stats.value.role
+  if (role === 2) {
+    const industryIcons = { 1: '🍖', 2: '🛒', 3: '💊', 4: '👗' }
+    return industryIcons[profileForm.industryType] || '🏪'
+  }
+  return { 1: '👴', 3: '🚴', 4: '🛡️' }[role] || '🙂'
+})
 
 // 🚨 补充 industryType
 const profileForm = reactive({ username: '', currentLon: '', currentLat: '', addressName: '', doorNumber: '', emergencyPhone: '', healthRemark: '', identityProofUrl: '', vehicleType: 1, industryType: '', userTag: '' })
@@ -315,6 +331,21 @@ const handleSubmitAudit = async () => {
   }
 }
 
+const csrLevelName = computed(() => {
+  const map = { 0: '未评级', 1: '🥉 铜牌爱心企业', 2: '🥈 银牌爱心企业', 3: '🥇 金牌爱心企业' }
+  return map[stats.value.csrLevel] || '未评级'
+})
+const csrLevelSub = computed(() => {
+  const level = stats.value.csrLevel || 0
+  if (level === 3) return '最高荣誉'
+  if (level >= 1) return `距下一级还差${(level === 1 ? 400 : 1500) - (stats.value.totalDonations || 0)}件`
+  return '继续捐赠解锁'
+})
+const formatDonatedValue = computed(() => {
+  const val = parseFloat(stats.value.totalDonatedValue) || 0
+  return val >= 10000 ? (val / 10000).toFixed(1) + '万' : val.toFixed(0)
+})
+
 const unverifiedTip = computed(() => {
   const currentRole = stats.value?.role;
   if (currentRole === 1) return { title: "【求助与关怀档案】尚未激活", desc: "请向下滚动完善门牌号并上传身份证明，以便调度网络为您精准送货上门！" };
@@ -334,10 +365,13 @@ onMounted(() => { fetchAllData(); window.addEventListener('resize', () => { if(m
 .pulse-dot { width: 8px; height: 8px; background: #8b5cf6; border-radius: 50%; box-shadow: 0 0 8px #8b5cf6; animation: pulse-purple 2s infinite; }
 @keyframes pulse-purple { 0% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(139, 92, 246, 0); } 100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); } }
 
+.unverified-banner { margin-bottom: 25px; border-radius: 16px; box-shadow: 0 8px 20px rgba(245, 158, 11, 0.15); }
+:deep(.unverified-banner .el-alert__content) { line-height: 1.6; }
+:deep(.unverified-banner .el-alert__title) { font-weight: 900; font-size: 1rem; }
 .global-alert-banner { background: #fffbeb; border: 1px solid #fde68a; color: #d97706; padding: 15px 20px; border-radius: 16px; margin-bottom: 25px; font-size: 0.95rem; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.1); line-height: 1.5; }
 .global-alert-banner strong { color: #b45309; }
 
-.locked-dashboard { position: relative; z-index: 10; background: rgba(0,0,0,0.2); backdrop-filter: blur(5px); border: 2px dashed rgba(255,255,255,0.4); border-radius: 20px; padding: 30px; text-align: center; color: white; margin-top: 10px; }
+.locked-dashboard { position: relative; z-index: 10; background: rgba(0,0,0,0.15); backdrop-filter: blur(5px); border: 1px dashed rgba(255,255,255,0.35); border-radius: 16px; padding: 20px 25px; text-align: center; color: white; margin-top: 10px; }
 .lock-huge { font-size: 3rem; margin-bottom: 10px; opacity: 0.9; animation: float 3s ease-in-out infinite; }
 @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
 .locked-dashboard h3 { margin: 0 0 5px 0; font-size: 1.2rem; font-weight: 900; letter-spacing: 1px;}
@@ -358,7 +392,11 @@ onMounted(() => { fetchAllData(); window.addEventListener('resize', () => { if(m
 .avatar-wrapper { position: relative; width: 100px; height: 100px; border-radius: 50%; border: 4px solid rgba(255,255,255,0.3); cursor: pointer; overflow: hidden; background: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2); transition: 0.3s; flex-shrink: 0; }
 .avatar-wrapper:hover { border-color: #fff; transform: scale(1.05); }
 .avatar-img { width: 100%; height: 100%; object-fit: cover; }
-.avatar-placeholder { font-size: 3rem; font-weight: 900; color: #94a3b8; }
+.avatar-placeholder { font-size: 3rem; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+.avatar-placeholder.role-1 { background: linear-gradient(135deg, #dbeafe, #bfdbfe); }
+.avatar-placeholder.role-2 { background: linear-gradient(135deg, #d1fae5, #a7f3d0); }
+.avatar-placeholder.role-3 { background: linear-gradient(135deg, #ffedd5, #fed7aa); }
+.avatar-placeholder.role-4 { background: linear-gradient(135deg, #e2e8f0, #cbd5e1); }
 .avatar-mask { position: absolute; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; opacity: 0; transition: 0.3s; }
 .avatar-wrapper:hover .avatar-mask { opacity: 1; }
 .camera-icon { font-size: 1.5rem; }
