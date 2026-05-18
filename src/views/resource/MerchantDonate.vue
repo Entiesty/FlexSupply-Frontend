@@ -131,13 +131,6 @@
               </el-row>
             </el-form-item>
 
-            <el-form-item class="no-margin-bottom">
-              <el-checkbox v-model="form.isEmergencyOnly">
-                <span class="check-label">🛡️ 标记为战备物资</span>
-                <span class="check-desc">若系统进入预警冻结或应急响应状态，仅战备物资保持流通</span>
-              </el-checkbox>
-            </el-form-item>
-
             <template v-if="sysMode !== 'EMERGENCY'">
               <el-form-item label="目标履约驿站" prop="currentStationId" class="no-margin-bottom">
                 <el-select v-model="form.currentStationId" placeholder="系统将按LBS匹配最近驿站..." style="width:100%;" filterable clearable>
@@ -217,8 +210,7 @@ const form = reactive({
   volumeLevel: 1,
   weightLevel: 1,
   goodsImageUrl: '',
-  estimatedValue: 0,
-  isEmergencyOnly: false
+  estimatedValue: 0
 })
 
 const emergencyDialog = reactive({ visible: false, data: null })
@@ -351,14 +343,13 @@ const handleDonate = async () => {
       weightLevel: form.weightLevel,
       goodsImageUrl: form.goodsImageUrl,
       estimatedValue: form.estimatedValue,
-      isEmergencyOnly: form.isEmergencyOnly,
       currentStationId: sysMode.value === 'EMERGENCY' ? null : form.currentStationId,
       targetOrderId: targetOrderId.value
     })
 
     ElNotification.success({ title: '✅ 发布成功', message: '已同步至调度大盘，运力测算与匹配中...' })
     form.goodsName = ''; form.stock = 1; form.category = ''; form.expirationDate = ''
-    form.currentStationId = null; form.volumeLevel = 1; form.weightLevel = 1; form.goodsImageUrl = ''; form.estimatedValue = 0; form.isEmergencyOnly = false
+    form.currentStationId = null; form.volumeLevel = 1; form.weightLevel = 1; form.goodsImageUrl = ''; form.estimatedValue = 0
     sysMode.value = 'NORMAL'; targetOrderId.value = null; activeTargetCategory.value = ''
   } catch (e) { } finally { submitting.value = false }
 }
@@ -445,10 +436,6 @@ onUnmounted(() => { if (pollTimer) { clearInterval(pollTimer); pollTimer = null 
 
 /* ===== 物理形态 radio ===== */
 .radio-label { font-size: 0.8rem; color: #94a3b8; font-weight: bold; margin-bottom: 8px; }
-
-/* ===== 战备勾选 ===== */
-.check-label { font-weight: 900; color: #1e293b; }
-.check-desc { color: #94a3b8; font-size: 0.82rem; margin-left: 8px; }
 
 /* ===== 内联 alert ===== */
 .inline-alert { margin-top: 12px; }
