@@ -11,6 +11,49 @@
       </header>
 
       <div class="engine-panel">
+        <!-- 应急状态机控制台 -->
+        <div class="state-machine-box">
+          <div class="sm-header">
+            <h3>🛡️ 应急模式全生命周期状态机</h3>
+            <span class="current-state-badge" :class="'state-' + form.sysMode.toLowerCase()">
+              当前: {{ stateLabel(form.sysMode) }}
+            </span>
+          </div>
+          <el-steps :active="activeStep" align-center finish-status="success" process-status="process">
+            <el-step title="常态" description="NORMAL" />
+            <el-step title="预警冻结" description="WARNING_FREEZE" />
+            <el-step title="紧急响应" description="EMERGENCY_RESPONSE" />
+            <el-step title="恢复期" description="RECOVERY" />
+          </el-steps>
+          <div class="sm-actions">
+            <button class="sm-btn freeze" :disabled="form.sysMode !== 'NORMAL'"
+                    @click="handleSwitchMode('WARNING_FREEZE')">
+              ⚠️ 进入预警冻结
+            </button>
+            <button class="sm-btn emergency-btn" :disabled="form.sysMode !== 'WARNING_FREEZE'"
+                    @click="handleSwitchMode('EMERGENCY_RESPONSE')">
+              🚨 激活紧急响应
+            </button>
+            <button class="sm-btn recover" :disabled="form.sysMode !== 'EMERGENCY_RESPONSE'"
+                    @click="handleSwitchMode('RECOVERY')">
+              🩹 转入恢复期
+            </button>
+            <button class="sm-btn normal-btn" :disabled="form.sysMode !== 'RECOVERY' && form.sysMode !== 'WARNING_FREEZE'"
+                    @click="handleSwitchMode('NORMAL')">
+              🕊️ 恢复常态
+            </button>
+          </div>
+          <el-alert v-if="form.sysMode === 'WARNING_FREEZE'" title="⚠️ 预警冻结生效中" type="warning"
+            description="非应急物资已从任务大厅隐退，仅战备物资保持流通。志愿者收到待命通知。"
+            :closable="false" show-icon style="margin-top: 15px;" />
+          <el-alert v-if="form.sysMode === 'EMERGENCY_RESPONSE'" title="🔴 紧急响应已激活" type="error"
+            description="全量物资已解锁，战时配给制与运力补贴已启动。L0直达优先，SAW权重自动切换至紧急预设。"
+            :closable="false" show-icon style="margin-top: 15px;" />
+          <el-alert v-if="form.sysMode === 'RECOVERY'" title="🟢 灾后恢复期" type="success"
+            description="物资流通恢复常态，历史补贴结算通道限时开放中。建议在30天内完成灾后补贴清算后切回常态模式。"
+            :closable="false" show-icon style="margin-top: 15px;" />
+        </div>
+
         <div class="mode-switch-box">
           <div class="mode-label">
             <h3>系统运行模式 (平急两用切换)</h3>
@@ -70,11 +113,10 @@
 <script setup>
 import {ref, reactive, computed, onMounted} from 'vue'
 import {ElMessage, ElMessageBox} from 'element-plus'
-import {getCurrentConfig, updateConfig} from '@/api/config'
+import {getCurrentConfig, updateConfig, switchMode, preCheckMode} from '@/api/config'
 
 const loading = ref(false)
 
-// 前端展示用百分比(整数)，提交后端时除以 100 变小数
 const form = reactive({
   sysMode: 'NORMAL',
   wDist: 80,
@@ -83,9 +125,15 @@ const form = reactive({
   wTag: 10
 })
 
-const totalWeight = computed(() => {
-  return form.wDist + form.wUrgency + form.wCredit + form.wTag
-})
+const stepMap = { 'NORMAL': 0, 'WARNING_FREEZE': 1, 'EMERGENCY_RESPONSE': 2, 'RECOVERY': 3 }
+const activeStep = computed(() => stepMap[form.sysMode] ?? 0)
+
+const stateLabel = (mode) => {
+  const map = { 'NORMAL': '🕊️ 常态', 'WARNING_FREEZE': '⚠️ 预警冻结期', 'EMERGENCY_RESPONSE': '🚨 紧急响应期', 'RECOVERY': '🩹 恢复期' }
+  return map[mode] || mode
+}
+
+const totalWeight = computed(() => form.wDist + form.wUrgency + form.wCredit + form.wTag)
 
 const fetchConfig = async () => {
   loading.value = true
@@ -105,28 +153,58 @@ const fetchConfig = async () => {
   }
 }
 
-// 模拟毕设中的“平急两用”一键切换预设模板
+const handleSwitchMode = async (targetMode) => {
+  // WARNING_FREEZE 预检：无战备物资时二次确认
+  if (targetMode === 'WARNING_FREEZE') {
+    try {
+      const res = await preCheckMode('WARNING_FREEZE')
+      const count = res.data?.emergencyCount || 0
+      const warning = res.data?.warning
+      const msg = warning
+        ? `⚠️ ${warning}。\n\n确定要继续进入预警冻结状态吗？`
+        : `当前共有 ${count} 批战备物资储备。\n\n进入预警冻结后，非应急物资将从调度列表隐退。确定继续吗？`
+
+      await ElMessageBox.confirm(msg.replace(/\n/g, '<br/>'), '预警冻结预检', {
+        confirmButtonText: '确认进入',
+        cancelButtonText: '取消',
+        type: 'warning',
+        dangerouslyUseHTMLString: true
+      })
+    } catch (e) {
+      return // 用户取消
+    }
+  }
+
+  ElMessageBox.confirm(`确定将系统模式切换至【${stateLabel(targetMode)}】吗？此操作将立即改变全局调度策略与 SAW 算法权重。`, '应急状态机操作', {
+    confirmButtonText: '确认切换',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(async () => {
+    try {
+      await switchMode({ targetMode })
+      form.sysMode = targetMode
+      await fetchConfig() // 刷新权重显示
+      ElMessage.success(`系统模式已切换至: ${stateLabel(targetMode)}，SAW 权重已自动同步`)
+    } catch (e) {
+      ElMessage.error(e.response?.data?.message || '状态机切换失败')
+    }
+  }).catch(() => {})
+}
+
 const applyPreset = (mode) => {
   if (mode === 'NORMAL') {
     form.sysMode = 'NORMAL'
-    form.wDist = 80;
-    form.wUrgency = 5;
-    form.wCredit = 5;
-    form.wTag = 10;
+    form.wDist = 80; form.wUrgency = 5; form.wCredit = 5; form.wTag = 10;
   } else {
     form.sysMode = 'EMERGENCY'
-    // 灾时模式：距离变得不那么重要，弱势群体保护和紧急度拉满
-    form.wDist = 30;
-    form.wUrgency = 40;
-    form.wCredit = 0;
-    form.wTag = 30;
+    form.wDist = 30; form.wUrgency = 40; form.wCredit = 0; form.wTag = 30;
   }
 }
 
 const handleSave = () => {
   if (totalWeight.value !== 100) return
 
-  ElMessageBox.confirm('确定要热更新调度引擎的底层权重吗？该操作将立即影响后续所有订单的派发逻辑。', '高权限警报', {
+  ElMessageBox.confirm('确定要热更新调度引擎的底层权重吗？', '高权限警报', {
     confirmButtonText: '执行覆盖',
     cancelButtonText: '取消',
     type: 'warning'
@@ -147,8 +225,7 @@ const handleSave = () => {
     } finally {
       loading.value = false
     }
-  }).catch(() => {
-  })
+  }).catch(() => {})
 }
 
 onMounted(() => fetchConfig())
@@ -228,6 +305,28 @@ onMounted(() => fetchConfig())
   box-shadow: 0 15px 35px rgba(0, 0, 0, 0.06);
   overflow: hidden;
 }
+
+/* 应急状态机控制台 */
+.state-machine-box { padding: 30px; background: #fff; border-bottom: 2px dashed #e2e8f0; }
+.sm-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.sm-header h3 { margin: 0; color: #1e293b; font-size: 1.3rem; font-weight: 900; }
+.current-state-badge { padding: 6px 16px; border-radius: 20px; font-weight: 900; font-size: 0.85rem; }
+.current-state-badge.state-normal { background: #ecfdf5; color: #059669; }
+.current-state-badge.state-warning_freeze { background: #fffbeb; color: #d97706; }
+.current-state-badge.state-emergency_response { background: #fef2f2; color: #dc2626; }
+.current-state-badge.state-recovery { background: #eff6ff; color: #2563eb; }
+
+.sm-actions { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; justify-content: center; }
+.sm-btn { padding: 10px 18px; border-radius: 12px; border: none; font-weight: 900; font-size: 0.85rem; cursor: pointer; transition: 0.3s; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+.sm-btn:disabled { background: #e2e8f0; color: #94a3b8; cursor: not-allowed; box-shadow: none; }
+.sm-btn.freeze:not(:disabled) { background: #fffbeb; color: #d97706; border: 1px solid #fcd34d; }
+.sm-btn.freeze:hover:not(:disabled) { background: #fef3c7; transform: translateY(-2px); }
+.sm-btn.emergency-btn:not(:disabled) { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+.sm-btn.emergency-btn:hover:not(:disabled) { background: #fee2e2; transform: translateY(-2px); }
+.sm-btn.recover:not(:disabled) { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
+.sm-btn.recover:hover:not(:disabled) { background: #dbeafe; transform: translateY(-2px); }
+.sm-btn.normal-btn:not(:disabled) { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
+.sm-btn.normal-btn:hover:not(:disabled) { background: #d1fae5; transform: translateY(-2px); }
 
 .mode-switch-box {
   padding: 30px;

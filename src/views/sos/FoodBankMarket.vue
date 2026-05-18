@@ -6,6 +6,17 @@
     </div>
 
     <div class="market-wrapper">
+      <!-- 灾区配给制提示 -->
+      <el-alert v-if="isEmergencyMode" :title="rationTitle" type="error"
+        :description="rationDesc" :closable="false" show-icon style="margin-bottom: 20px;">
+        <template #default>
+          <div class="ration-detail">
+            <span class="ration-count">今日剩余配额: <strong>{{ rationRemaining }} 次</strong></span>
+            <span class="ration-tip">（基于Redis原子计数器防资源挤兑）</span>
+          </div>
+        </template>
+      </el-alert>
+
       <header class="page-header">
         <div class="header-text">
           <h2 class="theme-green">🏪 社区食物银行</h2>
@@ -130,17 +141,28 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { Location } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { getUserProfile } from '@/api/user'
 import { getStationPage, getStationGoods } from '@/api/resource'
 import { publishDemand, getMyHistoryOrders } from '@/api/trade'
+import { getCurrentConfig } from '@/api/config'
 
 const loading = ref(false)
 const locationText = ref('定位中...')
 const userLoc = ref([118.092, 24.623])
 const stationList = ref([])
+
+// 灾区配给制状态
+const sysMode = ref('NORMAL')
+const maxDailyClaims = ref(3)
+const todayClaimed = ref(0)
+
+const isEmergencyMode = computed(() => sysMode.value === 'EMERGENCY_RESPONSE' || sysMode.value === 'WARNING_FREEZE')
+const rationRemaining = computed(() => Math.max(0, maxDailyClaims.value - todayClaimed.value))
+const rationTitle = computed(() => sysMode.value === 'EMERGENCY_RESPONSE' ? '🚨 战时配给制已启动' : '⚠️ 预警冻结期 · 限流配给中')
+const rationDesc = computed(() => `根据应急管理指挥中心指令，当前每人每日最多申领 ${maxDailyClaims.value} 次，请将资源留给最需要的人。`)
 
 const drawerVisible = ref(false)
 const currentSelectStation = ref(null)
@@ -171,6 +193,20 @@ const fetchData = async () => {
     } else {
       locationText.value = '未设置家庭定位，使用默认坐标'
     }
+
+    // 读取用户当日已申领次数
+    if (userRes.data?.dailyClaimCount != null) {
+      todayClaimed.value = userRes.data.dailyClaimCount
+    }
+
+    // 读取系统模式配置
+    try {
+      const configRes = await getCurrentConfig()
+      if (configRes.data) {
+        sysMode.value = configRes.data.sysMode
+        maxDailyClaims.value = configRes.data.maxDailyClaims || 3
+      }
+    } catch (e) {}
 
     try {
       const historyRes = await getMyHistoryOrders({ pageNum: 1, pageSize: 20 })
@@ -244,6 +280,11 @@ onMounted(() => fetchData())
 @keyframes pulse-green { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); } 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
 
 .market-wrapper { max-width: 1200px; margin: 0 auto; width: 100%; padding-bottom: 50px;}
+
+.ration-detail { padding: 5px 0; }
+.ration-count { font-weight: 900; font-size: 1rem; }
+.ration-count strong { color: #dc2626; font-size: 1.2rem; }
+.ration-tip { font-size: 0.8rem; color: #94a3b8; margin-left: 10px; }
 
 .page-header { margin-bottom: 25px; }
 .page-header h2.theme-green { color: #059669; font-size: 2.2rem; margin: 0 0 8px 0; font-weight: 900; letter-spacing: 0.5px; }

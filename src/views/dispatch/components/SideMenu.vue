@@ -112,6 +112,7 @@ const allMenus = [
   // 🟡 任务与流转记录 (中频查看，排在中间)
   { name: '我的配送任务', icon: '🚴', path: '/my-tasks', roles: [3], requiresAuth: true },
   { name: '我的捐赠记录', icon: '📦', path: '/merchant/history', roles: [2], requiresAuth: true },
+  { name: 'CSR社会责任战报', icon: '🏅', path: '/merchant/csr', roles: [2], requiresAuth: true },
   { name: '我的受赠档案', icon: '📜', path: '/recipient/history', roles: [1], requiresAuth: true },
 
   // 🟢 资产与信誉 (低频查看，靠后)

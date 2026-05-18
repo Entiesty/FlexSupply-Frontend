@@ -40,21 +40,27 @@
 
         <div class="sos-actions" v-if="!activeOrder">
 
-          <div class="sos-card urgent" @click="openDrawer('常备用药', ['感冒退烧药', '降压/心脏药', '肠胃用药', '外用消炎药'], 10)">
+          <div class="sos-card urgent" @click="openDrawer('医疗健康', ['常备药品', '外用急救', '医疗器械', '营养补品'], 10)">
             <div class="card-icon-wrap"><span class="card-icon">💊</span></div>
-            <div class="card-text"><h3>常备用药</h3><p>日常慢性病药 / 基础感冒药</p></div>
+            <div class="card-text"><h3>医疗健康</h3><p>慢性病药 / 急救用品 / 营养补品</p></div>
             <div class="sos-arrow">〉</div>
           </div>
 
-          <div class="sos-card food" @click="openDrawer('温暖餐食', ['热乎盒饭', '米面粮油', '方便速食', '新鲜果蔬'], 7)">
+          <div class="sos-card food" @click="openDrawer('食品与饮料', ['米面粮油', '方便速食', '饮用水', '热食盒饭', '烘焙糕点', '生鲜果蔬', '冷冻食品', '乳制品'], 6)">
             <div class="card-icon-wrap"><span class="card-icon">🍚</span></div>
-            <div class="card-text"><h3>温暖餐食</h3><p>现做餐食 / 基础粮油饮水</p></div>
+            <div class="card-text"><h3>食品与饮料</h3><p>米面粮油 / 速食 / 饮用水 / 热食</p></div>
             <div class="sos-arrow">〉</div>
           </div>
 
-          <div class="sos-card warm" @click="openDrawer('越冬日用', ['防寒衣物', '棉被毯子', '暖贴/取暖', '生活日用品'], 3)">
-            <div class="card-icon-wrap"><span class="card-icon">🧥</span></div>
-            <div class="card-text"><h3>越冬日用</h3><p>防寒保暖 / 日常生活必需品</p></div>
+          <div class="sos-card warm" @click="openDrawer('生活日用', ['卫生护理', '防寒保暖', '寝具家纺', '洗漱用品', '纸品耗材'], 3)">
+            <div class="card-icon-wrap"><span class="card-icon">🧹</span></div>
+            <div class="card-text"><h3>生活日用</h3><p>卫生护理 / 防寒保暖 / 洗漱用品</p></div>
+            <div class="sos-arrow">〉</div>
+          </div>
+
+          <div class="sos-card emergency-card" @click="openDrawer('应急物资', ['应急食品', '应急照明', '防护装备', '保暖物资'], 9)">
+            <div class="card-icon-wrap"><span class="card-icon">🚨</span></div>
+            <div class="card-text"><h3>应急物资</h3><p>应急食品 / 照明 / 防护装备</p></div>
             <div class="sos-arrow">〉</div>
           </div>
         </div>
@@ -300,17 +306,26 @@ const triggerSubmitConfirm = () => {
 const generateImplicitTags = (subCat, remark) => {
   let tags = []
   if (subCat.includes('药')) tags.push('药品')
-  if (subCat.includes('降压') || subCat.includes('心脏')) tags.push('高血压', '心脏病')
-  if (subCat.includes('外用消炎')) tags.push('外伤')
-  if (subCat.includes('肠胃')) tags.push('肠胃')
+  if (subCat.includes('急救')) tags.push('外伤', '急救')
+  if (subCat.includes('器械')) tags.push('医疗器械')
 
-  if (subCat === '热乎盒饭') tags.push('主食', '速食', '饱腹')
+  if (subCat === '热食盒饭') tags.push('主食', '速食', '饱腹')
   if (subCat === '米面粮油') tags.push('主食', '饱腹')
   if (subCat === '方便速食') tags.push('速食', '饱腹')
-  if (subCat === '新鲜果蔬') tags.push('生鲜', '高维生素')
+  if (subCat === '生鲜果蔬') tags.push('生鲜', '高维生素')
+  if (subCat === '冷冻食品') tags.push('冷冻', '需冷藏保鲜')
+  if (subCat === '乳制品') tags.push('需冷藏保鲜')
+  if (subCat === '饮用水') tags.push('饮品')
 
+  if (subCat === '卫生护理') tags.push('日用', '女性关怀')
   if (subCat.includes('防寒') || subCat.includes('暖')) tags.push('保暖')
-  if (subCat.includes('生活日用品')) tags.push('日用')
+  if (subCat.includes('寝具')) tags.push('日用')
+  if (subCat.includes('洗漱')) tags.push('日用')
+
+  if (subCat === '应急食品') tags.push('速食', '饱腹', '应急')
+  if (subCat === '应急照明') tags.push('应急', '电子设备')
+  if (subCat === '防护装备') tags.push('应急', '防护')
+  if (subCat === '保暖物资') tags.push('保暖', '应急')
 
   if (remark) {
     if (remark.includes('糖')) tags.push('无糖', '低糖', '糖尿病')
@@ -448,6 +463,7 @@ const submitRating = async () => {
 .urgent { border-color: #ffe4e6; } .urgent .card-icon-wrap { background: #fff1f2; } .urgent:hover { border-color: #fca5a5; }
 .food { border-color: #ffedd5; } .food .card-icon-wrap { background: #fff7ed; } .food:hover { border-color: #fdba74; }
 .warm { border-color: #e0f2fe; } .warm .card-icon-wrap { background: #f0f9ff; } .warm:hover { border-color: #7dd3fc; }
+.emergency-card { border-color: #fef2f2; } .emergency-card .card-icon-wrap { background: #fef2f2; } .emergency-card:hover { border-color: #f87171; }
 
 .status-header { display: flex; align-items: center; gap: 15px; margin-bottom: 25px; }
 .radar-spinner { width: 28px; height: 28px; border: 4px solid #ffedd5; border-top-color: #f97316; border-radius: 50%; animation: spin 1s linear infinite; }

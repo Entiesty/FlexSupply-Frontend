@@ -115,6 +115,12 @@ const routes: Array<RouteRecordRaw> = [
         }
     },
     {
+        path: '/merchant/csr',
+        name: 'MerchantCsr',
+        component: () => import('@/views/merchant/MerchantCsr.vue'),
+        meta: { requiresAuth: true, roles: [2] }
+    },
+    {
         path: '/:pathMatch(.*)*',
         name: 'NotFound',
         component: () => import('@/views/auth/Auth.vue')

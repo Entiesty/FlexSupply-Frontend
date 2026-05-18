@@ -50,16 +50,6 @@
           <input v-model="form.username" type="text" :placeholder="roleConfig.placeholder"/>
         </label>
 
-        <label v-if="isRegister && form.role === 1" class="field">
-          <span class="field-icon">🏷️</span>
-          <select v-model="form.userTag" class="dynamic-select">
-            <option value="NORMAL">普通求助者</option>
-            <option value="ELDERLY">需照顾老人</option>
-            <option value="DISABLED">残障人士</option>
-            <option value="SAN_WORKER">环卫工人</option>
-          </select>
-        </label>
-
         <label v-if="isRegister && form.role === 2" class="field">
           <span class="field-icon">🏢</span>
           <select v-model="form.industryType" class="dynamic-select"
@@ -88,8 +78,18 @@
         <label class="field">
           <span class="field-icon">🔒</span>
           <input v-model="form.password" type="password" :placeholder="isForgot ? '请输入新密码' : '请输入密码'"
-                 @keyup.enter="handleSubmit"/>
+                 @input="checkPasswordStrength" @keyup.enter="handleSubmit"/>
         </label>
+
+        <label v-if="isRegister || isForgot" class="field">
+          <span class="field-icon">🔒</span>
+          <input v-model="form.confirmPassword" type="password" placeholder="请再次输入密码"/>
+        </label>
+
+        <div v-if="(isRegister || isForgot) && form.password" class="pwd-strength">
+          <span class="strength-text" :style="{ color: strengthColor }">{{ strengthText }}</span>
+          <div class="strength-bar-track"><div class="strength-bar-fill" :style="{ width: strengthPercent + '%', background: strengthColor }"></div></div>
+        </div>
 
         <label v-if="!isRegister && !isForgot" class="field">
           <span class="field-icon">🛡️</span>
@@ -149,14 +149,35 @@ const generatedCaptcha = ref('')
 const form = reactive({
   phone: '',
   password: '',
+  confirmPassword: '',
   username: '',
   role: 3,
   smsCode: '',
   agree: false,
   captcha: '',
-  userTag: 'NORMAL',
   industryType: ''
 })
+
+const strengthText = ref('')
+const strengthColor = ref('#cbd5e1')
+const strengthPercent = ref(0)
+
+const PWD_REGEX = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,20}$/
+
+const checkPasswordStrength = () => {
+  const pwd = form.password
+  if (!pwd) { strengthText.value = ''; strengthPercent.value = 0; return }
+  const lenOk = pwd.length >= 6 && pwd.length <= 20
+  const hasLetter = /[A-Za-z]/.test(pwd)
+  const hasDigit = /\d/.test(pwd)
+  if (lenOk && hasLetter && hasDigit) {
+    strengthText.value = '✅ 密码强度合格'; strengthColor.value = '#10b981'; strengthPercent.value = 100
+  } else if (lenOk && (hasLetter || hasDigit)) {
+    strengthText.value = '⚠️ 需同时包含字母和数字'; strengthColor.value = '#f59e0b'; strengthPercent.value = 50
+  } else {
+    strengthText.value = '❌ 密码需为6-20位，且包含字母和数字'; strengthColor.value = '#ef4444'; strengthPercent.value = 25
+  }
+}
 
 const phoneRegex = /^1[3-9]\d{9}$/
 
@@ -226,12 +247,14 @@ const toggleMode = async (mode) => {
   isForgot.value = (mode === 'forgot');
   form.phone = '';
   form.password = '';
+  form.confirmPassword = '';
   form.username = '';
   form.smsCode = '';
   form.role = 3;
   form.captcha = '';
-  form.userTag = 'NORMAL';
   form.industryType = '';
+  strengthText.value = '';
+  strengthPercent.value = 0;
   countdown.value = 0;
 
   if (!isRegister.value && !isForgot.value) {
@@ -266,6 +289,8 @@ const handleSubmit = async () => {
   if (isRegister.value && !form.agree) return ElMessage.warning('请先勾选同意服务协议')
   if (!phoneRegex.test(form.phone)) return ElMessage.warning('手机号码格式不正确')
   if (!form.password) return ElMessage.warning('请输入密码')
+  if ((isRegister.value || isForgot.value) && !PWD_REGEX.test(form.password)) return ElMessage.warning('密码需为6-20位，且同时包含字母和数字')
+  if ((isRegister.value || isForgot.value) && form.password !== form.confirmPassword) return ElMessage.warning('两次输入的密码不一致')
   if ((isRegister.value || isForgot.value) && !form.smsCode) return ElMessage.warning('请输入短信验证码')
   if (isRegister.value && !form.username) return ElMessage.warning('请将名称填写完整')
 
@@ -295,7 +320,6 @@ const handleSubmit = async () => {
         username: form.username,
         role: form.role,
         smsCode: form.smsCode,
-        userTag: form.role === 1 ? form.userTag : 'NORMAL',
         industryType: form.role === 2 ? form.industryType : null
       })
       ElMessage.success('注册成功！登录后请前往个人中心完善资料。')
@@ -608,6 +632,11 @@ onMounted(() => {
 .dynamic-select.placeholder-color {
   color: #9ca3af;
 }
+
+.pwd-strength { margin-top: -4px; padding: 0 4px; }
+.strength-text { font-size: 0.75rem; font-weight: bold; display: block; margin-bottom: 4px; }
+.strength-bar-track { height: 4px; background: #f1f5f9; border-radius: 2px; overflow: hidden; }
+.strength-bar-fill { height: 100%; border-radius: 2px; transition: width 0.3s ease; }
 
 .agreement {
   text-align: left;
