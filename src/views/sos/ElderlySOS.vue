@@ -402,7 +402,7 @@ const handleFinalSubmit = async () => {
   try {
     await publishDemand({
       requiredCategory: currentMainCat.value,
-      urgencyLevel: currentUrgency.value,
+      urgencyLevel: urgencyMap.value[currentMainCat.value], // ✅ FIX-1: 提交时刻实时抓取当前sysMode下的urgency
       targetLon: currentLon.value,
       targetLat: currentLat.value,
       description: fullDescription,

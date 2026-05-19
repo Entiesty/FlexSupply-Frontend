@@ -11,46 +11,29 @@
       </header>
 
       <div class="engine-panel">
-        <!-- 应急状态机控制台 -->
+        <!-- ✅ FIX-2: 极简双轨状态机 -->
         <div class="state-machine-box">
           <div class="sm-header">
-            <h3>🛡️ 应急模式全生命周期状态机</h3>
+            <h3>🛡️ 极简双轨状态机 (NORMAL ↔ EMERGENCY)</h3>
             <span class="current-state-badge" :class="'state-' + form.sysMode.toLowerCase()">
               当前: {{ stateLabel(form.sysMode) }}
             </span>
           </div>
-          <el-steps :active="activeStep" align-center finish-status="success" process-status="process">
-            <el-step title="常态" description="NORMAL" />
-            <el-step title="预警冻结" description="WARNING_FREEZE" />
-            <el-step title="紧急响应" description="EMERGENCY_RESPONSE" />
-            <el-step title="恢复期" description="RECOVERY" />
-          </el-steps>
-          <div class="sm-actions">
-            <button class="sm-btn freeze" :disabled="form.sysMode !== 'NORMAL'"
-                    @click="handleSwitchMode('WARNING_FREEZE')">
-              ⚠️ 进入预警冻结
-            </button>
-            <button class="sm-btn emergency-btn" :disabled="form.sysMode !== 'WARNING_FREEZE'"
-                    @click="handleSwitchMode('EMERGENCY_RESPONSE')">
-              🚨 激活紧急响应
-            </button>
-            <button class="sm-btn recover" :disabled="form.sysMode !== 'EMERGENCY_RESPONSE'"
-                    @click="handleSwitchMode('RECOVERY')">
-              🩹 转入恢复期
-            </button>
-            <button class="sm-btn normal-btn" :disabled="form.sysMode !== 'RECOVERY' && form.sysMode !== 'WARNING_FREEZE'"
+          <div class="sm-actions" style="justify-content: center;">
+            <button class="sm-btn normal-btn" :disabled="form.sysMode === 'NORMAL'"
                     @click="handleSwitchMode('NORMAL')">
-              🕊️ 恢复常态
+              🕊️ 恢复平时模式
+            </button>
+            <button class="sm-btn emergency-btn" :disabled="form.sysMode === 'EMERGENCY'"
+                    @click="handleSwitchMode('EMERGENCY')">
+              🚨 激活应急模式
             </button>
           </div>
-          <el-alert v-if="form.sysMode === 'WARNING_FREEZE'" title="⚠️ 预警冻结生效中" type="warning"
-            description="非应急物资已从任务大厅隐退，仅战备物资保持流通。志愿者收到待命通知。"
+          <el-alert v-if="form.sysMode === 'NORMAL'" title="🟢 平时常态运行中" type="success"
+            description="Hub & Spoke 驿站中转, SAW距离优先(wDist=35%), 无配给限制, 日常物资自由流通。"
             :closable="false" show-icon style="margin-top: 15px;" />
-          <el-alert v-if="form.sysMode === 'EMERGENCY_RESPONSE'" title="🔴 紧急响应已激活" type="error"
-            description="全量物资已解锁，战时配给制与运力补贴已启动。L0直达优先，SAW权重自动切换至紧急预设。"
-            :closable="false" show-icon style="margin-top: 15px;" />
-          <el-alert v-if="form.sysMode === 'RECOVERY'" title="🟢 灾后恢复期" type="success"
-            description="物资流通恢复常态，历史补贴结算通道限时开放中。建议在30天内完成灾后补贴清算后切回常态模式。"
+          <el-alert v-if="form.sysMode === 'EMERGENCY'" title="🔴 应急模式已激活" type="error"
+            description="P2P直达优先, SAW紧急度优先(wUrgency=45%), 配给制+防挤兑+LBS雷达自动广播已全部启动。"
             :closable="false" show-icon style="margin-top: 15px;" />
         </div>
 
@@ -113,7 +96,7 @@
 <script setup>
 import {ref, reactive, computed, onMounted} from 'vue'
 import {ElMessage, ElMessageBox} from 'element-plus'
-import {getCurrentConfig, updateConfig, switchMode, preCheckMode} from '@/api/config'
+import {getCurrentConfig, updateConfig, switchMode} from '@/api/config'
 
 const loading = ref(false)
 
@@ -125,11 +108,8 @@ const form = reactive({
   wTag: 10
 })
 
-const stepMap = { 'NORMAL': 0, 'WARNING_FREEZE': 1, 'EMERGENCY_RESPONSE': 2, 'RECOVERY': 3 }
-const activeStep = computed(() => stepMap[form.sysMode] ?? 0)
-
 const stateLabel = (mode) => {
-  const map = { 'NORMAL': '🕊️ 常态', 'WARNING_FREEZE': '⚠️ 预警冻结期', 'EMERGENCY_RESPONSE': '🚨 紧急响应期', 'RECOVERY': '🩹 恢复期' }
+  const map = { 'NORMAL': '🕊️ 平时常态', 'EMERGENCY': '🔴 战时应急' }
   return map[mode] || mode
 }
 
@@ -154,28 +134,7 @@ const fetchConfig = async () => {
 }
 
 const handleSwitchMode = async (targetMode) => {
-  // WARNING_FREEZE 预检：无战备物资时二次确认
-  if (targetMode === 'WARNING_FREEZE') {
-    try {
-      const res = await preCheckMode('WARNING_FREEZE')
-      const count = res.data?.emergencyCount || 0
-      const warning = res.data?.warning
-      const msg = warning
-        ? `⚠️ ${warning}。\n\n确定要继续进入预警冻结状态吗？`
-        : `当前共有 ${count} 批战备物资储备。\n\n进入预警冻结后，非应急物资将从调度列表隐退。确定继续吗？`
-
-      await ElMessageBox.confirm(msg.replace(/\n/g, '<br/>'), '预警冻结预检', {
-        confirmButtonText: '确认进入',
-        cancelButtonText: '取消',
-        type: 'warning',
-        dangerouslyUseHTMLString: true
-      })
-    } catch (e) {
-      return // 用户取消
-    }
-  }
-
-  ElMessageBox.confirm(`确定将系统模式切换至【${stateLabel(targetMode)}】吗？此操作将立即改变全局调度策略与 SAW 算法权重。`, '应急状态机操作', {
+  ElMessageBox.confirm(`确定将系统模式切换至【${stateLabel(targetMode)}】吗？此操作将立即改变全局 SAW 权重、配给制与 LBS 广播策略。`, '双轨状态机操作', {
     confirmButtonText: '确认切换',
     cancelButtonText: '取消',
     type: 'warning'
