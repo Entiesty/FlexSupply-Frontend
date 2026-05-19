@@ -16,11 +16,11 @@
     </div>
 
     <template v-else>
-      <div class="top-status" :class="{ 'emergency-mode': sysMode !== 'NORMAL' }">
-        <span class="pulse-dot" :style="{ background: sysMode === 'NORMAL' ? '#10b981' : sysMode === 'RECOVERY' ? '#3b82f6' : '#ef4444' }"></span>
+      <div class="top-status" :class="{ 'emergency-mode': sysMode === 'EMERGENCY' }">
+        <span class="pulse-dot" :style="{ background: sysMode === 'NORMAL' ? '#10b981' : '#ef4444' }"></span>
         当前运行模式: <strong>{{ MODE_LABELS[sysMode] || '🟢 平时常态调度' }}</strong>
         <button v-if="currentUserRole === 4" class="mode-switch-btn" @click="toggleSysMode">
-          下一模式: {{ MODE_LABELS[MODE_NEXT[sysMode]] || '—' }}
+          切换至{{ sysMode === 'NORMAL' ? '🔴 战时应急' : '🟢 平时常态' }}
         </button>
       </div>
 
@@ -47,8 +47,8 @@
         />
 
         <div v-else class="empty-task-panel">
-          <div class="radar-spinner" :class="{ 'emergency-spin': sysMode !== 'NORMAL' }"></div>
-          <h3>{{ sysMode === 'NORMAL' ? '暂无调度需求' : sysMode === 'EMERGENCY_RESPONSE' ? '应急预案已启动，全城戒备' : '预警状态，正在密切监控物资流向...' }}</h3>
+          <div class="radar-spinner" :class="{ 'emergency-spin': sysMode === 'EMERGENCY' }"></div>
+          <h3>{{ sysMode === 'NORMAL' ? '暂无调度需求' : '应急预案已启动，全城戒备' }}</h3>
           <p>城市运转良好，红蓝双轨调度引擎正在实时监听中...</p>
         </div>
 
@@ -203,16 +203,12 @@ onUnmounted(() => {
 
 const MODE_LABELS = {
   NORMAL: '🟢 平时常态调度',
-  WARNING_FREEZE: '🟡 预警冻结调度',
-  EMERGENCY_RESPONSE: '🔴 急时应急调度',
-  RECOVERY: '🔵 灾后恢复调度'
+  EMERGENCY: '🔴 战时应急调度'
 }
 
 const MODE_NEXT = {
-  NORMAL: 'WARNING_FREEZE',
-  WARNING_FREEZE: 'EMERGENCY_RESPONSE',
-  EMERGENCY_RESPONSE: 'RECOVERY',
-  RECOVERY: 'NORMAL'
+  NORMAL: 'EMERGENCY',
+  EMERGENCY: 'NORMAL'
 }
 
 const toggleSysMode = async () => {

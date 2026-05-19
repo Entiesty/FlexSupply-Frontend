@@ -196,20 +196,17 @@ const locationText = ref('正在校验身份与地址...')
 const sysMode = ref('NORMAL')
 
 const modeBannerClass = computed(() => {
-  if (sysMode.value === 'EMERGENCY_RESPONSE') return 'mode-emergency'
-  if (sysMode.value === 'WARNING_FREEZE') return 'mode-warning'
+  if (sysMode.value === 'EMERGENCY') return 'mode-emergency'
   return 'mode-normal'
 })
 
 const modeBannerIcon = computed(() => {
-  if (sysMode.value === 'EMERGENCY_RESPONSE') return '🚨'
-  if (sysMode.value === 'WARNING_FREEZE') return '⚠️'
+  if (sysMode.value === 'EMERGENCY') return '🚨'
   return '🤝'
 })
 
 const modeBannerText = computed(() => {
-  if (sysMode.value === 'EMERGENCY_RESPONSE') return '城市处于紧急响应期，启用战时配给制，优先保障生存物资'
-  if (sysMode.value === 'WARNING_FREEZE') return '社区进入预警冻结期，物资调配受限，请合理申领'
+  if (sysMode.value === 'EMERGENCY') return '城市处于战时紧急响应，启用配给制，优先保障生存物资'
   return '社区互助快车道，专为行动不便长者开启，爱心骑士随时待命'
 })
 
