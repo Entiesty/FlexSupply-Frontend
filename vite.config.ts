@@ -12,7 +12,7 @@ export default defineConfig(() => { // 🧹 移除了用不到的 mode 参数
     },
     server: {
       host: '127.0.0.1',
-      port: 3000,
+      port: 5173,
       // 代理已经完全移除，请求直达后端 8080
     },
   }

@@ -12,6 +12,11 @@ export function getAvailableOrders(params) {
     return request({ url: '/trade/order/available-list', method: 'get', params })
 }
 
+// 商家响应紧急求助 (P2P直达)
+export function respondSos(data) {
+    return request({ url: '/trade/order/respond-sos', method: 'post', data })
+}
+
 // 受赠方发布紧急求助
 // 受赠方发布紧急求助
 export function publishDemand(data) {

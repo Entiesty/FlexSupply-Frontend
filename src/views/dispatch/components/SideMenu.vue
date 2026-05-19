@@ -140,6 +140,11 @@ onMounted(async () => {
       currentUser.value.username = res.data.username
     }
   } catch (e) {}
+
+  /* 监听个人设置页的用户名变更事件，实现跨组件实时同步 */
+  window.addEventListener('user-info-updated', (e) => {
+    currentUser.value.username = e.detail.username
+  })
 })
 
 const goToHome = () => {

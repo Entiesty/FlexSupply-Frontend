@@ -14,14 +14,6 @@
           <p>将余量物资送入社区调度网络，系统自动匹配最近驿站与最优运力</p>
         </header>
 
-        <el-alert v-if="sysMode === 'EMERGENCY'" :title="'🚨 定向救助任务: ' + activeTargetCategory"
-          type="error" :closable="false" show-icon style="margin-bottom: 20px;">
-          <template #default>
-            请选择<strong>高亮类目</strong>发布物资 — 骑士已待命，取件后直达求助市民
-            <el-button size="small" type="warning" style="margin-left: 12px;" @click="cancelEmergency">退出任务</el-button>
-          </template>
-        </el-alert>
-
         <el-form ref="formRef" :model="form" label-position="top" :rules="rules" :disabled="submitting">
 
           <!-- ====== 区块一：基本信息 ====== -->
@@ -49,7 +41,7 @@
                   <span class="category-group-name">{{ groupName }}</span>
                   <div class="pill-wrap">
                     <span v-for="cat in group" :key="cat" class="pill-btn"
-                      :class="{ active: form.category === cat, disabled: sysMode === 'EMERGENCY' && !isEmergencyTarget(cat) }"
+                      :class="{ active: form.category === cat }"
                       @click="selectCategory(cat)">{{ cat }}</span>
                   </div>
                 </div>
@@ -158,28 +150,19 @@
               💡 精准的物理规格评估，有助于系统算法为您秒级匹配最优运力
             </div>
 
-            <template v-if="sysMode !== 'EMERGENCY'">
-              <el-form-item label="目标履约驿站" prop="currentStationId" class="no-margin-bottom">
-                <el-select v-model="form.currentStationId" placeholder="系统将按LBS匹配最近驿站..." style="width:100%;" filterable clearable>
-                  <el-option v-for="st in availableStations" :key="st.stationId" :value="st.stationId"
-                    :label="st.stationName + (st.hasFreezer === 1 ? ' 🧊冷链' : '')" />
-                </el-select>
-              </el-form-item>
-              <el-alert v-if="isColdChainNeeded" title="🧊 检测到冷链需求 — 已自动过滤无冷库设备的驿站" type="info" :closable="false" class="inline-alert" />
-            </template>
-            <template v-else>
-              <el-alert title="🚀 生命通道直达模式" type="error" :closable="false" show-icon class="inline-alert">
-                <template #default>
-                  该单将越过驿站大仓，系统已指派运力从商铺取件后<strong>点对点护送</strong>至求助市民处
-                </template>
-              </el-alert>
-            </template>
+            <el-form-item label="目标履约驿站" prop="currentStationId" class="no-margin-bottom">
+              <el-select v-model="form.currentStationId" placeholder="系统将按LBS匹配最近驿站..." style="width:100%;" filterable clearable>
+                <el-option v-for="st in availableStations" :key="st.stationId" :value="st.stationId"
+                  :label="st.stationName + (st.hasFreezer === 1 ? ' 🧊冷链' : '')" />
+              </el-select>
+            </el-form-item>
+            <el-alert v-if="isColdChainNeeded" title="🧊 检测到冷链需求 — 已自动过滤无冷库设备的驿站" type="info" :closable="false" class="inline-alert" />
           </div>
 
           <!-- CTA 提交按钮 -->
-          <el-button size="large" :type="sysMode === 'EMERGENCY' ? 'danger' : 'primary'"
+          <el-button size="large" type="primary"
             class="submit-btn-cta" :disabled="!isFormValid" @click="handleDonate" :loading="submitting">
-            {{ sysMode === 'EMERGENCY' ? '🚨 响应紧急广播，立即发货' : '确认上架，呼叫运力接货' }}
+            确认上架，呼叫运力接货
           </el-button>
         </el-form>
       </div>
@@ -209,19 +192,18 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
-import { ElMessage, ElNotification, ElMessageBox } from 'element-plus'
+import { ElMessage, ElNotification } from 'element-plus'
 import SideMenu from '@/views/dispatch/components/SideMenu.vue'
 import { getRecommendStations, donateGoods } from '@/api/resource'
 import { getUserProfile } from '@/api/user'
 import { checkMyEmergencyBroadcast } from '@/api/dispatch'
+import { respondSos } from '@/api/trade'
 import { uploadFile } from '@/api/common'
 
 const loading = ref(false)
 const submitting = ref(false)
 const stations = ref([])
-const targetOrderId = ref(null)
 const sysMode = ref('NORMAL')
-const activeTargetCategory = ref('')
 const fileInput = ref(null)
 const formRef = ref(null)
 let pollTimer = null
@@ -262,7 +244,7 @@ const rules = {
   goodsImageUrl: [{ required: true, message: '请上传物资实拍图', trigger: 'change' }],
   currentStationId: [{
     validator: (_rule, value, callback) => {
-      if (sysMode.value !== 'EMERGENCY' && !value) callback(new Error('请选择目标驿站'))
+      if (!value) callback(new Error('请选择目标驿站'))
       else callback()
     }, trigger: 'change'
   }]
@@ -276,27 +258,11 @@ const categoryGroups = {
   '🚨 应急物资':   ['应急食品', '应急照明', '防护装备', '保暖物资']
 }
 
-const isEmergencyTarget = (cat) => {
-  const target = activeTargetCategory.value
-  if (!target) return true
-  if (cat === target) return true
-  for (const subs of Object.values(categoryGroups)) {
-    if (subs.includes(target) && subs.includes(cat)) return true
-  }
-  return false
-}
-
-const selectCategory = (cat) => {
-  if (sysMode.value === 'EMERGENCY' && !isEmergencyTarget(cat)) {
-    ElMessage.warning('应急模式下只能选择高亮类目')
-    return
-  }
-  form.category = cat
-}
+const selectCategory = (cat) => { form.category = cat }
 
 const isFormValid = computed(() => {
   if (!form.goodsName || !form.category || !form.stock || !form.expirationDate || !form.goodsImageUrl) return false
-  if (sysMode.value !== 'EMERGENCY' && !form.currentStationId) return false
+  if (!form.currentStationId) return false
   return true
 })
 
@@ -403,25 +369,36 @@ const handleFileChange = async (e) => {
   try { const res = await uploadFile(file); form.goodsImageUrl = res.data } catch (e) { ElMessage.error('上传失败') } finally { loading.value = false }
 }
 
+// 轮询收到紧急广播时展示弹窗
 const showEmergencyPopup = (data) => {
   if (emergencyDialog.visible) return
   emergencyDialog.data = data; emergencyDialog.visible = true
   processedBroadcastIds.add(data.orderId)
 }
-const acceptEmergency = () => {
+
+// 紧急广播弹窗 — 调用新 respond-sos API
+const acceptEmergency = async () => {
   const d = emergencyDialog.data
-  sysMode.value = 'EMERGENCY'; activeTargetCategory.value = d.requiredCategory || d.category
-  targetOrderId.value = d.orderId; form.category = ''; emergencyDialog.visible = false
+  emergencyDialog.visible = false
+  try {
+    await respondSos({
+      orderId: d.orderId,
+      goodsName: form.goodsName || '紧急响应物资',
+      category: d.requiredCategory || d.category || '应急物资',
+      stock: form.stock || 1,
+      unit: form.unit || '件',
+      expirationDate: form.expirationDate || '2099-12-31 23:59:59',
+      weightLevel: form.weightLevel || 1,
+      volumeLevel: form.volumeLevel || 1,
+      goodsImageUrl: form.goodsImageUrl || '/img/default.png',
+      estimatedValue: form.estimatedValue || 0
+    })
+    ElNotification.success({ title: '✅ 响应成功', message: '物资将点对点直达受赠方，感谢您的爱心！' })
+  } catch (e) {
+    ElMessage.error(e.response?.data?.message || '响应失败')
+  }
 }
-const rejectEmergency = () => { emergencyDialog.visible = false; emergencyDialog.data = null; ElMessage.info('已忽略该调度请求') }
-const cancelEmergency = () => {
-  ElMessageBox.confirm('确认撤销援助任务？该工单将重新放入公池。', '⚠️ 撤销援助任务', {
-    confirmButtonText: '确认撤销', cancelButtonText: '点错了', type: 'warning'
-  }).then(() => {
-    sysMode.value = 'NORMAL'; targetOrderId.value = null; form.category = ''
-    activeTargetCategory.value = ''
-  }).catch(() => {})
-}
+const rejectEmergency = () => { emergencyDialog.visible = false; ElMessage.info('已忽略该调度请求') }
 
 const handleDonate = async () => {
   if (!isFormValid.value) return
@@ -440,14 +417,12 @@ const handleDonate = async () => {
       weightLevel: form.weightLevel,
       goodsImageUrl: form.goodsImageUrl,
       estimatedValue: form.estimatedValue,
-      currentStationId: sysMode.value === 'EMERGENCY' ? null : form.currentStationId,
-      targetOrderId: targetOrderId.value
+      currentStationId: form.currentStationId
     })
 
     ElNotification.success({ title: '✅ 发布成功', message: '已同步至调度大盘，运力测算与匹配中...' })
     form.goodsName = ''; form.stock = 1; form.category = ''; form.expirationDate = ''
     form.currentStationId = null; form.weightLevel = 1; form.volumeLevel = 1; form.goodsImageUrl = ''; form.estimatedValue = 0
-    sysMode.value = 'NORMAL'; targetOrderId.value = null; activeTargetCategory.value = ''
   } catch (e) { } finally { submitting.value = false }
 }
 

@@ -16,11 +16,11 @@
     </div>
 
     <template v-else>
-      <div class="top-status" :class="{ 'emergency-mode': sysMode === 'EMERGENCY' }">
-        <span class="pulse-dot" :style="{ background: sysMode === 'EMERGENCY' ? '#ef4444' : '#10b981' }"></span>
-        当前运行模式: <strong>{{ sysMode === 'NORMAL' ? '🟢 平时常态调度' : '🔴 急时应急调度' }}</strong>
+      <div class="top-status" :class="{ 'emergency-mode': sysMode !== 'NORMAL' }">
+        <span class="pulse-dot" :style="{ background: sysMode === 'NORMAL' ? '#10b981' : sysMode === 'RECOVERY' ? '#3b82f6' : '#ef4444' }"></span>
+        当前运行模式: <strong>{{ MODE_LABELS[sysMode] || '🟢 平时常态调度' }}</strong>
         <button v-if="currentUserRole === 4" class="mode-switch-btn" @click="toggleSysMode">
-          切换至{{ sysMode === 'NORMAL' ? '急时' : '平时' }}
+          下一模式: {{ MODE_LABELS[MODE_NEXT[sysMode]] || '—' }}
         </button>
       </div>
 
@@ -47,8 +47,8 @@
         />
 
         <div v-else class="empty-task-panel">
-          <div class="radar-spinner" :class="{ 'emergency-spin': sysMode === 'EMERGENCY' }"></div>
-          <h3>{{ sysMode === 'NORMAL' ? '暂无调度需求' : '应急预案已启动，全城戒备' }}</h3>
+          <div class="radar-spinner" :class="{ 'emergency-spin': sysMode !== 'NORMAL' }"></div>
+          <h3>{{ sysMode === 'NORMAL' ? '暂无调度需求' : sysMode === 'EMERGENCY_RESPONSE' ? '应急预案已启动，全城戒备' : '预警状态，正在密切监控物资流向...' }}</h3>
           <p>城市运转良好，红蓝双轨调度引擎正在实时监听中...</p>
         </div>
 
@@ -70,6 +70,7 @@ import AMapLoader from '@amap/amap-jsapi-loader'
 import { smartMatch, getDispatchConfig } from '@/api/dispatch'
 import { getPendingOrders, grabTask, switchOrderToPickup } from '@/api/trade'
 import { getUserProfile } from '@/api/user'
+import { switchMode, getCurrentConfig } from '@/api/config'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import DispatchControl from './components/DispatchControl.vue'
 import DashboardPanel from './components/DashboardPanel.vue'
@@ -176,6 +177,11 @@ onMounted(async () => {
 const proceedInit = () => {
   initMap()
 
+  // 加载当前系统模式 (后端状态机)
+  getCurrentConfig().then(res => {
+    if (res?.data?.sysMode) sysMode.value = res.data.sysMode
+  }).catch(() => {})
+
   getDispatchConfig().then(res => {
     if (res?.data) dynamicThreshold.value = res.data
   }).catch(e => {})
@@ -195,10 +201,30 @@ onUnmounted(() => {
   clearFallbackTimer()
 })
 
-const toggleSysMode = () => {
-  sysMode.value = sysMode.value === 'NORMAL' ? 'EMERGENCY' : 'NORMAL'
-  if(sysMode.value === 'EMERGENCY') ElMessage.error({ message: '⚠️ 已进入【急时应急模式】，请注意资源倾斜', duration: 4000 })
-  else ElMessage.success({ message: '✅ 已恢复为【平时常态模式】', duration: 4000 })
+const MODE_LABELS = {
+  NORMAL: '🟢 平时常态调度',
+  WARNING_FREEZE: '🟡 预警冻结调度',
+  EMERGENCY_RESPONSE: '🔴 急时应急调度',
+  RECOVERY: '🔵 灾后恢复调度'
+}
+
+const MODE_NEXT = {
+  NORMAL: 'WARNING_FREEZE',
+  WARNING_FREEZE: 'EMERGENCY_RESPONSE',
+  EMERGENCY_RESPONSE: 'RECOVERY',
+  RECOVERY: 'NORMAL'
+}
+
+const toggleSysMode = async () => {
+  const target = MODE_NEXT[sysMode.value]
+  if (!target) return
+  try {
+    await switchMode({ targetMode: target })
+    sysMode.value = target
+    ElMessage.success({ message: `系统模式已切换: ${MODE_LABELS[target]}`, duration: 3000 })
+  } catch (e) {
+    ElMessage.error(e?.message || '模式切换失败，请检查权限或状态机规则')
+  }
 }
 
 const fetchMapOrders = async () => {
