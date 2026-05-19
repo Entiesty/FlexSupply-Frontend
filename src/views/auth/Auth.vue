@@ -342,7 +342,10 @@ const handleSubmit = async () => {
         await router.push('/volunteer/profile')
       } else {
         ElMessage.success('登录成功，欢迎回来！')
-        if (res.data.role === 1) await router.push('/market') // 👈 核心修改：改为跳转至食物银行
+        if (res.data.role === 1) {
+          const dt = res.data.deliveryType
+          await router.push(dt === 1 ? '/sos' : '/market')
+        }
         else if (res.data.role === 2) await router.push('/merchant/donate')
         else if (res.data.role === 3) await router.push('/map')
         else if (res.data.role === 4) await router.push('/map')

@@ -363,7 +363,7 @@ const triggerSubmitConfirm = () => {
   }).catch(() => {})
 }
 
-const generateImplicitTags = (subCat, remark) => {
+const generateImplicitTags = (subCat) => {
   let tags = []
   if (subCat.includes('药')) tags.push('药品')
   if (subCat.includes('急救')) tags.push('外伤', '急救')
@@ -373,11 +373,11 @@ const generateImplicitTags = (subCat, remark) => {
   if (subCat === '米面粮油') tags.push('主食', '饱腹')
   if (subCat === '方便速食') tags.push('速食', '饱腹')
   if (subCat === '生鲜果蔬') tags.push('生鲜', '高维生素')
-  if (subCat === '冷冻食品') tags.push('冷冻', '需冷藏保鲜')
-  if (subCat === '乳制品') tags.push('需冷藏保鲜')
+  if (subCat === '冷冻食品') tags.push('冷冻')
+  if (subCat === '乳制品') tags.push('乳制品')
   if (subCat === '饮用水') tags.push('饮品')
 
-  if (subCat === '卫生护理') tags.push('日用', '女性关怀')
+  if (subCat === '卫生护理') tags.push('日用')
   if (subCat.includes('防寒') || subCat.includes('暖')) tags.push('保暖')
   if (subCat.includes('寝具')) tags.push('日用')
   if (subCat.includes('洗漱')) tags.push('日用')
@@ -387,11 +387,6 @@ const generateImplicitTags = (subCat, remark) => {
   if (subCat === '防护装备') tags.push('应急', '防护')
   if (subCat === '保暖物资') tags.push('保暖', '应急')
 
-  if (remark) {
-    if (remark.includes('糖')) tags.push('无糖', '低糖', '糖尿病')
-    if (remark.includes('压') || remark.includes('心')) tags.push('高血压', '心脏病')
-    if (remark.includes('牙') || remark.includes('老') || remark.includes('嚼')) tags.push('易咀嚼')
-  }
   return [...new Set(tags)]
 }
 
@@ -399,11 +394,10 @@ const handleFinalSubmit = async () => {
   drawerVisible.value = false
   loading.value = true
 
-  const doorStr = userInfo.value.doorNumber ? ` | 门牌: ${userInfo.value.doorNumber}` : ' | 门牌: 未填'
-  const remarkStr = userInfo.value.healthRemark ? ` | 备注: ${userInfo.value.healthRemark}` : ''
-  const fullDescription = `${selectedSub.value}${doorStr}${remarkStr}`
+  const doorStr = userInfo.value.doorNumber ? ` | 门牌: ${userInfo.value.doorNumber}` : ''
+  const fullDescription = `${selectedSub.value}${doorStr}`
 
-  const derivedTags = generateImplicitTags(selectedSub.value, userInfo.value.healthRemark)
+  const derivedTags = generateImplicitTags(selectedSub.value)
 
   try {
     await publishDemand({

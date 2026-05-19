@@ -51,7 +51,6 @@
                 <template v-if="scope.row.role === 1">
                   <div class="d-row"><span class="d-icon">🏠</span> 门牌: {{ scope.row.doorNumber || '未填写' }}</div>
                   <div class="d-row" v-if="scope.row.emergencyPhone"><span class="d-icon">☎️</span> 紧急: {{ scope.row.emergencyPhone }}</div>
-                  <div class="d-row d-alert" v-if="scope.row.healthRemark"><span class="d-icon">❤️</span> 备注: {{ scope.row.healthRemark }}</div>
                 </template>
 
                 <template v-if="scope.row.role === 2">
@@ -99,7 +98,7 @@
           <el-alert
               title="💡 身份核定提示"
               type="warning"
-              description="该用户为【重点关怀对象】。请结合其填写的健康备注与资质凭证，核定最终的调度身份。算法将依此进行物资靶向匹配！"
+              description="该用户为【重点关怀对象】。请结合其资质凭证与门牌地址，核定配送方式与最终调度身份。"
               show-icon
               :closable="false"
               style="margin-bottom: 25px; border-radius: 12px;"

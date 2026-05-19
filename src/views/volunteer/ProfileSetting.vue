@@ -116,16 +116,6 @@
                     <el-radio :value="1" border class="delivery-radio">🚪 我行动不便，需要志愿者送货上门</el-radio>
                   </el-radio-group>
                 </el-form-item>
-                <el-form-item label="🏷️ 特殊需求标签 (帮助系统精准匹配物资)">
-                  <el-checkbox-group v-model="careTags">
-                    <el-checkbox label="行动不便">行动不便</el-checkbox>
-                    <el-checkbox label="需特殊用药">需特殊用药</el-checkbox>
-                    <el-checkbox label="独居高龄">独居高龄</el-checkbox>
-                  </el-checkbox-group>
-                </el-form-item>
-                <el-form-item label="📝 补充备注 (健康/饮食/配送注意事项)">
-                  <el-input v-model="profileForm.healthRemark" size="large" type="textarea" :rows="2" placeholder="例如：严重糖尿病需无糖食品、或膝关节术后无法下楼需送至屋内" />
-                </el-form-item>
               </template>
 
               <template v-if="stats.role === 2">
@@ -387,11 +377,9 @@ const vehicleOptions = [
 // ==================== 表单数据 ====================
 const profileForm = reactive({
   username: '', currentLon: '', currentLat: '', addressName: '',
-  doorNumber: '', emergencyPhone: '', healthRemark: '',
-  identityProofUrl: '', vehicleType: 1, industryType: '', userTag: '',
+  doorNumber: '', identityProofUrl: '', vehicleType: 1, industryType: '',
   deliveryType: 0,
 })
-const careTags = ref([])
 const pwdForm = reactive({ oldPassword: '', newPassword: '', confirmPassword: '' })
 
 // ==================== 高德地图逻辑 ====================
@@ -499,14 +487,10 @@ const fetchAllData = async () => {
     profileForm.currentLon = profileRes.data.currentLon || ''
     profileForm.currentLat = profileRes.data.currentLat || ''
     profileForm.doorNumber = profileRes.data.doorNumber || ''
-    profileForm.emergencyPhone = profileRes.data.emergencyPhone || ''
-    profileForm.healthRemark = profileRes.data.healthRemark || ''
     profileForm.identityProofUrl = profileRes.data.identityProofUrl || ''
     profileForm.vehicleType = profileRes.data.vehicleType || 1
     profileForm.industryType = profileRes.data.industryType || ''
-    profileForm.userTag = profileRes.data.userTag || ''
     profileForm.deliveryType = profileRes.data.deliveryType != null ? profileRes.data.deliveryType : 0
-    careTags.value = profileForm.userTag ? profileForm.userTag.split(',').filter(t => t.trim()) : []
 
     if (profileForm.currentLon && profileForm.currentLat) {
       profileForm.addressName = '正在解析...'
@@ -584,8 +568,7 @@ const handleUpdateProfile = async (isSubmitAudit = false) => {
     payload.currentLat = parseFloat(profileForm.currentLat)
   }
   if (stats.value.role === 1) {
-    payload.doorNumber = profileForm.doorNumber; payload.emergencyPhone = profileForm.emergencyPhone
-    payload.healthRemark = profileForm.healthRemark; payload.userTag = careTags.value.join(',')
+    payload.doorNumber = profileForm.doorNumber
     payload.deliveryType = profileForm.deliveryType
   }
   /* ✅ FIX-2: 防御空字符串导致后端Byte反序列化500 */
