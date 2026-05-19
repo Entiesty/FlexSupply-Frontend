@@ -110,7 +110,7 @@
                 <el-form-item label="详细门牌号 (精确到室)" required>
                   <el-input v-model="profileForm.doorNumber" size="large" placeholder="例如：幸福小区3栋2梯402室" />
                 </el-form-item>
-                <el-form-item label="🚪 物资领取方式" required>
+                <el-form-item label="🚪 入口偏好 (影响侧栏导航, 非订单履约方式)" required>
                   <el-radio-group v-model="profileForm.deliveryType" size="large">
                     <el-radio :value="0" border class="delivery-radio">🏪 我可以自行前往食物银行取货</el-radio>
                     <el-radio :value="1" border class="delivery-radio">🚪 我行动不便，需要志愿者送货上门</el-radio>

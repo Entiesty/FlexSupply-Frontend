@@ -157,8 +157,9 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { Location } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { getUserProfile } from '@/api/user'
 import { getStationPage, getStationGoods } from '@/api/resource'
 import { publishDemand, getMyHistoryOrders } from '@/api/trade'
@@ -174,9 +175,9 @@ const sysMode = ref('NORMAL')
 const maxDailyClaims = ref(3)
 const todayClaimed = ref(0)
 
-const isEmergencyMode = computed(() => sysMode.value === 'EMERGENCY_RESPONSE' || sysMode.value === 'WARNING_FREEZE')
+const isEmergencyMode = computed(() => sysMode.value === 'EMERGENCY')
 const rationRemaining = computed(() => Math.max(0, maxDailyClaims.value - todayClaimed.value))
-const rationTitle = computed(() => sysMode.value === 'EMERGENCY_RESPONSE' ? '🚨 战时配给制已启动' : '⚠️ 预警冻结期 · 限流配给中')
+const rationTitle = computed(() => '🚨 战时配给制已启动')
 const rationDesc = computed(() => `根据应急管理指挥中心指令，当前每人每日最多申领 ${maxDailyClaims.value} 次，请将资源留给最需要的人。`)
 
 const drawerVisible = ref(false)
@@ -285,7 +286,26 @@ const closeAndRefresh = () => {
   fetchData()
 }
 
-onMounted(() => fetchData())
+const router = useRouter()
+
+// ✅ FIX-3: 应急模式门卫 — 收到切换信号立即踢回SOS舱
+const handleEmergencyLockdown = () => {
+  ElMessageBox.alert(
+    '⚠️ 战时应急模式已启动，为保障人身安全，线下自提通道已关闭！系统将为您转至紧急呼救大舱。',
+    '🚨 自提通道封锁',
+    { confirmButtonText: '我知道了', type: 'error', center: true }
+  ).then(() => router.replace('/sos'))
+}
+
+onMounted(() => {
+  fetchData()
+  window.addEventListener('mode-changed', (e) => {
+    if (e.detail?.mode) {
+      sysMode.value = e.detail.mode
+      if (e.detail.mode === 'EMERGENCY') handleEmergencyLockdown()
+    }
+  })
+})
 </script>
 
 <style scoped>
