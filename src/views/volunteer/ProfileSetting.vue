@@ -583,6 +583,13 @@ const handleUpdateProfile = async (isSubmitAudit = false) => {
     /* ✅ FIX-4: 派发全局事件通知SideMenu等组件同步更新 */
     window.dispatchEvent(new CustomEvent('user-info-updated', { detail: { username: profileForm.username } }))
     if (!isSubmitAudit) ElMessage.success('全局设置已成功保存！')
+    // ✅ FIX-2: 敏感字段变更触发风控锁定时弹窗提示
+    const hasSensitiveChange = (stats.value.role === 1 && profileForm.deliveryType !== stats.value.deliveryType)
+        || (stats.value.role === 3 && payload.vehicleType !== undefined)
+        || (payload.identityProofUrl)
+    if (hasSensitiveChange && !isSubmitAudit) {
+      ElMessage.warning({ message: '⚠️ 安全风控：您修改了核心调度参数（配送方式/载具/资质），系统已将您的状态重置为待审核，部分权限将暂时锁定。请等待指挥中心重新核验。', duration: 6000 })
+    }
     fetchAllData()
     return true
   } catch (e) { return false } finally { saving.value = false }
