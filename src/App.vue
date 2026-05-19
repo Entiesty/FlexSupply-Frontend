@@ -51,10 +51,16 @@ const initGlobalWebSocket = () => {
     try {
       // 后端发来的是 JSON 字符串，必须先解析
       const data = JSON.parse(event.data)
-      const userRole = localStorage.getItem('userRole') // 1市民 2商家 3骑士 4管理
+      const userRole = localStorage.getItem('userRole')
 
+      // ═══ ✅ FIX-1: 全局模式切换推送 ═══
+      if (data.type === 'MODE_CHANGED') {
+        const modeLabels = { NORMAL: '🟢 平时常态', WARNING_FREEZE: '🟡 预警冻结', EMERGENCY_RESPONSE: '🔴 急时应急', RECOVERY: '🔵 灾后恢复' }
+        ElNotification({ title: '🌐 全城调度模式变更', message: `指挥中心已将系统切换至: ${modeLabels[data.mode] || data.mode}`, type: data.mode === 'EMERGENCY_RESPONSE' ? 'error' : 'warning', duration: 0, position: 'top-right' })
+        window.dispatchEvent(new CustomEvent('mode-changed', { detail: { mode: data.mode } }))
+      }
       // 🚨 场景 A：紧急呼救 (仅向骑士和管理员弹窗)
-      if (data.type === 'NEW_SOS' && ['3', '4'].includes(userRole)) {
+      else if (data.type === 'NEW_SOS' && ['3', '4'].includes(userRole)) {
         ElNotification({
           title: '🚨 紧急呼救响应',
           message: `捕获到高优紧急单号: ${data.orderSn}，请立即查看！`,

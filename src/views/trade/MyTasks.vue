@@ -42,7 +42,8 @@
       </div>
 
       <transition-group name="list" tag="div" class="task-list-animator">
-        <div class="task-card" v-for="item in taskList" :key="item.orderId || item.taskId" :class="{ overloaded: activeTab === 'available' && isOverCapacity(item) }">
+        <!-- ✅ FIX-3: SOS急救呼吸灯 + 超载拦截 -->
+        <div class="task-card" v-for="item in taskList" :key="item.orderId || item.taskId" :class="{ overloaded: activeTab === 'available' && isOverCapacity(item), 'sos-emergency': isSosOrder(item) }">
 
           <!-- ===== Step 2a: 卡片顶部条带 ===== -->
           <div class="card-strip">
@@ -255,6 +256,9 @@ const vehicleCapacity = (vType) => {
   if (vType === 3) return { maxW: 10, maxV: 15 }
   return { maxW: 100, maxV: 100 }
 }
+
+// ✅ FIX-3: SOS急救订单检测 (order_type=2 且 urgency>=8)
+const isSosOrder = (item) => item.orderSn?.startsWith('SOS') || (item.urgencyLevel >= 8)
 
 const isOverCapacity = (item) => {
   const wl = item.weightLevel || 1
@@ -983,9 +987,21 @@ onMounted(() => { initLocationStrategy() })
   font-size: 0.8rem; font-weight: 600; color: #cbd5e1;
 }
 
-/* 超载卡片视觉降权 */
-.task-card.overloaded .card-body { opacity: 0.5; pointer-events: none; }
+/* ✅ FIX-3: 超载卡片视觉降权——仅禁用抢单按钮，保留路线推演 */
+.task-card.overloaded .card-body { opacity: 0.55; }
+.task-card.overloaded .btn-main.grab { pointer-events: none; opacity: 0.4; cursor: not-allowed; }
 .task-card.overloaded .card-strip { opacity: 1; }
+
+/* ✅ FIX-3: SOS急救卡片呼吸灯特效 */
+.task-card.sos-emergency {
+  border: 2px solid #ef4444;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.25), 0 4px 20px rgba(0,0,0,0.06);
+  animation: sos-pulse 2s ease-in-out infinite;
+}
+@keyframes sos-pulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(239, 68, 68, 0.2), 0 4px 20px rgba(0,0,0,0.06); }
+  50% { box-shadow: 0 0 28px rgba(239, 68, 68, 0.45), 0 4px 20px rgba(0,0,0,0.06); }
+}
 
 .btn-main {
   padding: 12px 0; border: none; border-radius: 10px; color: white; font-weight: 900;

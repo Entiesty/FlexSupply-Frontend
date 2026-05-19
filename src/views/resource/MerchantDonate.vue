@@ -198,6 +198,7 @@ import { getRecommendStations, donateGoods } from '@/api/resource'
 import { getUserProfile } from '@/api/user'
 import { checkMyEmergencyBroadcast } from '@/api/dispatch'
 import { respondSos } from '@/api/trade'
+import { getCurrentConfig } from '@/api/config'
 import { uploadFile } from '@/api/common'
 
 const loading = ref(false)
@@ -434,6 +435,11 @@ const fetchStations = async (lon, lat) => {
 }
 
 onMounted(async () => {
+  // ✅ FIX-2: 加载真实系统模式
+  getCurrentConfig().then(res => { if (res?.data?.sysMode) sysMode.value = res.data.sysMode }).catch(() => {})
+  // ✅ FIX-2: 监听模式切换事件, 无需刷新即可实时变色
+  window.addEventListener('mode-changed', (e) => { if (e.detail?.mode) sysMode.value = e.detail.mode })
+
   loading.value = true
   try {
     const userRes = await getUserProfile()
