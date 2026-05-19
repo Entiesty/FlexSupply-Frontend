@@ -56,6 +56,7 @@ const initGlobalWebSocket = () => {
       // ═══ ✅ FIX-1: 全局模式切换推送 ═══
       if (data.type === 'MODE_CHANGED') {
         const modeLabels = { NORMAL: '🟢 平时常态', EMERGENCY: '🔴 战时应急' }
+        localStorage.setItem('sysMode', data.mode)
         ElNotification({ title: '🌐 全城调度模式变更', message: `指挥中心已将系统切换至: ${modeLabels[data.mode] || data.mode}`, type: data.mode === 'EMERGENCY' ? 'error' : 'warning', duration: 0, position: 'top-right' })
         window.dispatchEvent(new CustomEvent('mode-changed', { detail: { mode: data.mode } }))
       }

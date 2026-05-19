@@ -7,8 +7,8 @@
 
     <div class="sos-wrapper">
       <header class="page-header">
-        <h2>🚨 紧急呼救大舱</h2>
-        <p>遇到困难请别怕，社区与志愿者随时在您身边</p>
+        <h2>{{ pageTitle }}</h2>
+        <p>{{ sysMode === 'EMERGENCY' ? '城市进入全速救援模式，所有物资优先配给' : '遇到困难请别怕，社区与志愿者随时在您身边' }}</p>
       </header>
 
       <!-- ===== Step 1: 平急模式动态横幅 ===== -->
@@ -39,25 +39,25 @@
           <div class="divider"></div>
 
           <div class="sos-actions">
-            <div class="sos-card urgent" @click="openDrawer('医疗健康', ['常备药品', '外用急救', '医疗器械', '营养补品'], 10)">
+            <div class="sos-card urgent" @click="openDrawer('医疗健康', ['常备药品', '外用急救', '医疗器械', '营养补品'], urgencyMap['医疗健康'])">
               <div class="card-icon-wrap"><span class="card-icon">💊</span></div>
               <div class="card-text"><h3>医疗健康</h3><p>慢性病药 / 急救用品 / 营养补品</p></div>
               <div class="sos-arrow">〉</div>
             </div>
 
-            <div class="sos-card food" @click="openDrawer('食品与饮料', ['米面粮油', '方便速食', '饮用水', '热食盒饭', '烘焙糕点', '生鲜果蔬', '冷冻食品', '乳制品'], 6)">
+            <div class="sos-card food" @click="openDrawer('食品与饮料', ['米面粮油', '方便速食', '饮用水', '热食盒饭', '烘焙糕点', '生鲜果蔬', '冷冻食品', '乳制品'], urgencyMap['食品与饮料'])">
               <div class="card-icon-wrap"><span class="card-icon">🍚</span></div>
               <div class="card-text"><h3>食品与饮料</h3><p>米面粮油 / 速食 / 饮用水 / 热食</p></div>
               <div class="sos-arrow">〉</div>
             </div>
 
-            <div class="sos-card warm" @click="openDrawer('生活日用', ['卫生护理', '防寒保暖', '寝具家纺', '洗漱用品', '纸品耗材'], 3)">
+            <div class="sos-card warm" @click="openDrawer('生活日用', ['卫生护理', '防寒保暖', '寝具家纺', '洗漱用品', '纸品耗材'], urgencyMap['生活日用'])">
               <div class="card-icon-wrap"><span class="card-icon">🧹</span></div>
               <div class="card-text"><h3>生活日用</h3><p>卫生护理 / 防寒保暖 / 洗漱用品</p></div>
               <div class="sos-arrow">〉</div>
             </div>
 
-            <div class="sos-card emergency-card" @click="openDrawer('应急物资', ['应急食品', '应急照明', '防护装备', '保暖物资'], 9)">
+            <div class="sos-card emergency-card" @click="openDrawer('应急物资', ['应急食品', '应急照明', '防护装备', '保暖物资'], urgencyMap['应急物资'])">
               <div class="card-icon-wrap"><span class="card-icon">🚨</span></div>
               <div class="card-text"><h3>应急物资</h3><p>应急食品 / 照明 / 防护装备</p></div>
               <div class="sos-arrow">〉</div>
@@ -194,6 +194,11 @@ const locationText = ref('正在校验身份与地址...')
 
 // ===== Step 1: 系统平急模式感知 =====
 const sysMode = ref('NORMAL')
+const deliveryType = ref(0)
+
+const pageTitle = computed(() =>
+  sysMode.value === 'EMERGENCY' ? '🚨 紧急呼救大舱' : '📦 预约上门配送'
+)
 
 const modeBannerClass = computed(() => {
   if (sysMode.value === 'EMERGENCY') return 'mode-emergency'
@@ -209,6 +214,12 @@ const modeBannerText = computed(() => {
   if (sysMode.value === 'EMERGENCY') return '城市处于战时紧急响应，启用配给制，优先保障生存物资'
   return '社区互助快车道，专为行动不便长者开启，爱心骑士随时待命'
 })
+
+// urgency动态映射: EMERGENCY下全面上浮
+const urgencyMap = computed(() => sysMode.value === 'EMERGENCY'
+  ? { '医疗健康': 10, '应急物资': 10, '食品与饮料': 8, '生活日用': 6 }
+  : { '医疗健康': 10, '应急物资': 9,  '食品与饮料': 6, '生活日用': 3 }
+)
 
 const fetchSysMode = async () => {
   try {
@@ -278,7 +289,13 @@ onMounted(async () => {
   initLocation()
   await fetchSysMode()
   await fetchActiveOrder()
+  deliveryType.value = userInfo.value.deliveryType || 0
   timer = setInterval(fetchActiveOrder, 5000)
+
+  // 监听全局模式切换, 响应式更新urgency/标题/横幅
+  window.addEventListener('mode-changed', (e) => {
+    if (e.detail?.mode) sysMode.value = e.detail.mode
+  })
 
   if (route.query.reorder && route.query.cat) {
     openDrawer(route.query.cat, [route.query.reorder], 5)
@@ -400,12 +417,16 @@ const handleFinalSubmit = async () => {
     })
 
     playVoiceFeedback('求助已发出，请安心等待骑士送货。')
+    const msgText = sysMode.value === 'EMERGENCY'
+      ? `您需要的 <b>【${selectedSub.value}】</b> 已进入全城救援队列！<br/>战时配给制已启动，骑士将疾驰送达。`
+      : `您需要的 <b>【${selectedSub.value}】</b> 社区已收到！<br/>骑士将在今日内为您安排上门配送 [HOME_DELIVERY]。`
+
     ElNotification({
-      title: '✅ 请求成功',
-      message: `<div style="font-size: 1.1rem; margin-top:5px; line-height:1.5;">您需要的 <b>【${selectedSub.value}】</b> 社区已收到！<br/>骑士将尽快为您送货上门。</div>`,
+      title: sysMode.value === 'EMERGENCY' ? '🚨 紧急呼救已发出' : '✅ 预约成功',
+      message: `<div style="font-size: 1.1rem; margin-top:5px; line-height:1.5;">${msgText}</div>`,
       dangerouslyUseHTMLString: true,
-      type: 'success',
-      duration: 8000
+      type: sysMode.value === 'EMERGENCY' ? 'error' : 'success',
+      duration: sysMode.value === 'EMERGENCY' ? 0 : 8000
     })
     await fetchActiveOrder()
   } catch (e) {

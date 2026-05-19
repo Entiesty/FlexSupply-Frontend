@@ -36,13 +36,12 @@ export function getAuditPage(params) {
     return request({ url: '/system/user/admin/audit-page', method: 'get', params })
 }
 
-// 2. 提交资质审核结果
-export function submitAudit(userId, isPass) {
-    // 对接 UserController.java 的 /system/user/admin/audit/{userId}
+// 2. 提交资质审核结果 (deliveryType 可选, 仅对受赠者生效)
+export function submitAudit(userId, isPass, deliveryType) {
     return request({
         url: `/system/user/admin/audit/${userId}`,
         method: 'put',
-        params: { isPass }
+        params: { isPass, deliveryType }
     })
 }
 

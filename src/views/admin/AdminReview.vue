@@ -113,6 +113,12 @@
                 <el-option label="🧹 环卫/特种工人 (户外高强度)" value="SAN_WORKER"></el-option>
               </el-select>
             </el-form-item>
+            <el-form-item label="配送方式 (决定该用户能看到哪个入口)" required>
+              <el-radio-group v-model="auditForm.deliveryType" size="large">
+                <el-radio :value="0" border class="delivery-radio">🏪 可自行前往食物银行取货</el-radio>
+                <el-radio :value="1" border class="delivery-radio">🚪 仅限上门配送（行动不便）</el-radio>
+              </el-radio-group>
+            </el-form-item>
           </el-form>
         </div>
         <template #footer>
@@ -141,7 +147,7 @@ const queryParams = ref({ pageNum: 1, pageSize: 10 })
 const tagDialogVisible = ref(false)
 const submittingTag = ref(false)
 const currentAuditUser = ref(null)
-const auditForm = reactive({ userTag: 'ELDERLY' }) // 打开时默认选中老人
+const auditForm = reactive({ userTag: 'ELDERLY', deliveryType: 0 }) // 打开时默认老人+可自取
 
 // 字典映射
 const formatVehicle = (type) => {
@@ -175,7 +181,7 @@ const handlePass = (row) => {
     }).then(async () => {
       loading.value = true
       try {
-        await submitAudit(row.userId, true)
+        await submitAudit(row.userId, true, row.deliveryType)
         ElMessage.success('指令已下达，权限已开通！')
         fetchData()
       } catch (e) { ElMessage.error('操作失败，请重试') } finally { loading.value = false }
@@ -188,8 +194,8 @@ const submitTagAndPass = async () => {
   if (!auditForm.userTag) return ElMessage.warning('身份标签不能为空')
   submittingTag.value = true
   try {
-    // 1. 发送通过指令
-    await submitAudit(currentAuditUser.value.userId, true)
+    // 1. 发送通过指令 (附带配送类型)
+    await submitAudit(currentAuditUser.value.userId, true, auditForm.deliveryType)
     // 2. 写入系统标签
     await updateUserTag(currentAuditUser.value.userId, auditForm.userTag, 1)
 
