@@ -106,28 +106,25 @@
 
               <template v-if="stats.role === 1">
                 <el-divider border-style="dashed" />
-                <div class="block-section-title">🏠 居住与关怀档案</div>
+                <div class="block-section-title">🏠 居住与配送档案</div>
                 <el-form-item label="详细门牌号 (精确到室)" required>
                   <el-input v-model="profileForm.doorNumber" size="large" placeholder="例如：幸福小区3栋2梯402室" />
                 </el-form-item>
-                <el-row :gutter="20">
-                  <el-col :xs="24" :sm="12">
-                    <el-form-item label="紧急联系人电话">
-                      <el-input v-model="profileForm.emergencyPhone" size="large" placeholder="突发状况时方便骑士联系" />
-                    </el-form-item>
-                  </el-col>
-                  <el-col :xs="24" :sm="12">
-                    <el-form-item label="特定关怀需求 (可多选)">
-                      <el-checkbox-group v-model="careTags">
-                        <el-checkbox label="行动不便">行动不便</el-checkbox>
-                        <el-checkbox label="需特殊用药">需特殊用药</el-checkbox>
-                        <el-checkbox label="独居高龄">独居高龄</el-checkbox>
-                      </el-checkbox-group>
-                    </el-form-item>
-                  </el-col>
-                </el-row>
-                <el-form-item label="健康与送达备注">
-                  <el-input v-model="profileForm.healthRemark" size="large" placeholder="例如：严重糖尿病(需无糖)，或双目失明需电话联系" />
+                <el-form-item label="🚪 物资领取方式" required>
+                  <el-radio-group v-model="profileForm.deliveryType" size="large">
+                    <el-radio :value="0" border class="delivery-radio">🏪 我可以自行前往食物银行取货</el-radio>
+                    <el-radio :value="1" border class="delivery-radio">🚪 我行动不便，需要志愿者送货上门</el-radio>
+                  </el-radio-group>
+                </el-form-item>
+                <el-form-item label="🏷️ 特殊需求标签 (帮助系统精准匹配物资)">
+                  <el-checkbox-group v-model="careTags">
+                    <el-checkbox label="行动不便">行动不便</el-checkbox>
+                    <el-checkbox label="需特殊用药">需特殊用药</el-checkbox>
+                    <el-checkbox label="独居高龄">独居高龄</el-checkbox>
+                  </el-checkbox-group>
+                </el-form-item>
+                <el-form-item label="📝 补充备注 (健康/饮食/配送注意事项)">
+                  <el-input v-model="profileForm.healthRemark" size="large" type="textarea" :rows="2" placeholder="例如：严重糖尿病需无糖食品、或膝关节术后无法下楼需送至屋内" />
                 </el-form-item>
               </template>
 
@@ -392,6 +389,7 @@ const profileForm = reactive({
   username: '', currentLon: '', currentLat: '', addressName: '',
   doorNumber: '', emergencyPhone: '', healthRemark: '',
   identityProofUrl: '', vehicleType: 1, industryType: '', userTag: '',
+  deliveryType: 0,
 })
 const careTags = ref([])
 const pwdForm = reactive({ oldPassword: '', newPassword: '', confirmPassword: '' })
@@ -507,6 +505,7 @@ const fetchAllData = async () => {
     profileForm.vehicleType = profileRes.data.vehicleType || 1
     profileForm.industryType = profileRes.data.industryType || ''
     profileForm.userTag = profileRes.data.userTag || ''
+    profileForm.deliveryType = profileRes.data.deliveryType != null ? profileRes.data.deliveryType : 0
     careTags.value = profileForm.userTag ? profileForm.userTag.split(',').filter(t => t.trim()) : []
 
     if (profileForm.currentLon && profileForm.currentLat) {
@@ -587,6 +586,7 @@ const handleUpdateProfile = async (isSubmitAudit = false) => {
   if (stats.value.role === 1) {
     payload.doorNumber = profileForm.doorNumber; payload.emergencyPhone = profileForm.emergencyPhone
     payload.healthRemark = profileForm.healthRemark; payload.userTag = careTags.value.join(',')
+    payload.deliveryType = profileForm.deliveryType
   }
   /* ✅ FIX-2: 防御空字符串导致后端Byte反序列化500 */
   if (stats.value.role === 2 && profileForm.industryType !== '') payload.industryType = profileForm.industryType

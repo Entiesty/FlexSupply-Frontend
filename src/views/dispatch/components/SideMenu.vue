@@ -114,9 +114,9 @@ const allMenus = computed(() => {
 
   return [
     { name: '实时调度大屏', icon: '🗺️️', path: '/map', roles: [3, 4], requiresAuth: true },
-    ...(showSos ? [{ name: isEmergency ? '🚨 紧急呼救大舱' : '📦 预约上门配送', icon: isEmergency ? '🚨' : '📦', path: '/sos', roles: [1], requiresAuth: false }] : []),
+    ...(showSos ? [{ name: isEmergency ? '🚨 紧急呼救大舱' : '预约上门配送', icon: isEmergency ? '🚨' : '📦', path: '/sos', roles: [1], requiresAuth: false }] : []),
     { name: '物资捐赠大厅', icon: '💝', path: '/merchant/donate', roles: [2], requiresAuth: true },
-    ...(showMarket ? [{ name: '🏪 日常食物银行', icon: '🏪', path: '/market', roles: [1], requiresAuth: true }] : []),
+    ...(showMarket ? [{ name: '日常食物银行', icon: '🏪', path: '/market', roles: [1], requiresAuth: true }] : []),
     { name: '我的配送任务', icon: '🚴', path: '/my-tasks', roles: [3], requiresAuth: true },
     { name: '我的捐赠记录', icon: '📦', path: '/merchant/history', roles: [2], requiresAuth: true },
     { name: 'CSR社会责任战报', icon: '🏅', path: '/merchant/csr', roles: [2], requiresAuth: true },
@@ -159,7 +159,11 @@ onMounted(async () => {
 
 const goToHome = () => {
   if (currentUser.value.role === 2) router.push('/merchant/donate')
-  else if (currentUser.value.role === 1) router.push('/market')
+  else if (currentUser.value.role === 1) {
+    // deliveryType=1(仅上门)或EMERGENCY模式 → SOS舱; deliveryType=0(自取)+NORMAL → 食物银行
+    if (currentUser.value.deliveryType === 1 || sysMode.value === 'EMERGENCY') router.push('/sos')
+    else router.push('/market')
+  }
   else router.push('/map')
 }
 
