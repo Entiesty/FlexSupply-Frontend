@@ -104,6 +104,8 @@ const activeOrder = ref({})
 const pendingOrder = ref(null)
 const autoDispatchedOrderId = ref(null)
 
+const lastSeenOrderId = ref(null)
+let herdCheckTimer = null
 const fallbackCountdown = ref(0)
 const dynamicThreshold = ref(30)
 let pollingTimer = null
@@ -233,20 +235,22 @@ const proceedInit = () => {
     if (e.detail?.mode) sysMode.value = e.detail.mode
   })
   // 限制 3：惊群效应安抚 — 监听订单被抢事件（带防抖，避免 WebSocket 消息洪峰刷屏）
-  let lastSeenOrderId = null
-  let herdCheckTimer = null
   window.addEventListener('refresh-orders', () => {
     if (pendingOrder.value?.orderId) {
-      lastSeenOrderId = pendingOrder.value.orderId
+      lastSeenOrderId.value = pendingOrder.value.orderId
+    }
+    // 正在执行任务或抢单中 → 清掉残留 tracking，防止任务完成后误判弹窗
+    if (isMissionActive.value || loading.value) {
+      lastSeenOrderId.value = null
     }
     // 300ms 防抖：短时间内的多次 refresh-orders 只执行最后一次
     if (herdCheckTimer) clearTimeout(herdCheckTimer)
     herdCheckTimer = setTimeout(async () => {
       await fetchMapOrders()
-      if (lastSeenOrderId && !pendingOrder.value?.orderId && !isMissionActive.value) {
+      if (lastSeenOrderId.value && !pendingOrder.value?.orderId && !isMissionActive.value) {
         ElMessage.info('⚡ 慢了一步，该紧急指令已被其他护航者接管，感谢您的响应！')
         if (map.value) map.value.clearMap()
-        lastSeenOrderId = null
+        lastSeenOrderId.value = null
       }
     }, 300)
   })
