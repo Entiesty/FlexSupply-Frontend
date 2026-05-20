@@ -39,12 +39,6 @@
           <div class="divider"></div>
 
           <div class="sos-actions">
-            <div class="sos-card urgent" @click="openDrawer('医疗健康', ['常备药品', '外用急救', '医疗器械', '营养补品'], urgencyMap['医疗健康'])">
-              <div class="card-icon-wrap"><span class="card-icon">💊</span></div>
-              <div class="card-text"><h3>医疗健康</h3><p>慢性病药 / 急救用品 / 营养补品</p></div>
-              <div class="sos-arrow">〉</div>
-            </div>
-
             <div class="sos-card food" @click="openDrawer('食品与饮料', ['米面粮油', '方便速食', '饮用水', '热食盒饭', '烘焙糕点', '生鲜果蔬', '冷冻食品', '乳制品'], urgencyMap['食品与饮料'])">
               <div class="card-icon-wrap"><span class="card-icon">🍚</span></div>
               <div class="card-text"><h3>食品与饮料</h3><p>米面粮油 / 速食 / 饮用水 / 热食</p></div>
@@ -54,6 +48,12 @@
             <div class="sos-card warm" @click="openDrawer('生活日用', ['卫生护理', '防寒保暖', '寝具家纺', '洗漱用品', '纸品耗材'], urgencyMap['生活日用'])">
               <div class="card-icon-wrap"><span class="card-icon">🧹</span></div>
               <div class="card-text"><h3>生活日用</h3><p>卫生护理 / 防寒保暖 / 洗漱用品</p></div>
+              <div class="sos-arrow">〉</div>
+            </div>
+
+            <div class="sos-card urgent" @click="openDrawer('医疗健康', ['常备药品', '外用急救', '医疗器械', '营养补品'], urgencyMap['医疗健康'])">
+              <div class="card-icon-wrap"><span class="card-icon">💊</span></div>
+              <div class="card-text"><h3>医疗健康</h3><p>慢性病药 / 急救用品 / 营养补品</p></div>
               <div class="sos-arrow">〉</div>
             </div>
 
@@ -401,7 +401,7 @@ const handleFinalSubmit = async () => {
 
   try {
     await publishDemand({
-      requiredCategory: currentMainCat.value,
+      requiredCategory: selectedSub.value, // 直接用子类(如"烘焙糕点")精准匹配, 不再用大类展开
       urgencyLevel: urgencyMap.value[currentMainCat.value], // ✅ FIX-1: 提交时刻实时抓取当前sysMode下的urgency
       targetLon: currentLon.value,
       targetLat: currentLat.value,
@@ -424,8 +424,8 @@ const handleFinalSubmit = async () => {
     })
     await fetchActiveOrder()
   } catch (e) {
-    playVoiceFeedback('哎呀，网络好像出问题了，请您直接拨打社区电话求助。')
-    ElMessage.error('网络不太好，请打社区电话求助哦')
+    // 业务异常已由 axios 拦截器统一弹窗, 此处仅处理网络彻底断连
+    if (!e?.response) playVoiceFeedback('哎呀，网络好像出问题了，请您直接拨打社区电话求助。')
   } finally {
     loading.value = false
   }

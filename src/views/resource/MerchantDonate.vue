@@ -168,23 +168,45 @@
       </div>
     </main>
 
-    <el-dialog v-model="emergencyDialog.visible" title="🚨 城市生命通道紧急求援"
-      width="460px" :close-on-click-modal="false" :close-on-press-escape="false" align-center>
-      <div style="text-align:center;">
-        <p style="color:#64748b;margin-bottom:12px;">您是最靠近求助者的商家，急需以下物资：</p>
-        <div style="background:#fef2f2;border:2px dashed #fca5a5;border-radius:12px;padding:16px;margin-bottom:12px;">
-          <span style="color:#dc2626;font-size:1.4rem;font-weight:900;">
-            {{ emergencyDialog.data?.requiredCategory || emergencyDialog.data?.category }}
-          </span>
+    <el-dialog v-model="emergencyDialog.visible" title="🚨 紧急求助响应" width="480px" align-center>
+      <template v-if="emergencyDialog.data">
+        <!-- 求助人摘要 -->
+        <div class="emergency-recipient-card">
+          <div class="er-header">
+            <span class="er-avatar">{{ emergencyDialog.data.recipientTag === 'ELDERLY' ? '👴' : emergencyDialog.data.recipientTag === 'DISABLED' ? '👩‍🦽' : '👤' }}</span>
+            <div>
+              <div class="er-name">{{ emergencyDialog.data.recipientName || '求助市民' }}</div>
+              <div class="er-tag" v-if="emergencyDialog.data.recipientTag">{{ formatRecipientTag(emergencyDialog.data.recipientTag) }}</div>
+            </div>
+          </div>
+          <div class="er-details">
+            <div class="er-row"><span>📍</span> {{ emergencyDialog.data.doorNumber || '地址未登记' }}</div>
+            <div class="er-row"><span>🔥</span> 紧急度 Lv.{{ emergencyDialog.data.urgency || '?' }} · 急需 {{ emergencyDialog.data.category }}</div>
+          </div>
         </div>
-        <div style="display:flex;gap:8px;justify-content:center;">
-          <el-tag type="danger">最高优先级</el-tag>
-          <el-tag type="info">LBS就近匹配</el-tag>
+
+        <!-- 响应物资输入 -->
+        <div class="emergency-response-form">
+          <div class="erf-title">📦 您的响应物资</div>
+          <el-input v-model="emergencyForm.goodsName" size="large" placeholder="物资名称，如：金龙鱼大米 5kg" class="erf-input" />
+          <el-row :gutter="10" style="margin-top:10px;">
+            <el-col :span="8">
+              <el-input-number v-model="emergencyForm.stock" :min="1" :max="999" size="large" controls-position="right" style="width:100%;" placeholder="数量" />
+            </el-col>
+            <el-col :span="8">
+              <el-select v-model="emergencyForm.unit" size="large" style="width:100%;">
+                <el-option v-for="u in ['件','箱','份','kg','袋','提','瓶','包']" :key="u" :label="u" :value="u" />
+              </el-select>
+            </el-col>
+            <el-col :span="8">
+              <el-input v-model="emergencyForm.estimatedValue" size="large" placeholder="估值(元)" />
+            </el-col>
+          </el-row>
         </div>
-      </div>
+      </template>
       <template #footer>
-        <el-button @click="rejectEmergency">库存不足 / 忽略</el-button>
-        <el-button type="danger" @click="acceptEmergency">⚡ 锁定任务，马上发货</el-button>
+        <el-button @click="rejectEmergency">暂不响应</el-button>
+        <el-button type="danger" @click="acceptEmergency" :disabled="!emergencyForm.goodsName">⚡ 确认响应，点对点直达</el-button>
       </template>
     </el-dialog>
   </div>
@@ -377,24 +399,33 @@ const showEmergencyPopup = (data) => {
   processedBroadcastIds.add(data.orderId)
 }
 
-// 紧急广播弹窗 — 调用新 respond-sos API
+const emergencyForm = reactive({ goodsName: '', stock: 1, unit: '件', estimatedValue: 0 })
+
+const formatRecipientTag = (tag) => {
+  const map = { 'ELDERLY': '👴 需照顾老人', 'DISABLED': '♿ 残障人士', 'SAN_WORKER': '🧹 环卫工人', 'NORMAL': '👤 普通市民' }
+  return map[tag] || tag
+}
+
+// 紧急广播弹窗 — 使用独立表单, 不再复用捐赠表单
 const acceptEmergency = async () => {
   const d = emergencyDialog.data
+  if (!emergencyForm.goodsName.trim()) return ElMessage.warning('请填写响应物资名称')
   emergencyDialog.visible = false
   try {
     await respondSos({
       orderId: d.orderId,
-      goodsName: form.goodsName || '紧急响应物资',
-      category: d.requiredCategory || d.category || '应急物资',
-      stock: form.stock || 1,
-      unit: form.unit || '件',
-      expirationDate: form.expirationDate || '2099-12-31 23:59:59',
-      weightLevel: form.weightLevel || 1,
-      volumeLevel: form.volumeLevel || 1,
-      goodsImageUrl: form.goodsImageUrl || '/img/default.png',
-      estimatedValue: form.estimatedValue || 0
+      goodsName: emergencyForm.goodsName,
+      category: d.category || '应急物资',
+      stock: emergencyForm.stock,
+      unit: emergencyForm.unit,
+      expirationDate: '2099-12-31 23:59:59',
+      weightLevel: 1,
+      volumeLevel: 1,
+      goodsImageUrl: '/img/default.png',
+      estimatedValue: emergencyForm.estimatedValue || 0
     })
     ElNotification.success({ title: '✅ 响应成功', message: '物资将点对点直达受赠方，感谢您的爱心！' })
+    emergencyForm.goodsName = ''; emergencyForm.stock = 1
   } catch (e) {
     ElMessage.error(e.response?.data?.message || '响应失败')
   }
@@ -592,4 +623,17 @@ onUnmounted(() => { if (pollTimer) { clearInterval(pollTimer); pollTimer = null 
 :deep(.el-checkbox__input.is-checked .el-checkbox__inner) { background-color: #f97316; border-color: #f97316; }
 :deep(.el-checkbox__input.is-checked + .el-checkbox__label) { color: #f97316; }
 :deep(.el-date-picker) { --el-color-primary: #f97316; }
+
+/* ===== 紧急响应弹窗 ===== */
+.emergency-recipient-card { background: #fef2f2; border: 2px dashed #fca5a5; border-radius: 14px; padding: 16px; margin-bottom: 18px; }
+.er-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.er-avatar { font-size: 2rem; background: #fff; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+.er-name { font-size: 1.1rem; font-weight: 900; color: #991b1b; }
+.er-tag { display: inline-block; margin-top: 3px; font-size: 0.75rem; background: #fecaca; color: #dc2626; padding: 2px 8px; border-radius: 6px; font-weight: 700; }
+.er-details { display: flex; flex-direction: column; gap: 6px; }
+.er-row { font-size: 0.88rem; color: #7f1d1d; font-weight: 600; }
+.er-row span { margin-right: 4px; }
+.emergency-response-form { background: #f8fafc; border-radius: 12px; padding: 14px; }
+.erf-title { font-size: 0.9rem; font-weight: 800; color: #475569; margin-bottom: 10px; }
+.erf-input { margin-bottom: 4px; }
 </style>

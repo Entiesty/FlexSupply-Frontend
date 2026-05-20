@@ -56,11 +56,17 @@
           </el-table-column>
 
           <template v-if="currentRole === 1">
-            <el-table-column label="引擎画像标签" min-width="150" align="center">
+            <el-table-column label="配送方式" width="110" align="center">
               <template #default="scope">
-                <span class="tag-badge" :class="getTagClass(scope.row.userTag)">
-                  {{ formatUserTag(scope.row.userTag) }}
+                <span :class="scope.row.deliveryType === 1 ? 'tag-need' : 'tag-self'">
+                  {{ scope.row.deliveryType === 1 ? '🚪 上门' : '🏪 自取' }}
                 </span>
+              </template>
+            </el-table-column>
+            <el-table-column label="坐标" width="90" align="center">
+              <template #default="scope">
+                <span v-if="scope.row.currentLon" class="tag-ok">📍 已设</span>
+                <span v-else class="tag-warn">⚠ 缺失</span>
               </template>
             </el-table-column>
           </template>
@@ -90,7 +96,7 @@
           <el-table-column label="风控干预指令" min-width="200" align="center" fixed="right">
             <template #default="scope">
               <div class="action-flex">
-                <button v-if="currentRole === 1" class="action-btn btn-edit" @click="handleEditTag(scope.row)">🏷️ 修正画像</button>
+                <button v-if="currentRole === 1" class="action-btn btn-edit" @click="handleEditDelivery(scope.row)">🚪 改配送方式</button>
 
                 <template v-if="currentRole === 2">
                   <button v-if="scope.row.status !== 0" class="action-btn btn-reject" @click="handleRejectMerchant(scope.row.userId)">🚫 强制清退</button>
@@ -129,7 +135,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getUserList, updateUserTag, updateUserCredit, evictUser } from '@/api/admin'
+import { getUserList, updateUserTag, updateUserCredit, evictUser, submitAudit } from '@/api/admin'
 
 const loading = ref(false)
 const userList = ref([])
@@ -139,28 +145,9 @@ const currentRole = ref(1)
 const keyword = ref('')
 
 // 🧠 核心补充：标签智能字典
-const formatUserTag = (tag) => {
-  const map = {
-    'ELDERLY': '👵 需照顾老人',
-    'DISABLED': '♿ 残障人士',
-    'SAN_WORKER': '🧹 环卫工人',
-    'NORMAL': '👤 普通市民',
-    'PREGNANT': '🤰 孕妇'
-  }
-  return map[tag] || tag || '暂无专属画像'
-}
+// 保留为空, userTag已废弃
 
 // 🎨 核心补充：根据标签动态分配颜色类名
-const getTagClass = (tag) => {
-  const map = {
-    'ELDERLY': 'tag-purple',
-    'DISABLED': 'tag-red',
-    'SAN_WORKER': 'tag-orange',
-    'NORMAL': 'tag-gray'
-  }
-  return map[tag] || 'tag-gray'
-}
-
 // 🎨 为没有头像的用户动态分配多巴胺背景色
 const getAvatarColor = (id) => {
   const colors = ['bg-blue', 'bg-green', 'bg-purple', 'bg-orange', 'bg-pink']
@@ -183,14 +170,16 @@ const fetchData = async () => {
   } catch (e) {} finally { loading.value = false }
 }
 
-const handleEditTag = (row) => {
-  ElMessageBox.prompt('重塑该受赠方的系统画像标签 (可填入 NORMAL, ELDERLY, DISABLED 等)：', '🏷️ 修正画像', {
-    confirmButtonText: '确定保存', cancelButtonText: '取消', inputValue: row.userTag, customClass: 'dopamine-msg-box'
-  }).then(async ({ value }) => {
-    if (!value) return
+const handleEditDelivery = (row) => {
+  const newType = row.deliveryType === 1 ? 0 : 1
+  ElMessageBox.confirm(
+    `当前: ${row.deliveryType === 1 ? '🚪 仅限上门配送' : '🏪 可自行取货'} → 切换为 ${newType === 1 ? '🚪 仅上门' : '🏪 可自取'}？`,
+    '🚪 修改配送方式',
+    { confirmButtonText: '确认切换', cancelButtonText: '取消', type: 'warning', customClass: 'dopamine-msg-box' }
+  ).then(async () => {
     try {
-      await updateUserTag(row.userId, value, 1)
-      ElMessage.success('画像标签修正完成，调度引擎将按新标签算力执行！')
+      await submitAudit(row.userId, true, newType)
+      ElMessage.success(`配送方式已切换为: ${newType === 1 ? '🚪 仅上门' : '🏪 可自取'}！`)
       fetchData()
     } catch (e) {}
   }).catch(() => {})

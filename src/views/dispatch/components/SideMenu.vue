@@ -108,9 +108,12 @@ const roleName = computed(() => roleMap[currentUser.value.role] || '未知角色
 // SOS舱入口: EMERGENCY时全员可见, NORMAL时仅deliveryType=1(仅上门)可见
 const allMenus = computed(() => {
   const isEmergency = sysMode.value === 'EMERGENCY'
+  const verified = currentUser.value.isVerified === 1
   const dt = currentUser.value.deliveryType
-  const showSos = currentUser.value.role === 1 && (isEmergency || dt === 1)
-  const showMarket = currentUser.value.role === 1 && dt === 0 && !isEmergency
+  // 审核未通过时强制默认入口, 审核通过后才按deliveryType分流
+  const effectiveDt = verified ? dt : 0
+  const showSos = currentUser.value.role === 1 && (isEmergency || effectiveDt === 1)
+  const showMarket = currentUser.value.role === 1 && effectiveDt === 0 && !isEmergency
 
   return [
     { name: '实时调度大屏', icon: '🗺️️', path: '/map', roles: [3, 4], requiresAuth: true },
@@ -144,9 +147,11 @@ onMounted(async () => {
     }
   } catch (e) {}
 
-  /* 监听个人设置页的用户名变更事件 */
+  /* 监听个人设置页的变更事件, 实时同步用户名/配送方式/审核状态 */
   window.addEventListener('user-info-updated', (e) => {
     currentUser.value.username = e.detail.username
+    if (e.detail.deliveryType !== undefined) currentUser.value.deliveryType = e.detail.deliveryType
+    if (e.detail.isVerified !== undefined) currentUser.value.isVerified = e.detail.isVerified
   })
   /* 监听全局模式切换, 侧栏菜单项实时更新 */
   window.addEventListener('mode-changed', (e) => {

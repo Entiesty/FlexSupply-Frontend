@@ -182,6 +182,11 @@ const proceedInit = () => {
     if (res?.data?.sysMode) sysMode.value = res.data.sysMode
   }).catch(() => {})
 
+  // 监听全局模式切换, 大屏实时联动
+  window.addEventListener('mode-changed', (e) => {
+    if (e.detail?.mode) sysMode.value = e.detail.mode
+  })
+
   getDispatchConfig().then(res => {
     if (res?.data) dynamicThreshold.value = res.data
   }).catch(e => {})
@@ -231,6 +236,12 @@ const fetchMapOrders = async () => {
     })
     if (res?.data && res.data.length > 0) {
       const mainOrder = res.data[0]
+
+      // 新订单到来时清除上次的测算结果
+      if (pendingOrder.value?.orderId !== mainOrder.orderId) {
+        result.value = null
+        autoDispatchedOrderId.value = null
+      }
       pendingOrder.value = mainOrder
 
       const mainSrcLat = mainOrder.sourceLat || userLocation.value[1]
@@ -238,14 +249,13 @@ const fetchMapOrders = async () => {
       const mainTgtLat = mainOrder.targetLat || userLocation.value[1]
       const mainTgtLon = mainOrder.targetLon || userLocation.value[0]
 
-      const isDonation = mainOrder.orderSn?.startsWith('DON')
+      const isDonation = mainOrder.orderType === 1
 
       drawMarker(isDonation, [mainTgtLon, mainTgtLat])
 
       if (currentUserRole.value === 3
           && pendingOrder.value.deliveryMethod === 1
-          && !result.value
-          && autoDispatchedOrderId.value !== pendingOrder.value.orderId) {
+          && !result.value) {
 
         autoDispatchedOrderId.value = pendingOrder.value.orderId
 
@@ -290,7 +300,7 @@ const drawMarker = (isDonation, position) => {
 }
 
 const handleDispatchAction = async () => {
-  const isDonation = pendingOrder.value.orderSn?.startsWith('DON')
+  const isDonation = pendingOrder.value.orderType === 1
   const lng = pendingOrder.value.targetLon || userLocation.value[0]
   const lat = pendingOrder.value.targetLat || userLocation.value[1]
   if (isDonation) handleDonationDispatch([lng, lat])

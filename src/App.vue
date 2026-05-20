@@ -66,7 +66,7 @@ const initGlobalWebSocket = () => {
           title: '🚨 紧急呼救响应',
           message: `捕获到高优紧急单号: ${data.orderSn}，请立即查看！`,
           type: 'error',
-          duration: 0,
+          duration: 8000,
           position: 'top-right'
         })
         // 关键：抛出一个全局事件，让 OrderFlow.vue 听到后自动刷新表格！
@@ -83,15 +83,18 @@ const initGlobalWebSocket = () => {
         })
         window.dispatchEvent(new Event('refresh-orders'))
       }
-      // 🚨 场景 C：送达通知 (发给求助市民的)
+      // 🚨 场景 C：订单已被骑手抢单 (全局刷新)
+      else if (data.type === 'ORDER_TAKEN') {
+        window.dispatchEvent(new Event('refresh-orders'))
+      }
+      // 🚨 场景 D：送达通知
       else if (data.type === 'DELIVERED') {
-        ElNotification({
-          title: '📦 物资已送达',
-          message: `单号 ${data.orderSn} 已安全送达/入库，请前往确认或核销！`,
-          type: 'success',
-          duration: 0,
-          position: 'top-right'
-        })
+        ElNotification({ title: '📦 物资已送达', message: `单号 ${data.orderSn} 已安全送达/入库，请前往确认或核销！`, type: 'success', duration: 5000, position: 'top-right' })
+        window.dispatchEvent(new Event('refresh-orders'))
+      }
+      // 🚨 场景 E：SOS已被商家响应
+      else if (data.type === 'SOS_RESPONDED') {
+        window.dispatchEvent(new Event('refresh-orders'))
       }
     } catch (err) {
       console.error('全局 WebSocket 解析失败，收到的非 JSON 数据:', event.data)

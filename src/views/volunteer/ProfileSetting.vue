@@ -107,14 +107,42 @@
               <template v-if="stats.role === 1">
                 <el-divider border-style="dashed" />
                 <div class="block-section-title">🏠 居住与配送档案</div>
-                <el-form-item label="详细门牌号 (精确到室)" required>
-                  <el-input v-model="profileForm.doorNumber" size="large" placeholder="例如：幸福小区3栋2梯402室" />
+                <el-form-item label="📍 家庭住址坐标 (骑手导航依据)" required>
+                  <div class="location-picker-box">
+                    <div class="loc-display" :class="{ 'has-val': profileForm.currentLon }">
+                      <div class="loc-address">{{ profileForm.addressName || '尚未设置坐标，请点击地图选点' }}</div>
+                      <div class="loc-coords" v-if="profileForm.currentLon">Lon: {{ profileForm.currentLon }} | Lat: {{ profileForm.currentLat }}</div>
+                    </div>
+                    <el-button type="primary" plain class="pick-map-btn" @click="openMapDialog">🗺️ 地图选点</el-button>
+                  </div>
                 </el-form-item>
-                <el-form-item label="🚪 入口偏好 (影响侧栏导航, 非订单履约方式)" required>
-                  <el-radio-group v-model="profileForm.deliveryType" size="large">
-                    <el-radio :value="0" border class="delivery-radio">🏪 我可以自行前往食物银行取货</el-radio>
-                    <el-radio :value="1" border class="delivery-radio">🚪 我行动不便，需要志愿者送货上门</el-radio>
-                  </el-radio-group>
+                <el-form-item label="详细门牌号 (帮助骑手精确找到房门)">
+                  <el-input v-model="profileForm.doorNumber" size="large" placeholder="例如：3栋2梯402室" />
+                </el-form-item>
+                <el-form-item label="🚪 当前配送方式">
+                  <div v-if="stats.isVerified === 1 && !showDeliveryEdit" class="delivery-readonly-box">
+                    <div class="delivery-info">
+                      <span class="delivery-icon">{{ profileForm.deliveryType === 1 ? '🚪' : '🏪' }}</span>
+                      <div class="delivery-text-wrap">
+                        <div class="delivery-title">{{ profileForm.deliveryType === 1 ? '仅限上门配送' : '自行前往食物银行取货' }}</div>
+                        <div class="delivery-desc">{{ profileForm.deliveryType === 1 ? '骑士将根据您的门牌号为您送货上门' : '您可自由前往附近的网点自提物资' }}</div>
+                      </div>
+                    </div>
+                    <el-button type="warning" plain class="btn-change-delivery" @click="showDeliveryEdit = true">✎ 申请变更</el-button>
+                  </div>
+                  <div v-else class="delivery-edit-box">
+                    <el-radio-group v-model="profileForm.deliveryType" class="delivery-radio-group">
+                      <el-radio :value="0" border class="custom-radio-card">
+                        <span class="radio-emoji">🏪</span>
+                        <span class="radio-label">我可以自行前往食物银行取货</span>
+                      </el-radio>
+                      <el-radio :value="1" border class="custom-radio-card">
+                        <span class="radio-emoji">🚪</span>
+                        <span class="radio-label">我行动不便，需要志愿者送货上门</span>
+                      </el-radio>
+                    </el-radio-group>
+                    <el-alert v-if="stats.isVerified === 1" title="变更配送方式将触发安全风控，需管理员重新审核。审核期间不影响当前状态。" type="warning" show-icon :closable="false" class="delivery-warning-alert" />
+                  </div>
                 </el-form-item>
               </template>
 
@@ -286,7 +314,7 @@
     </div>
 
     <el-dialog
-        v-if="[2, 3].includes(stats.role)"
+        v-if="[1, 2, 3].includes(stats.role)"
         v-model="mapVisible"
         title="定位常驻服务网格"
         width="95%"
@@ -347,6 +375,7 @@ const proofInput = ref(null)
 const radarChartRef = ref(null)
 let myRadarChart = null
 
+const showDeliveryEdit = ref(false)
 const activeTab = ref('profile')
 
 // ==================== 常量 ====================
@@ -563,7 +592,7 @@ const handleUpdateProfile = async (isSubmitAudit = false) => {
   if (profileForm.identityProofUrl && profileForm.identityProofUrl !== profile.value.identityProofUrl) {
     payload.identityProofUrl = profileForm.identityProofUrl
   }
-  if ([2, 3].includes(stats.value.role) && profileForm.currentLon) {
+  if ([1, 2, 3].includes(stats.value.role) && profileForm.currentLon) {
     payload.currentLon = parseFloat(profileForm.currentLon)
     payload.currentLat = parseFloat(profileForm.currentLat)
   }
@@ -581,7 +610,7 @@ const handleUpdateProfile = async (isSubmitAudit = false) => {
     localStorage.setItem('username', profileForm.username)
     stats.value.username = profileForm.username
     /* ✅ FIX-4: 派发全局事件通知SideMenu等组件同步更新 */
-    window.dispatchEvent(new CustomEvent('user-info-updated', { detail: { username: profileForm.username } }))
+    window.dispatchEvent(new CustomEvent('user-info-updated', { detail: { username: profileForm.username, deliveryType: profileForm.deliveryType, isVerified: stats.value.isVerified } }))
     if (!isSubmitAudit) ElMessage.success('全局设置已成功保存！')
     // ✅ FIX-2: 敏感字段变更触发风控锁定时弹窗提示
     const hasSensitiveChange = (stats.value.role === 1 && profileForm.deliveryType !== stats.value.deliveryType)
@@ -746,6 +775,23 @@ onMounted(() => {
   display: flex; align-items: center; justify-content: space-between; padding: 0 15px; width: 100%;
 }
 .readonly-value { font-weight: 700; color: #334155; font-size: 0.95rem; }
+
+/* ===== 配送方式 SaaS UI 优化 ===== */
+.delivery-readonly-box { display: flex; align-items: center; justify-content: space-between; background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 16px 20px; width: 100%; transition: all 0.3s; }
+.delivery-readonly-box:hover { border-color: #cbd5e1; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
+.delivery-info { display: flex; align-items: center; gap: 16px; }
+.delivery-icon { font-size: 2rem; background: #fff; padding: 10px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+.delivery-title { font-size: 1.05rem; font-weight: 900; color: #1e293b; line-height: 1.2; }
+.delivery-desc { font-size: 0.8rem; color: #64748b; margin-top: 6px; font-weight: 600; }
+.btn-change-delivery { border-radius: 8px; font-weight: 800; }
+.delivery-edit-box { width: 100%; }
+.delivery-radio-group { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+.custom-radio-card { margin: 0 !important; height: auto !important; padding: 16px 20px !important; border-radius: 12px !important; border: 1.5px solid #e2e8f0 !important; display: flex; align-items: center; transition: all 0.2s; }
+.custom-radio-card.is-checked { border-color: #f97316 !important; background: #fffcf9 !important; box-shadow: 0 4px 10px rgba(249, 115, 22, 0.05) !important; }
+.radio-emoji { font-size: 1.3rem; margin-right: 10px; }
+.radio-label { font-weight: 800; color: #334155; white-space: normal; line-height: 1.4; font-size: 0.95rem; }
+:deep(.custom-radio-card .el-radio__label) { display: flex; align-items: center; padding-left: 5px; }
+.delivery-warning-alert { margin-top: 16px; border-radius: 8px; }
 
 /* ===== 资质看板区块 ===== */
 .verification-status-board {

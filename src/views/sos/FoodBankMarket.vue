@@ -297,6 +297,7 @@ const handleEmergencyLockdown = () => {
   ).then(() => router.replace('/sos'))
 }
 
+const handleRefreshMarket = () => fetchData()
 onMounted(() => {
   fetchData()
   window.addEventListener('mode-changed', (e) => {
@@ -305,6 +306,7 @@ onMounted(() => {
       if (e.detail.mode === 'EMERGENCY') handleEmergencyLockdown()
     }
   })
+  window.addEventListener('refresh-orders', handleRefreshMarket)
 })
 </script>
 

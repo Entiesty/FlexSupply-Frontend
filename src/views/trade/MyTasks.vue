@@ -52,8 +52,8 @@
               <span class="strip-time">🕒 {{ item.createTime || '近期' }}</span>
             </div>
             <div class="strip-right">
-              <span class="type-badge" :class="isDonation(item.orderSn) ? 'bg-blue' : 'bg-red'">
-                {{ isDonation(item.orderSn) ? '🔵 捐赠集货' : '🔴 紧急求助' }}
+              <span class="type-badge" :class="isDonation(item) ? 'bg-blue' : 'bg-red'">
+                {{ isDonation(item) ? '🔵 捐赠集货' : '🔴 紧急求助' }}
               </span>
               <span class="urgency-badge" :class="'urgency-' + (item.urgencyLevel || 5)">
                 {{ formatUrgency(item.urgencyLevel) }}
@@ -112,8 +112,8 @@
               </div>
 
               <div class="goods-capsule" v-if="item.goodsName || item.requiredCategory">
-                <span class="capsule-name">📦 {{ item.goodsName || item.requiredCategory }}</span>
-                <span class="goods-qty">× {{ item.goodsCount || 0 }}</span>
+                <span class="capsule-name" :title="item.goodsName">{{ truncateGoodsName(item.goodsName || item.requiredCategory) }}</span>
+                <span class="goods-qty">× {{ item.goodsCount || 0 }} {{ item.goodsUnit || '份' }}</span>
               </div>
 
               <div class="card-actions">
@@ -243,7 +243,7 @@ const currentCheckoutOrder = ref(null)
 const selectedPhoto = ref(null)
 const uploadRef = ref(null)
 
-const isDonation = (sn) => sn?.startsWith('DON-')
+const isDonation = (item) => item.orderType === 1  // 用数据库字段判断, 而非订单号前缀
 const isValidCoordinate = (lon, lat) => lon && lat && !isNaN(lon) && !isNaN(lat) && lon > 0 && lat > 0
 
 // ===== 双维载具容量校验 (重量 vs 体积，绝对阈值，1对1履约) =====
@@ -423,6 +423,8 @@ const handleGrab = async (item) => {
     }, 600)
   } catch (err) {
     loading.value = false
+    const msg = err?.response?.data?.message || err?.message || '抢单失败，请重试'
+    ElNotification({ title: '抢单拦截', message: msg, type: 'warning', duration: 5000 })
   }
 }
 
@@ -613,7 +615,16 @@ const drawRouteByStep = (AMapClass) => {
   }
 }
 
-onMounted(() => { initLocationStrategy() })
+const truncateGoodsName = (name) => name && name.length > 14 ? name.slice(0, 14) + '…' : name
+const handleRefreshOrders = () => loadData(true)
+onMounted(() => {
+  initLocationStrategy()
+  window.addEventListener('refresh-orders', handleRefreshOrders)
+})
+onUnmounted(() => {
+  if (pollingTimer) clearInterval(pollingTimer)
+  window.removeEventListener('refresh-orders', handleRefreshOrders)
+})
 </script>
 
 <style scoped>
