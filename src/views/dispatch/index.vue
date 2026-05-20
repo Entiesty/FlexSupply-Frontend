@@ -25,6 +25,12 @@
       </div>
 
       <div class="map-wrapper">
+        <div v-if="!isLbsReady" class="map-loading-overlay">
+          <div class="radar-spinner"></div>
+          <h3>📍 正在初始化城市调度沙盘...</h3>
+          <p>锁定厦门集美区指挥中心坐标，加载 GIS 引擎</p>
+        </div>
+
         <div id="amap-container"></div>
 
         <DashboardPanel v-if="currentUserRole === 4" />
@@ -71,7 +77,7 @@ import { smartMatch, getDispatchConfig } from '@/api/dispatch'
 import { getPendingOrders, grabTask, switchOrderToPickup } from '@/api/trade'
 import { getUserProfile } from '@/api/user'
 import { switchMode, getCurrentConfig } from '@/api/config'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
 import DispatchControl from './components/DispatchControl.vue'
 import DashboardPanel from './components/DashboardPanel.vue'
 
@@ -104,6 +110,36 @@ let pollingTimer = null
 let fallbackTimer = null
 
 const userLocation = ref([118.092000, 24.623500])
+const isLbsReady = ref(false)
+
+// 厦门集美区安全坐标范围
+const JIMEI_BOUNDS = { minLng: 118.00, maxLng: 118.20, minLat: 24.50, maxLat: 24.70 }
+const GEO_FALLBACK = [118.092000, 24.623500]
+
+const isValidCoord = (lng, lat) => {
+  if (lng == null || lat == null || lng === '' || lat === '') return false
+  const numLng = Number(lng)
+  const numLat = Number(lat)
+  if (isNaN(numLng) || isNaN(numLat)) return false
+  if (!isFinite(numLng) || !isFinite(numLat)) return false
+  return true
+}
+
+const safeCoord = (lng, lat, fallbackLng, fallbackLat) => {
+  if (isValidCoord(lng, lat)) return [lng, lat]
+  const fl = isValidCoord(fallbackLng, fallbackLat) ? fallbackLng : GEO_FALLBACK[0]
+  const fa = isValidCoord(fallbackLng, fallbackLat) ? fallbackLat : GEO_FALLBACK[1]
+  return [fl, fa]
+}
+
+const calcSafeCenter = () => {
+  const lng = userLocation.value[0]
+  const lat = userLocation.value[1]
+  if (isValidCoord(lng, lat)) return [lng, lat]
+  console.warn('userLocation 含有非法坐标，降级至默认中心')
+  userLocation.value = [...GEO_FALLBACK]
+  return GEO_FALLBACK
+}
 
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
   const R = 6371
@@ -147,10 +183,10 @@ onMounted(async () => {
             let realLat = pos.coords.latitude
 
             // 答辩沙盘防漂移保护 (只在厦门集美区有效)
-            if (Math.abs(realLon - 118.1) > 1 || Math.abs(realLat - 24.6) > 1) {
-              console.warn('大屏检测到异地登录，开启沙盘保护，降级使用档案坐标');
-              userLocation.value = [dbLon || 118.065200, dbLat || 24.615500];
-              ElMessage.warning('GPS异地，大屏已锁定至测试沙盘区域');
+            if (!isValidCoord(realLon, realLat) || Math.abs(realLon - 118.1) > 1 || Math.abs(realLat - 24.6) > 1) {
+              console.warn('大屏检测到异地登录或GPS异常，开启沙盘保护，降级使用档案坐标');
+              userLocation.value = isValidCoord(dbLon, dbLat) ? [dbLon, dbLat] : [...GEO_FALLBACK];
+              ElMessage.warning('GPS异常，大屏已锁定至测试沙盘区域');
             } else {
               userLocation.value = [realLon, realLat];
               ElMessage.success('📍 大屏已接入实时 GPS 信号');
@@ -159,7 +195,7 @@ onMounted(async () => {
           },
           (err) => {
             console.warn('大屏 GPS 被拒或超时，使用静态坐标');
-            userLocation.value = [dbLon || 118.065200, dbLat || 24.615500];
+            userLocation.value = isValidCoord(dbLon, dbLat) ? [dbLon, dbLat] : [...GEO_FALLBACK];
             proceedInit();
           },
           { timeout: 5000, enableHighAccuracy: true }
@@ -167,7 +203,7 @@ onMounted(async () => {
     }
     // 🏢 如果是指挥中心 (Role 4) 或不支持 GPS，直接用静态中心点
     else {
-      userLocation.value = [dbLon || 118.092000, dbLat || 24.623500];
+      userLocation.value = isValidCoord(dbLon, dbLat) ? [dbLon, dbLat] : [...GEO_FALLBACK];
       proceedInit();
     }
   }
@@ -175,7 +211,17 @@ onMounted(async () => {
 
 // 💡 抽离出的初始化执行管线 (等待坐标就绪后执行)
 const proceedInit = () => {
+  // 🛡️ 最终防线：原子性确保 userLocation 合法
+  if (!isValidCoord(userLocation.value[0], userLocation.value[1])) {
+    console.warn('proceedInit 检测到非法 userLocation，强制写入默认中心')
+    userLocation.value = [...GEO_FALLBACK]
+  }
+
+  // 🗺️ 高德地图容器常驻 DOM，直接初始化即可读取到正确物理尺寸
   initMap()
+
+  // 🚦 map 创建成功后揭开遮罩（在 initMap 的 then 回调中设置）
+  // 这里先标记为 ready，initMap 失败时会回写 false
 
   // 加载当前系统模式 (后端状态机)
   getCurrentConfig().then(res => {
@@ -185,6 +231,24 @@ const proceedInit = () => {
   // 监听全局模式切换, 大屏实时联动
   window.addEventListener('mode-changed', (e) => {
     if (e.detail?.mode) sysMode.value = e.detail.mode
+  })
+  // 限制 3：惊群效应安抚 — 监听订单被抢事件（带防抖，避免 WebSocket 消息洪峰刷屏）
+  let lastSeenOrderId = null
+  let herdCheckTimer = null
+  window.addEventListener('refresh-orders', () => {
+    if (pendingOrder.value?.orderId) {
+      lastSeenOrderId = pendingOrder.value.orderId
+    }
+    // 300ms 防抖：短时间内的多次 refresh-orders 只执行最后一次
+    if (herdCheckTimer) clearTimeout(herdCheckTimer)
+    herdCheckTimer = setTimeout(async () => {
+      await fetchMapOrders()
+      if (lastSeenOrderId && !pendingOrder.value?.orderId && !isMissionActive.value) {
+        ElMessage.info('⚡ 慢了一步，该紧急指令已被其他护航者接管，感谢您的响应！')
+        if (map.value) map.value.clearMap()
+        lastSeenOrderId = null
+      }
+    }, 300)
   })
 
   getDispatchConfig().then(res => {
@@ -230,9 +294,10 @@ const toggleSysMode = async () => {
 
 const fetchMapOrders = async () => {
   try {
+    const [safeLng, safeLat] = calcSafeCenter()
     const res = await getPendingOrders({
-      currentLon: userLocation.value[0],
-      currentLat: userLocation.value[1]
+      currentLon: safeLng,
+      currentLat: safeLat
     })
     if (res?.data && res.data.length > 0) {
       const mainOrder = res.data[0]
@@ -244,14 +309,16 @@ const fetchMapOrders = async () => {
       }
       pendingOrder.value = mainOrder
 
-      const mainSrcLat = mainOrder.sourceLat || userLocation.value[1]
-      const mainSrcLon = mainOrder.sourceLon || userLocation.value[0]
-      const mainTgtLat = mainOrder.targetLat || userLocation.value[1]
-      const mainTgtLon = mainOrder.targetLon || userLocation.value[0]
+      const mainTgtLat = isValidCoord(mainOrder.targetLon, mainOrder.targetLat) ? mainOrder.targetLat : safeLat
+      const mainTgtLon = isValidCoord(mainOrder.targetLon, mainOrder.targetLat) ? mainOrder.targetLon : safeLng
 
       const isDonation = mainOrder.orderType === 1
 
       drawMarker(isDonation, [mainTgtLon, mainTgtLat])
+
+      // P2P 已响应订单：商家已备货，跳过 SAW 驿站匹配，直接用商家坐标画三点路线
+      const isP2PResponded = pendingOrder.value.sourceId != null
+          && isValidCoord(pendingOrder.value.sourceLon, pendingOrder.value.sourceLat)
 
       if (currentUserRole.value === 3
           && pendingOrder.value.deliveryMethod === 1
@@ -259,8 +326,13 @@ const fetchMapOrders = async () => {
 
         autoDispatchedOrderId.value = pendingOrder.value.orderId
 
-        if (isDonation) handleDonationDispatch([mainTgtLon, mainTgtLat])
-        else await handleSmartDispatch([mainTgtLon, mainTgtLat])
+        if (isDonation) {
+          handleDonationDispatch([mainTgtLon, mainTgtLat])
+        } else if (isP2PResponded) {
+          handleP2PDispatch([mainTgtLon, mainTgtLat])
+        } else {
+          await handleSmartDispatch([mainTgtLon, mainTgtLat])
+        }
       }
     } else {
       pendingOrder.value = null
@@ -280,16 +352,40 @@ const initMap = () => {
     plugins: ['AMap.MoveAnimation', 'AMap.Riding']
   }).then((amap) => {
     AMap = amap
-    map.value = new AMap.Map('amap-container', {
-      viewMode: '3D', pitch: 40, zoom: 15, center: userLocation.value, mapStyle: 'amap://styles/fresh'
-    })
+    const center = calcSafeCenter()
+    // 深拷贝 + Number 强转：彻底切断 Vue Proxy 与任何非数字引用
+    const safeCenter = [Number(center[0]), Number(center[1])]
+    if (!isValidCoord(safeCenter[0], safeCenter[1])) {
+      console.error('地图中心坐标二次校验失败，写入硬编码降级值')
+      safeCenter[0] = GEO_FALLBACK[0]
+      safeCenter[1] = GEO_FALLBACK[1]
+    }
+    // 🎯 极简初始化：去掉 3D/viewMode/mapStyle 等可能因 WebGL/Key 等级产生内部 NaN 的选项
+    try {
+      map.value = new AMap.Map('amap-container', {
+        zoom: 15,
+        center: safeCenter
+      })
+      isLbsReady.value = true
+      console.log('🗺️ 高德地图实例已安全创建，中心:', safeCenter)
+    } catch (e) {
+      console.error('AMap.Map 构造失败，最终降级:', e)
+      map.value = null
+      isLbsReady.value = false
+    }
   }).catch(e => {
+    console.error('AMapLoader 加载失败', e)
     ElMessage.error('地图引擎加载异常')
+    isLbsReady.value = false
   })
 }
 
 const drawMarker = (isDonation, position) => {
   if (!AMap || !map.value) return
+  if (!isValidCoord(position[0], position[1])) {
+    console.warn('drawMarker 收到非法坐标，已降级')
+    return
+  }
   map.value.clearMap()
   map.value.setCenter(position)
 
@@ -300,18 +396,23 @@ const drawMarker = (isDonation, position) => {
 }
 
 const handleDispatchAction = async () => {
+  const [safeLng, safeLat] = calcSafeCenter()
   const isDonation = pendingOrder.value.orderType === 1
-  const lng = pendingOrder.value.targetLon || userLocation.value[0]
-  const lat = pendingOrder.value.targetLat || userLocation.value[1]
+  const isP2PResponded = pendingOrder.value.sourceId != null
+      && isValidCoord(pendingOrder.value.sourceLon, pendingOrder.value.sourceLat)
+  const lng = isValidCoord(pendingOrder.value.targetLon, pendingOrder.value.targetLat) ? pendingOrder.value.targetLon : safeLng
+  const lat = isValidCoord(pendingOrder.value.targetLon, pendingOrder.value.targetLat) ? pendingOrder.value.targetLat : safeLat
   if (isDonation) handleDonationDispatch([lng, lat])
+  else if (isP2PResponded) handleP2PDispatch([lng, lat])
   else await handleSmartDispatch([lng, lat])
 }
 
 const handleDonationDispatch = (targetPos) => {
   loading.value = true
   setTimeout(() => {
-    const srcLng = pendingOrder.value.sourceLon || userLocation.value[0]
-    const srcLat = pendingOrder.value.sourceLat || userLocation.value[1]
+    const [safeLng, safeLat] = calcSafeCenter()
+    const srcLng = isValidCoord(pendingOrder.value.sourceLon, pendingOrder.value.sourceLat) ? pendingOrder.value.sourceLon : safeLng
+    const srcLat = isValidCoord(pendingOrder.value.sourceLon, pendingOrder.value.sourceLat) ? pendingOrder.value.sourceLat : safeLat
 
     result.value = {
       station: {
@@ -327,6 +428,33 @@ const handleDonationDispatch = (targetPos) => {
     drawRoute(result.value, [srcLng, srcLat], true)
     loading.value = false
     ElMessage.success('✅ 识别到定向捐赠，已免测算直接生成回收路线！')
+  }, 800)
+}
+
+// P2P 已响应订单：跳过 SAW 驿站匹配，直接用商家坐标绘制三点接驾路线
+const handleP2PDispatch = (targetPos) => {
+  loading.value = true
+  setTimeout(() => {
+    const [safeLng, safeLat] = calcSafeCenter()
+    const srcLng = isValidCoord(pendingOrder.value.sourceLon, pendingOrder.value.sourceLat)
+      ? pendingOrder.value.sourceLon : safeLng
+    const srcLat = isValidCoord(pendingOrder.value.sourceLon, pendingOrder.value.sourceLat)
+      ? pendingOrder.value.sourceLat : safeLat
+
+    result.value = {
+      station: {
+        longitude: srcLng,
+        latitude: srcLat,
+        stationName: pendingOrder.value.sourceName || '🚨 爱心商铺取货点'
+      },
+      orderSn: pendingOrder.value.orderSn,
+      requiredCategory: pendingOrder.value.goodsName || pendingOrder.value.requiredCategory || '应急物资',
+      urgencyLevel: pendingOrder.value.urgencyLevel || 8
+    }
+
+    drawRoute(result.value, targetPos, false)
+    loading.value = false
+    ElMessage.success('✅ 商家已备好物资，跳过驿站匹配，请立即前往商铺取货！')
   }, 800)
 }
 
@@ -379,12 +507,21 @@ const handleSmartDispatch = async (targetPos) => {
 // 🚀 架构师重构版：导航级平滑路径渲染引擎 (带流向箭头、智能降级与 Z-Index 视觉层级控制)
 const drawRoute = async (data, targetPos, isDonation) => {
   if (!AMap || !map.value) return
+  if (!isValidCoord(targetPos[0], targetPos[1])) {
+    console.warn('drawRoute 收到非法 targetPos, 已取消渲染')
+    return
+  }
 
-  const stationLoc = [data?.station?.longitude || userLocation.value[0], data?.station?.latitude || userLocation.value[1]]
+  const [safeLng, safeLat] = calcSafeCenter()
+
+  // 取 station 坐标，非法则用安全中心
+  const staLng = isValidCoord(data?.station?.longitude, data?.station?.latitude) ? data.station.longitude : safeLng
+  const staLat = isValidCoord(data?.station?.longitude, data?.station?.latitude) ? data.station.latitude : safeLat
+  const stationLoc = [staLng, staLat]
   map.value.clearMap()
 
   // 1. 定义三个关键物理坐标点
-  const ptA = new AMap.LngLat(userLocation.value[0], userLocation.value[1]) // A: 志愿者位置
+  const ptA = new AMap.LngLat(safeLng, safeLat) // A: 志愿者/指挥中心位置
   const pickupPos = isDonation ? targetPos : stationLoc
   const ptB = new AMap.LngLat(pickupPos[0], pickupPos[1]) // B: 取货点
   const dropoffPos = isDonation ? stationLoc : targetPos
@@ -418,12 +555,26 @@ const drawRoute = async (data, targetPos, isDonation) => {
   // 💡 核心：带 Z-Index 层级控制的 Promise 路线解析器
   const searchAndDraw = (startLoc, endLoc, routeColor, layerZIndex) => {
     return new Promise((resolve) => {
+      // 🛡️ 防卫：起终点 LngLat 对象非空且坐标合法
+      if (!startLoc || !endLoc ||
+          !isValidCoord(startLoc.lng, startLoc.lat) ||
+          !isValidCoord(endLoc.lng, endLoc.lat)) {
+        console.warn('searchAndDraw 收到非法起终点，已跳过')
+        resolve(false)
+        return
+      }
       riding.search(startLoc, endLoc, (status, result) => {
         if (status === 'complete' && result.routes && result.routes.length > 0) {
           let path = []
           result.routes[0].rides.forEach(ride => {
             path = path.concat(ride.path)
           })
+          // 🛡️ 过滤掉路径中的 NaN 点
+          path = path.filter(p => p && isValidCoord(p.lng, p.lat))
+          if (path.length === 0) {
+            console.warn('骑行路线路径全为非法坐标，降级为直线')
+            path = [startLoc, endLoc]
+          }
 
           new AMap.Polyline({
             map: map.value,
@@ -438,7 +589,7 @@ const drawRoute = async (data, targetPos, isDonation) => {
             isOutline: true,
             outlineColor: '#ffffff',
             borderWeight: 2,
-            zIndex: layerZIndex // 🚨 动态接收传入的 Z轴层级
+            zIndex: layerZIndex
           })
           resolve(true)
         } else {
@@ -451,7 +602,7 @@ const drawRoute = async (data, targetPos, isDonation) => {
             strokeStyle: 'dashed',
             strokeDasharray: [15, 10],
             lineJoin: 'round',
-            zIndex: layerZIndex // 🚨 虚线也保持层级
+            zIndex: layerZIndex
           })
           resolve(false)
         }
@@ -467,7 +618,7 @@ const drawRoute = async (data, targetPos, isDonation) => {
   await searchAndDraw(ptA, ptB, '#3b82f6', 60)
 
   // 5. 动画级视野自适应：四周留出 80px 的优美 Padding
-  map.value.setFitView(null, false, [80, 80, 80, 80])
+  try { map.value.setFitView(null, false, [80, 80, 80, 80]) } catch (e) { console.warn('setFitView 异常', e) }
 }
 
 const startFallbackTimer = () => {
@@ -514,27 +665,37 @@ const handleBatchGrab = async () => {
   if (!orderId) return ElMessage.error('订单状态异常')
 
   loading.value = true
+  // 🚨 在 await 之前立起保护屏障，防止 refresh-orders 的 debounce 定时器在 await 间隙误判"慢了一步"
+  isMissionActive.value = true
   try {
     await grabTask(orderId)
+    // 先捕获快照，再清空大屏，防止 fetchMapOrders 因 MQ 延迟把同一单拉回来
+    const grabbedSnap = { ...pendingOrder.value }
+    activeOrder.value = grabbedSnap
+    pendingOrder.value = null
+    result.value = null
+    localStorage.setItem('riderStatus', 'BUSY')
+    if (map.value) map.value.clearMap()
     ElNotification.success({
       title: '⚡ 抢单成功',
-      message: `单号 ${pendingOrder.value.orderSn} 已被您锁定，请尽快前往取货`,
+      message: `单号 ${grabbedSnap.orderSn} 已被您锁定，请尽快前往取货`,
       type: 'success',
       duration: 6000
     })
-    result.value = null
-    isMissionActive.value = true
-    activeOrder.value = pendingOrder.value
-    fetchMapOrders()
   } catch (e) {
-    ElMessage.error(e.response?.data?.message || '抢单失败，请重试')
+    // 抢单失败回滚：释放保护屏障，允许继续轮询
+    isMissionActive.value = false
+    const errMsg = e.response?.data?.message || e.message || '抢单失败，请重试'
+    ElMessage.error(errMsg)
   } finally {
     loading.value = false
   }
 }
 
 const handleFinishMission = () => {
-  isMissionActive.value = false; result.value = null; fetchMapOrders()
+  isMissionActive.value = false; result.value = null
+  localStorage.setItem('riderStatus', 'IDLE')
+  fetchMapOrders()
 }
 </script>
 
@@ -563,6 +724,9 @@ const handleFinishMission = () => {
 .pulse-dot { width: 10px; height: 10px; border-radius: 50%; animation: pulse 2s infinite; }
 @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); } 70% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); } 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
 .map-wrapper { flex: 1; position: relative; width: 100%; height: 100%; }
+.map-loading-overlay { position: absolute; inset: 0; z-index: 999; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #f1f5f9; color: #64748b; }
+.map-loading-overlay h3 { margin-top: 20px; color: #1e293b; font-weight: 800; }
+.map-loading-overlay p { font-size: 14px; margin-top: 8px; }
 #amap-container { width: 100%; height: 100%; }
 .empty-task-panel { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 40px; border-radius: 20px; text-align: center; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1); z-index: 100; pointer-events: none; }
 .empty-task-panel h3 { color: #1e293b; margin: 15px 0 5px 0; font-weight: 800; }

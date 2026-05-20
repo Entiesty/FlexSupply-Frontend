@@ -12,7 +12,8 @@
           class="menu-item"
           :class="{
             active: route.path === item.path,
-            'is-locked': item.requiresAuth && currentUser.isVerified === 0
+            'is-locked': item.requiresAuth && currentUser.isVerified === 0,
+            'emergency-highlight': item.emergency && sysMode === 'EMERGENCY'
           }"
           @click="handleMenuClick(item)"
       >
@@ -61,6 +62,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { logout } from '@/api/auth'
 import { getUserProfile } from '@/api/user'
+import { getCurrentConfig } from '@/api/config'
 import { verifyPickup } from '@/api/trade'
 
 // 🚨 触发线下核销的全局弹窗逻辑 (重构文案与样式注入)
@@ -117,9 +119,9 @@ const allMenus = computed(() => {
 
   return [
     { name: '实时调度大屏', icon: '🗺️️', path: '/map', roles: [3, 4], requiresAuth: true },
-    ...(showSos ? [{ name: isEmergency ? '🚨 紧急呼救大舱' : '预约上门配送', icon: isEmergency ? '🚨' : '📦', path: '/sos', roles: [1], requiresAuth: false }] : []),
+    ...(showSos ? [{ name: isEmergency ? '紧急呼救大舱' : '预约上门配送', icon: isEmergency ? '🚨' : '📦', path: '/sos', roles: [1], requiresAuth: false }] : []),
     { name: '物资捐赠大厅', icon: '💝', path: '/merchant/donate', roles: [2], requiresAuth: true },
-    ...(showMarket ? [{ name: '日常食物银行', icon: '🏪', path: '/market', roles: [1], requiresAuth: true }] : []),
+    ...(isEmergency ? [{ name: '紧急求助雷达', icon: '🚨', path: '/merchant/radar', roles: [2], requiresAuth: true, emergency: true }] : []),    ...(showMarket ? [{ name: '日常食物银行', icon: '🏪', path: '/market', roles: [1], requiresAuth: true }] : []),
     { name: '我的配送任务', icon: '🚴', path: '/my-tasks', roles: [3], requiresAuth: true },
     { name: '我的捐赠记录', icon: '📦', path: '/merchant/history', roles: [2], requiresAuth: true },
     { name: 'CSR社会责任战报', icon: '🏅', path: '/merchant/csr', roles: [2], requiresAuth: true },
@@ -144,6 +146,15 @@ onMounted(async () => {
       currentUser.value.isVerified = res.data.isVerified
       currentUser.value.username = res.data.username
       currentUser.value.deliveryType = res.data.deliveryType || 0
+    }
+  } catch (e) {}
+
+  // 从后端拉取真实的系统模式, 覆盖 localStorage 可能残留的脏数据
+  try {
+    const cfgRes = await getCurrentConfig()
+    if (cfgRes?.data?.sysMode) {
+      sysMode.value = cfgRes.data.sysMode
+      localStorage.setItem('sysMode', cfgRes.data.sysMode)
     }
   } catch (e) {}
 
@@ -218,6 +229,8 @@ const handleLogout = () => {
 .menu-content { display: flex; align-items: center; gap: 12px; }
 .menu-item:hover:not(.is-locked) { background: #f8fafc; color: #1e293b; }
 .menu-item.active { background: #f97316; color: #fff; box-shadow: 0 8px 20px rgba(249, 115, 22, 0.25); }
+.menu-item.emergency-highlight { background: #dc2626; color: #fff; animation: emerg-pulse 2s infinite; }
+@keyframes emerg-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(220,38,38,0.4); } 50% { box-shadow: 0 0 16px 4px rgba(220,38,38,0.5); } }
 
 .menu-item.is-locked { color: #cbd5e1; cursor: not-allowed; }
 .menu-item.is-locked:hover { background: #fef2f2; color: #ef4444; }

@@ -80,6 +80,14 @@
               <label>👴 弱势群体标签保护权重 <span>(w_tag: {{ form.wTag }}%)</span></label>
               <el-slider v-model="form.wTag" :step="5" show-stops/>
             </div>
+            <div class="slider-item">
+              <label>📅 物资临期偏好 (FEFO) <span>(w_expiration: {{ form.wExpiration }}%)</span></label>
+              <el-slider v-model="form.wExpiration" :step="5" show-stops/>
+            </div>
+            <div class="slider-item">
+              <label>📦 据点库存偏好 <span>(w_stock: {{ form.wStock }}%)</span></label>
+              <el-slider v-model="form.wStock" :step="5" show-stops/>
+            </div>
           </div>
         </div>
 
@@ -102,10 +110,12 @@ const loading = ref(false)
 
 const form = reactive({
   sysMode: 'NORMAL',
-  wDist: 80,
-  wUrgency: 5,
-  wCredit: 5,
-  wTag: 10
+  wDist: 35,
+  wUrgency: 20,
+  wCredit: 15,
+  wTag: 15,
+  wExpiration: 10,
+  wStock: 5
 })
 
 const stateLabel = (mode) => {
@@ -113,7 +123,7 @@ const stateLabel = (mode) => {
   return map[mode] || mode
 }
 
-const totalWeight = computed(() => form.wDist + form.wUrgency + form.wCredit + form.wTag)
+const totalWeight = computed(() => form.wDist + form.wUrgency + form.wCredit + form.wTag + form.wExpiration + form.wStock)
 
 const fetchConfig = async () => {
   loading.value = true
@@ -125,6 +135,8 @@ const fetchConfig = async () => {
       form.wUrgency = res.data.wUrgency * 100
       form.wCredit = res.data.wCredit * 100
       form.wTag = res.data.wTag * 100
+      form.wExpiration = (res.data.wExpiration || 0) * 100
+      form.wStock = (res.data.wStock || 0) * 100
     }
   } catch (e) {
     console.error(e)
@@ -134,6 +146,10 @@ const fetchConfig = async () => {
 }
 
 const handleSwitchMode = async (targetMode) => {
+  if (totalWeight.value !== 100) {
+    ElMessage.warning(`当前权重总和为 ${totalWeight.value}%，请先将权重调整为 100% 再切换模式`)
+    return
+  }
   ElMessageBox.confirm(`确定将系统模式切换至【${stateLabel(targetMode)}】吗？此操作将立即改变全局 SAW 权重、配给制与 LBS 广播策略。`, '双轨状态机操作', {
     confirmButtonText: '确认切换',
     cancelButtonText: '取消',
@@ -153,15 +169,20 @@ const handleSwitchMode = async (targetMode) => {
 const applyPreset = (mode) => {
   if (mode === 'NORMAL') {
     form.sysMode = 'NORMAL'
-    form.wDist = 80; form.wUrgency = 5; form.wCredit = 5; form.wTag = 10;
+    form.wDist = 35; form.wUrgency = 20; form.wCredit = 15; form.wTag = 15
+    form.wExpiration = 10; form.wStock = 5
   } else {
     form.sysMode = 'EMERGENCY'
-    form.wDist = 30; form.wUrgency = 40; form.wCredit = 0; form.wTag = 30;
+    form.wDist = 10; form.wUrgency = 45; form.wCredit = 5; form.wTag = 25
+    form.wExpiration = 5; form.wStock = 10
   }
 }
 
 const handleSave = () => {
-  if (totalWeight.value !== 100) return
+  if (totalWeight.value !== 100) {
+    ElMessage.warning(`当前权重总和为 ${totalWeight.value}%，必须严格等于 100% 才能提交`)
+    return
+  }
 
   ElMessageBox.confirm('确定要热更新调度引擎的底层权重吗？', '高权限警报', {
     confirmButtonText: '执行覆盖',
@@ -175,7 +196,9 @@ const handleSave = () => {
         wDist: (form.wDist / 100).toFixed(2),
         wUrgency: (form.wUrgency / 100).toFixed(2),
         wCredit: (form.wCredit / 100).toFixed(2),
-        wTag: (form.wTag / 100).toFixed(2)
+        wTag: (form.wTag / 100).toFixed(2),
+        wExpiration: (form.wExpiration / 100).toFixed(2),
+        wStock: (form.wStock / 100).toFixed(2)
       }
       await updateConfig(payload)
       ElMessage.success('引擎权重热更新完毕！')
@@ -272,6 +295,7 @@ onMounted(() => fetchConfig())
 .current-state-badge { padding: 6px 16px; border-radius: 20px; font-weight: 900; font-size: 0.85rem; }
 .current-state-badge.state-normal { background: #ecfdf5; color: #059669; }
 .current-state-badge.state-warning_freeze { background: #fffbeb; color: #d97706; }
+.current-state-badge.state-emergency { background: #fef2f2; color: #dc2626; }
 .current-state-badge.state-emergency_response { background: #fef2f2; color: #dc2626; }
 .current-state-badge.state-recovery { background: #eff6ff; color: #2563eb; }
 

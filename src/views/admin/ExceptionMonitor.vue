@@ -157,9 +157,13 @@ const handleForceCancel = (orderId) => {
 onMounted(() => {
   fetchExceptionList()
   pollTimer = setInterval(fetchExceptionList, 10000)
+  window.addEventListener('refresh-orders', fetchExceptionList)
 })
 
-onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
+onUnmounted(() => {
+  if (pollTimer) clearInterval(pollTimer)
+  window.removeEventListener('refresh-orders', fetchExceptionList)
+})
 </script>
 
 <style scoped>

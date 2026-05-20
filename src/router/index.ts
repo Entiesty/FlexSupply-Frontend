@@ -115,6 +115,12 @@ const routes: Array<RouteRecordRaw> = [
         }
     },
     {
+        path: '/merchant/radar',
+        name: 'EmergencyRadar',
+        component: () => import('@/views/merchant/EmergencyRadar.vue'),
+        meta: { requiresAuth: true, roles: [2] }
+    },
+    {
         path: '/merchant/csr',
         name: 'MerchantCsr',
         component: () => import('@/views/merchant/MerchantCsr.vue'),

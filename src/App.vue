@@ -3,11 +3,13 @@
 
     <SideMenu v-if="showMenu" />
 
-    <router-view v-slot="{ Component }">
-      <transition name="page" mode="out-in">
-        <component :is="Component"/>
-      </transition>
-    </router-view>
+    <div class="main-viewport">
+      <router-view v-slot="{ Component }">
+        <transition name="page" mode="out-in">
+          <component :is="Component"/>
+        </transition>
+      </router-view>
+    </div>
 
   </div>
 </template>
@@ -15,11 +17,12 @@
 <script setup>
 // 👇 1. 扩充了 vue 和 element-plus 的引入
 import { computed, onMounted, onUnmounted } from 'vue'
-import { useRoute } from 'vue-router'
-import { ElNotification } from 'element-plus'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessageBox, ElNotification } from 'element-plus'
 import SideMenu from '@/views/dispatch/components/SideMenu.vue'
 
 const route = useRoute()
+const router = useRouter()
 
 // 控制哪些页面不需要侧边栏 (登录页、老人求助页)
 const showMenu = computed(() => {
@@ -96,6 +99,95 @@ const initGlobalWebSocket = () => {
       else if (data.type === 'SOS_RESPONDED') {
         window.dispatchEvent(new Event('refresh-orders'))
       }
+      // 🚨 场景 E2：订单被指挥中心撤销 (定向通知受赠方)
+      else if (data.type === 'ORDER_CANCELLED' && userRole === '1') {
+        ElNotification({
+          title: '📋 求助工单已撤销',
+          message: data.message || `您的紧急求助 ${data.orderSn || ''} 已被指挥中心取消。`,
+          type: 'warning',
+          duration: 8000,
+          position: 'top-right'
+        })
+        window.dispatchEvent(new Event('refresh-orders'))
+      }
+      // 🚨 场景 F：资质审核通过/驳回 (全局刷新)
+      else if (data.type === 'AUDIT_PASSED' || data.type === 'AUDIT_REJECTED') {
+        const isPassed = data.type === 'AUDIT_PASSED'
+        ElNotification({
+          title: isPassed ? '🎉 资质审核已通过' : '📋 资质审核结果',
+          message: data.message || (isPassed ? '全部调度功能已解锁！' : '请重新上传凭证。'),
+          type: isPassed ? 'success' : 'warning',
+          duration: isPassed ? 5000 : 8000,
+          position: 'top-right'
+        })
+        // 持久化审核状态 + 通知全局刷新
+        localStorage.setItem('isVerified', isPassed ? '1' : '0')
+        window.dispatchEvent(new CustomEvent('audit-status-changed', { detail: { isVerified: isPassed ? 1 : 0 } }))
+
+        window.dispatchEvent(new Event('refresh-orders'))
+      }
+      // 🚨 场景 G：商家已备货，触发 P2P 天降神兵
+      else if (data.type === 'URGENT_TASK_READY') {
+        const cargo = data.cargoInfo || '未知规格'
+        const needHeavy = data.weightLevel >= 3 || data.volumeLevel >= 3
+        const needMedium = data.weightLevel >= 2 || data.volumeLevel >= 2
+
+        if (userRole === '3') {
+          // 限制 1：状态互斥 — 忙碌骑士不弹强窗，降级为温和通知
+          const riderStatus = localStorage.getItem('riderStatus') || 'IDLE'
+          if (riderStatus === 'BUSY') {
+            ElNotification({
+              title: '📦 周边有新的 P2P 紧急物资待取',
+              message: `单号 ${data.orderId || ''}，完成当前配送后可前往大屏查看。`,
+              type: 'info',
+              duration: 5000,
+              position: 'top-right'
+            })
+            return
+          }
+          // 限制 2：CVRP 运力硬约束 — 重载物资不推送给步行/单车
+          const myVehicle = Number(localStorage.getItem('vehicleType') || 1)
+          if ((data.weightLevel >= 3 || data.volumeLevel >= 3) && myVehicle < 3) {
+            return
+          }
+          // 通过所有拦截 → 弹出强制接单导航框
+          ElMessageBox.confirm(
+            `<div style="text-align:center;line-height:1.8;">
+              <div style="font-size:3rem;margin-bottom:12px;">🚨</div>
+              <div style="font-size:1.2rem;font-weight:900;color:#dc2626;margin-bottom:8px;">爱心商家已备好救命物资</div>
+              <div style="color:#475569;">请立即前往商家取件，<br/>点对点直达求助市民手中！</div>
+              <div style="margin-top:12px;background:#fef2f2;border-radius:12px;padding:10px;font-size:0.95rem;">
+                📦 货物规格：<b style="color:#dc2626;">${cargo}</b>
+                ${needHeavy ? '<div style="margin-top:6px;color:#ef4444;font-weight:900;">⚠️ 重载/大件物资，请确认您的车辆能装载！</div>' : ''}
+                ${needMedium && !needHeavy ? '<div style="margin-top:6px;color:#f97316;font-weight:bold;">⚡ 标准件，建议电动车配送</div>' : ''}
+              </div>
+              ${data.orderId ? `<div style="margin-top:10px;font-family:monospace;color:#94a3b8;">调度单号: ${data.orderId}</div>` : ''}
+            </div>`,
+            '最高指令：P2P紧急救援触发！',
+            {
+              confirmButtonText: '⚡ 接受指令 · 立即导航',
+              cancelButtonText: '稍后处理',
+              type: 'warning',
+              dangerouslyUseHTMLString: true,
+              showClose: false,
+              closeOnClickModal: false,
+              closeOnPressEscape: false,
+              customClass: 'dopamine-msg-box'
+            }
+          ).then(() => {
+            router.push('/map')
+          }).catch(() => {})
+        } else if (userRole === '4') {
+          // 管理员：仅做温和通知，告知 P2P 匹配成功
+          ElNotification({
+            title: '⚡ P2P 匹配成功',
+            message: `紧急单号 ${data.orderId || ''} 已被商家响应，系统正呼叫周边护航骑士。`,
+            type: 'success',
+            duration: 5000,
+            position: 'top-right'
+          })
+        }
+      }
     } catch (err) {
       console.error('全局 WebSocket 解析失败，收到的非 JSON 数据:', event.data)
     }
@@ -166,6 +258,15 @@ html, body, #app {
   height: 100vh;
   background: #f1f5f9;
   overflow: hidden;
+}
+
+/* 右侧主内容视口：占满剩余空间，纵向自动滚动，左侧菜单固定不动 */
+.main-viewport {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* 页面平滑切换动画保持你的原样 */

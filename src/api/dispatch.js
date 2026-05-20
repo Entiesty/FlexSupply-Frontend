@@ -33,10 +33,18 @@ export function triggerEmergencyBroadcast(orderId) {
     })
 }
 
-// 🚨 商家端短轮询：监听指挥中心发给我的紧急广播
+// 🚨 商家端短轮询：获取所有未处理的紧急广播列表 (持久化)
 export function checkMyEmergencyBroadcast() {
     return request({
         url: `/dispatch/emergency/my-broadcast`,
+        method: 'get'
+    })
+}
+
+// 骑手端：获取可抢的 P2P 紧急订单列表
+export function getEmergencyOrderPool() {
+    return request({
+        url: '/dispatch/emergency/pool',
         method: 'get'
     })
 }

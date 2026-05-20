@@ -168,47 +168,6 @@
       </div>
     </main>
 
-    <el-dialog v-model="emergencyDialog.visible" title="🚨 紧急求助响应" width="480px" align-center>
-      <template v-if="emergencyDialog.data">
-        <!-- 求助人摘要 -->
-        <div class="emergency-recipient-card">
-          <div class="er-header">
-            <span class="er-avatar">{{ emergencyDialog.data.recipientTag === 'ELDERLY' ? '👴' : emergencyDialog.data.recipientTag === 'DISABLED' ? '👩‍🦽' : '👤' }}</span>
-            <div>
-              <div class="er-name">{{ emergencyDialog.data.recipientName || '求助市民' }}</div>
-              <div class="er-tag" v-if="emergencyDialog.data.recipientTag">{{ formatRecipientTag(emergencyDialog.data.recipientTag) }}</div>
-            </div>
-          </div>
-          <div class="er-details">
-            <div class="er-row"><span>📍</span> {{ emergencyDialog.data.doorNumber || '地址未登记' }}</div>
-            <div class="er-row"><span>🔥</span> 紧急度 Lv.{{ emergencyDialog.data.urgency || '?' }} · 急需 {{ emergencyDialog.data.category }}</div>
-          </div>
-        </div>
-
-        <!-- 响应物资输入 -->
-        <div class="emergency-response-form">
-          <div class="erf-title">📦 您的响应物资</div>
-          <el-input v-model="emergencyForm.goodsName" size="large" placeholder="物资名称，如：金龙鱼大米 5kg" class="erf-input" />
-          <el-row :gutter="10" style="margin-top:10px;">
-            <el-col :span="8">
-              <el-input-number v-model="emergencyForm.stock" :min="1" :max="999" size="large" controls-position="right" style="width:100%;" placeholder="数量" />
-            </el-col>
-            <el-col :span="8">
-              <el-select v-model="emergencyForm.unit" size="large" style="width:100%;">
-                <el-option v-for="u in ['件','箱','份','kg','袋','提','瓶','包']" :key="u" :label="u" :value="u" />
-              </el-select>
-            </el-col>
-            <el-col :span="8">
-              <el-input v-model="emergencyForm.estimatedValue" size="large" placeholder="估值(元)" />
-            </el-col>
-          </el-row>
-        </div>
-      </template>
-      <template #footer>
-        <el-button @click="rejectEmergency">暂不响应</el-button>
-        <el-button type="danger" @click="acceptEmergency" :disabled="!emergencyForm.goodsName">⚡ 确认响应，点对点直达</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -218,8 +177,6 @@ import { ElMessage, ElNotification } from 'element-plus'
 import SideMenu from '@/views/dispatch/components/SideMenu.vue'
 import { getRecommendStations, donateGoods } from '@/api/resource'
 import { getUserProfile } from '@/api/user'
-import { checkMyEmergencyBroadcast } from '@/api/dispatch'
-import { respondSos } from '@/api/trade'
 import { getCurrentConfig } from '@/api/config'
 import { uploadFile } from '@/api/common'
 
@@ -230,7 +187,6 @@ const sysMode = ref('NORMAL')
 const fileInput = ref(null)
 const formRef = ref(null)
 let pollTimer = null
-const processedBroadcastIds = new Set()
 
 const form = reactive({
   goodsName: '',
@@ -244,8 +200,6 @@ const form = reactive({
   goodsImageUrl: '',
   estimatedValue: 0
 })
-
-const emergencyDialog = reactive({ visible: false, data: null })
 
 const weightOptions = [
   { value: 1, icon: '🛍️', title: '轻量 <5kg', desc: '适合手提 / 步行配送' },
@@ -392,46 +346,6 @@ const handleFileChange = async (e) => {
   try { const res = await uploadFile(file); form.goodsImageUrl = res.data } catch (e) { ElMessage.error('上传失败') } finally { loading.value = false }
 }
 
-// 轮询收到紧急广播时展示弹窗
-const showEmergencyPopup = (data) => {
-  if (emergencyDialog.visible) return
-  emergencyDialog.data = data; emergencyDialog.visible = true
-  processedBroadcastIds.add(data.orderId)
-}
-
-const emergencyForm = reactive({ goodsName: '', stock: 1, unit: '件', estimatedValue: 0 })
-
-const formatRecipientTag = (tag) => {
-  const map = { 'ELDERLY': '👴 需照顾老人', 'DISABLED': '♿ 残障人士', 'SAN_WORKER': '🧹 环卫工人', 'NORMAL': '👤 普通市民' }
-  return map[tag] || tag
-}
-
-// 紧急广播弹窗 — 使用独立表单, 不再复用捐赠表单
-const acceptEmergency = async () => {
-  const d = emergencyDialog.data
-  if (!emergencyForm.goodsName.trim()) return ElMessage.warning('请填写响应物资名称')
-  emergencyDialog.visible = false
-  try {
-    await respondSos({
-      orderId: d.orderId,
-      goodsName: emergencyForm.goodsName,
-      category: d.category || '应急物资',
-      stock: emergencyForm.stock,
-      unit: emergencyForm.unit,
-      expirationDate: '2099-12-31 23:59:59',
-      weightLevel: 1,
-      volumeLevel: 1,
-      goodsImageUrl: '/img/default.png',
-      estimatedValue: emergencyForm.estimatedValue || 0
-    })
-    ElNotification.success({ title: '✅ 响应成功', message: '物资将点对点直达受赠方，感谢您的爱心！' })
-    emergencyForm.goodsName = ''; emergencyForm.stock = 1
-  } catch (e) {
-    ElMessage.error(e.response?.data?.message || '响应失败')
-  }
-}
-const rejectEmergency = () => { emergencyDialog.visible = false; ElMessage.info('已忽略该调度请求') }
-
 const handleDonate = async () => {
   if (!isFormValid.value) return
   submitting.value = true
@@ -477,14 +391,6 @@ onMounted(async () => {
     if (userRes.data?.currentLon) await fetchStations(userRes.data.currentLon, userRes.data.currentLat)
     else await fetchStations()
   } catch (e) { await fetchStations() }
-  pollTimer = setInterval(async () => {
-    try {
-      const res = await checkMyEmergencyBroadcast()
-      if (res?.data && (res.data.category || res.data.requiredCategory) && !processedBroadcastIds.has(res.data.orderId)) {
-        showEmergencyPopup(res.data)
-      }
-    } catch (e) {}
-  }, 5000)
 })
 
 onUnmounted(() => { if (pollTimer) { clearInterval(pollTimer); pollTimer = null } })
