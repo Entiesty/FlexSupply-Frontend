@@ -248,7 +248,7 @@ const proceedInit = () => {
     herdCheckTimer = setTimeout(async () => {
       await fetchMapOrders()
       if (lastSeenOrderId.value && !pendingOrder.value?.orderId && !isMissionActive.value) {
-        ElMessage.info('⚡ 慢了一步，该紧急指令已被其他护航者接管，感谢您的响应！')
+        // ElMessage.info('⚡ 慢了一步，该紧急指令已被其他护航者接管，感谢您的响应！')
         if (map.value) map.value.clearMap()
         lastSeenOrderId.value = null
       }
