@@ -4,7 +4,7 @@
     <main class="main-content">
       <div class="top-status">
         <span class="pulse-dot"></span>
-        物资全链路溯源 | 信誉分 <strong>{{ myCreditScore }}</strong>
+        物资全链路溯源
       </div>
 
       <div class="history-wrapper">
@@ -21,23 +21,17 @@
             <el-option :value="null" label="全部状态" />
             <el-option :value="0" label="待取货" />
             <el-option :value="1" label="运送中" />
-            <el-option :value="4" label="商家自送中" />
             <el-option :value="2" label="已入库" />
             <el-option :value="3" label="已发完" />
           </el-select>
           <el-button type="primary" @click="fetchData">检索</el-button>
         </div>
 
-        <!-- 自送中横幅 -->
-        <div v-if="activeDeliveries.length > 0" class="active-banner">
-          <span class="live-dot"></span> 您有 {{ activeDeliveries.length }} 批物资正在亲自护送中
-        </div>
-
         <!-- 卡片列表 -->
         <div class="card-list" v-loading="loading">
           <el-empty v-if="!loading && historyDeliveries.length === 0" description="暂无捐赠记录" />
 
-          <div class="item-card" v-for="row in historyDeliveries" :key="row.goodsId" :class="{ 'is-active': row.status === 4 }">
+          <div class="item-card" v-for="row in historyDeliveries" :key="row.goodsId">
             <!-- Header -->
             <div class="card-hd">
               <h3 class="card-name" :title="row.goodsName">{{ cleanGoodsName(row.goodsName) }}</h3>
@@ -66,15 +60,7 @@
               <span v-else></span>
               <div class="card-actions">
                 <el-button size="small" @click="openTrace(row)">📍 物资追踪</el-button>
-                <el-dropdown v-if="row.status === 0" trigger="click" @command="(cmd) => handleCardAction(cmd, row)">
-                  <el-button size="small">···</el-button>
-                  <template #dropdown>
-                    <el-dropdown-menu>
-                      <el-dropdown-item command="start">🚗 开始自送</el-dropdown-item>
-                      <el-dropdown-item command="revoke" divided style="color: #ef4444;">❌ 撤销</el-dropdown-item>
-                    </el-dropdown-menu>
-                  </template>
-                </el-dropdown>
+                <el-button v-if="row.status === 0" size="small" type="danger" plain @click="handleRevoke(row)">❌ 撤销</el-button>
               </div>
             </div>
           </div>
@@ -110,12 +96,12 @@
           </el-timeline-item>
 
           <el-timeline-item
-              :color="currentTraceItem.status === 1 || currentTraceItem.status === 4 || currentTraceItem.status >= 2 ? '#f97316' : '#e2e8f0'"
+              :color="currentTraceItem.status >= 1 ? '#f97316' : '#e2e8f0'"
               :hollow="currentTraceItem.status === 0">
             <h4 class="tl-title" :class="{'pending-text': currentTraceItem.status === 0}">
-              {{ currentTraceItem.status === 4 ? '🚗 您正在亲自护送物资前往驿站' : (currentTraceItem.status >= 1 ? '🚴 城市护航骑士已接单取货' : '⏳ 调度引擎正在呼叫骑士/等待自送...') }}
+              {{ currentTraceItem.status >= 1 ? '🚴 城市护航骑士已接单取货' : '⏳ 调度引擎正在呼叫骑士接单...' }}
             </h4>
-            <p class="tl-desc" v-if="currentTraceItem.status === 1 || currentTraceItem.status === 4">正在全力保障您的爱心物资安全抵达目的地。</p>
+            <p class="tl-desc" v-if="currentTraceItem.status === 1">正在全力保障您的爱心物资安全抵达目的地。</p>
           </el-timeline-item>
 
           <el-timeline-item
@@ -193,19 +179,17 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
 import SideMenu from '@/views/dispatch/components/SideMenu.vue'
-import { getMerchantGoodsPage, revokeGoods, startSelfDelivery } from '@/api/resource'
+import { getMerchantGoodsPage, revokeGoods } from '@/api/resource'
 import { getUserProfile } from '@/api/user'
 import { getGoodsDistribution } from '@/api/trade'
 
 const loading = ref(false)
 const tableData = ref([])
 const total = ref(0)
-const myCreditScore = ref(100)
-
 const queryParams = ref({
   pageNum: 1,
   pageSize: 10,
@@ -217,26 +201,18 @@ const traceVisible = ref(false)
 const currentTraceItem = ref(null)
 const distributionList = ref([])
 const distLoading = ref(false)
+let tracePollTimer = null
 
-const activeDeliveries = computed(() => tableData.value.filter(item => item.status === 4))
-const historyDeliveries = computed(() => {
-  if (queryParams.value.status === 4) return tableData.value
-  return tableData.value.filter(item => item.status !== 4)
-})
+const historyDeliveries = computed(() => tableData.value)
 
 const getStatusText = (status) => {
-  const map = { 0: '待取货', 1: '运送中', 2: '已入库', 3: '已发完', 4: '商家自送中' }
+  const map = { 0: '待取货', 1: '运送中', 2: '已入库', 3: '已发完' }
   return map[status] || '未知'
 }
 
 const statusTagType = (status) => {
   const map = { 0: 'warning', 1: '', 2: 'success', 3: 'info', 4: 'warning' }
   return map[status] || 'info'
-}
-
-const handleCardAction = (cmd, row) => {
-  if (cmd === 'start') handleStart(row)
-  else if (cmd === 'revoke') handleRevoke(row)
 }
 
 const cleanGoodsName = (name) => {
@@ -279,6 +255,22 @@ const openTrace = async (row) => {
       distLoading.value = false
     }
   }
+
+  // 每 5 秒刷新追踪数据
+  if (tracePollTimer) clearInterval(tracePollTimer)
+  tracePollTimer = setInterval(async () => {
+    await fetchData()
+    // 从刷新后的列表中同步该物资的最新状态
+    const updated = tableData.value.find(r => r.goodsId === row.goodsId)
+    if (updated) currentTraceItem.value = updated
+    // 物资状态变为已入库时自动拉取领取明细
+    if (currentTraceItem.value.status >= 2 && distributionList.value.length === 0) {
+      try {
+        const res = await getGoodsDistribution(row.goodsId)
+        distributionList.value = res.data || []
+      } catch (e) {}
+    }
+  }, 5000)
 }
 
 const handleRevoke = (row) => {
@@ -296,94 +288,16 @@ const handleRevoke = (row) => {
   }).catch(() => {})
 }
 
-const handleStart = async (row) => {
-  ElMessageBox.confirm('确认亲自护送这批物资吗？系统将为您开启自送护航通道。', '启动自送', {
-    confirmButtonText: '开始自送', cancelButtonText: '取消', type: 'warning'
-  }).then(async () => {
-    loading.value = true
-    try {
-      await startSelfDelivery(row.goodsId)
-      ElMessage.success('自送通道已开启！请尽快护送物资前往终点。')
-      await fetchData()
-    } catch (e) {} finally { loading.value = false }
-  }).catch(() => {})
-}
-
-// === 🚨 滑动解锁逻辑 ===
-const startSlide = (e, goodsId) => {
-  if (slideSuccessMap.value[goodsId]) return // 已经成功的不允许再滑
-  isDragging = true
-  currentGoodsId = goodsId
-  startX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX
-
-  window.addEventListener('mousemove', onSlideMove)
-  window.addEventListener('touchmove', onSlideMove, { passive: false })
-  window.addEventListener('mouseup', endSlide)
-  window.addEventListener('touchend', endSlide)
-}
-
-const onSlideMove = (e) => {
-  if (!isDragging) return
-  if (e.type.includes('touch')) e.preventDefault() // 防止页面滚动
-  const currentX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX
-  let moveX = currentX - startX
-
-  if (moveX < 0) moveX = 0
-  if (moveX > maxSlideWidth) moveX = maxSlideWidth
-
-  slideProgressMap.value[currentGoodsId] = moveX
-}
-
-const endSlide = async () => {
-  if (!isDragging) return
-  isDragging = false
-
-  const finalProgress = slideProgressMap.value[currentGoodsId] || 0
-
-  // 必须滑到 95% 以上才算成功
-  if (finalProgress >= maxSlideWidth * 0.95) {
-    slideProgressMap.value[currentGoodsId] = maxSlideWidth
-    slideSuccessMap.value[currentGoodsId] = true
-    // 触发真实核销接口
-    await executeFinishDelivery(currentGoodsId)
-  } else {
-    // 失败回弹动画
-    let backStep = finalProgress
-    const anim = setInterval(() => {
-      backStep -= 15
-      if (backStep <= 0) {
-        slideProgressMap.value[currentGoodsId] = 0
-        clearInterval(anim)
-      } else {
-        slideProgressMap.value[currentGoodsId] = backStep
-      }
-    }, 16)
-  }
-
-  window.removeEventListener('mousemove', onSlideMove)
-  window.removeEventListener('touchmove', onSlideMove)
-  window.removeEventListener('mouseup', endSlide)
-  window.removeEventListener('touchend', endSlide)
-}
-
-const executeFinishDelivery = async (goodsId) => {
-  try {
-    await finishSelfDelivery(goodsId)
-    ElMessage.success('核销成功，感谢您的亲力亲为！')
-    await fetchData()
-  } catch (e) {
-    // 失败了重置滑块
-    slideSuccessMap.value[goodsId] = false
-    slideProgressMap.value[goodsId] = 0
-  }
-}
-
-onMounted(async () => {
+onMounted(() => {
   fetchData()
-  try {
-    const userRes = await getUserProfile()
-    if (userRes && userRes.data) myCreditScore.value = userRes.data.creditScore || 100
-  } catch (e) {}
+  window.addEventListener('refresh-orders', fetchData)
+})
+
+watch(traceVisible, (v) => {
+  if (!v && tracePollTimer) {
+    clearInterval(tracePollTimer)
+    tracePollTimer = null
+  }
 })
 </script>
 
@@ -405,16 +319,11 @@ onMounted(async () => {
 .toolbar-search { flex: 1; min-width: 200px; }
 .toolbar-select { width: 160px; flex-shrink: 0; }
 
-/* 自送横幅 */
-.active-banner { background: #fefce8; border: 1px solid #fde68a; border-radius: 12px; padding: 12px 20px; margin-bottom: 20px; font-weight: 900; color: #a16207; font-size: 0.9rem; display: flex; align-items: center; gap: 8px; }
-.live-dot { width: 8px; height: 8px; background: #f59e0b; border-radius: 50%; animation: pulse 1.5s infinite; }
-
 /* 卡片 */
 .card-list { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 
 .item-card { background: #fff; border-radius: 16px; border: 1px solid #f1f5f9; box-shadow: 0 4px 12px rgba(0,0,0,0.03); overflow: hidden; display: flex; flex-direction: column; transition: 0.2s; }
 .item-card:hover { border-color: #e2e8f0; box-shadow: 0 8px 20px rgba(0,0,0,0.05); }
-.item-card.is-active { border-left: 3px solid #f97316; }
 
 .card-hd { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #f8fafc; }
 .card-name { margin: 0; font-size: 1.05rem; color: #1e293b; font-weight: 900; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; margin-right: 12px; }

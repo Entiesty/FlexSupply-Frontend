@@ -94,6 +94,7 @@ const map = shallowRef(null)
 let AMap = null
 
 const isVerified = ref(0)
+const mapInitialized = ref(false)
 
 // ================= 调度核心状态 =================
 const loading = ref(false)
@@ -115,7 +116,7 @@ const userLocation = ref([118.092000, 24.623500])
 const isLbsReady = ref(false)
 
 // 厦门集美区安全坐标范围
-const JIMEI_BOUNDS = { minLng: 118.00, maxLng: 118.20, minLat: 24.50, maxLat: 24.70 }
+const JIMEI_BOUNDS = { minLng: 117.00, maxLng: 119.00, minLat: 23.00, maxLat: 26.00 }
 const GEO_FALLBACK = [118.092000, 24.623500]
 
 const isValidCoord = (lng, lat) => {
@@ -169,6 +170,18 @@ onMounted(async () => {
     console.warn('获取资料失败，可能未登录')
   }
 
+  // 监听审核状态变更 — 审核通过后实时解锁大屏并初始化地图
+  window.addEventListener('audit-status-changed', (e) => {
+    if (e.detail?.isVerified !== undefined) {
+      isVerified.value = e.detail.isVerified
+      if (e.detail.isVerified && !mapInitialized.value) {
+        mapInitialized.value = true
+        userLocation.value = isValidCoord(dbLon, dbLat) ? [dbLon, dbLat] : [...GEO_FALLBACK]
+        proceedInit()
+      }
+    }
+  })
+
   // 权限拦截：审核通过或是管理员，才允许看大屏
   if (currentUserRole.value === 4 || isVerified.value === 1) {
 
@@ -185,7 +198,7 @@ onMounted(async () => {
             let realLat = pos.coords.latitude
 
             // 答辩沙盘防漂移保护 (只在厦门集美区有效)
-            if (!isValidCoord(realLon, realLat) || Math.abs(realLon - 118.1) > 1 || Math.abs(realLat - 24.6) > 1) {
+            if (!isValidCoord(realLon, realLat) || Math.abs(realLon - 118.1) > 5 || Math.abs(realLat - 24.6) > 5) {
               console.warn('大屏检测到异地登录或GPS异常，开启沙盘保护，降级使用档案坐标');
               userLocation.value = isValidCoord(dbLon, dbLat) ? [dbLon, dbLat] : [...GEO_FALLBACK];
               ElMessage.warning('GPS异常，大屏已锁定至测试沙盘区域');
@@ -213,6 +226,7 @@ onMounted(async () => {
 
 // 💡 抽离出的初始化执行管线 (等待坐标就绪后执行)
 const proceedInit = () => {
+  mapInitialized.value = true
   // 🛡️ 最终防线：原子性确保 userLocation 合法
   if (!isValidCoord(userLocation.value[0], userLocation.value[1])) {
     console.warn('proceedInit 检测到非法 userLocation，强制写入默认中心')
@@ -230,10 +244,8 @@ const proceedInit = () => {
     if (res?.data?.sysMode) sysMode.value = res.data.sysMode
   }).catch(() => {})
 
-  // 监听全局模式切换, 大屏实时联动
-  window.addEventListener('mode-changed', (e) => {
-    if (e.detail?.mode) sysMode.value = e.detail.mode
-  })
+  // 监听全局模式切换, 大屏实时联动 — 清空旧模式脏数据并重新拉取
+  window.addEventListener('mode-changed', handleModeChange)
   // 限制 3：惊群效应安抚 — 监听订单被抢事件（带防抖，避免 WebSocket 消息洪峰刷屏）
   window.addEventListener('refresh-orders', () => {
     if (pendingOrder.value?.orderId) {
@@ -268,10 +280,26 @@ const proceedInit = () => {
   }, 5000)
 }
 
+// 模式切换统一处理函数（WebSocket 事件驱动，保证单一数据源）
+const handleModeChange = (e) => {
+  if (e.detail?.mode && sysMode.value !== e.detail.mode) {
+    sysMode.value = e.detail.mode
+    // 1. 彻底清空旧模式残留的所有测算数据和弹窗
+    pendingOrder.value = null
+    result.value = null
+    autoDispatchedOrderId.value = null
+    if (map.value) map.value.clearMap()
+    // 2. 立即拉取新模式下的全城态势
+    fetchMapOrders()
+    ElMessage.warning(`系统已切换为 ${e.detail.mode === 'EMERGENCY' ? '战时应急' : '平时常态'}，沙盘已重置。`)
+  }
+}
+
 onUnmounted(() => {
   if (map.value) map.value.destroy()
   if (pollingTimer) clearInterval(pollingTimer)
   clearFallbackTimer()
+  window.removeEventListener('mode-changed', handleModeChange)
 })
 
 const MODE_LABELS = {
@@ -284,13 +312,28 @@ const MODE_NEXT = {
   EMERGENCY: 'NORMAL'
 }
 
+// 🚨 终极修复：发起者“先斩后奏”，绝不干等极其容易断连的 WebSocket！
 const toggleSysMode = async () => {
   const target = MODE_NEXT[sysMode.value]
   if (!target) return
+
   try {
+    // 1. 发送 API 请求，更新后台数据库
     await switchMode({ targetMode: target })
+
+    // 2. 🔥 API 一旦成功，本地立刻强行更新状态！不再等 WebSocket！
     sysMode.value = target
-    ElMessage.success({ message: `系统模式已切换: ${MODE_LABELS[target]}`, duration: 3000 })
+
+    // 3. 彻底清空旧模式的大盘残留数据 (毁尸灭迹)
+    pendingOrder.value = null
+    result.value = null
+    autoDispatchedOrderId.value = null
+    if (map.value) map.value.clearMap()
+
+    // 4. 重新拉取新模式下的全城态势
+    await fetchMapOrders()
+
+    ElMessage.success({ message: `系统已强制切换至: ${MODE_LABELS[target]}，沙盘已重置`, duration: 3000 })
   } catch (e) {
     ElMessage.error(e?.message || '模式切换失败，请检查权限或状态机规则')
   }
@@ -320,9 +363,10 @@ const fetchMapOrders = async () => {
 
       drawMarker(isDonation, [mainTgtLon, mainTgtLat])
 
-      // P2P 已响应订单：商家已备货，跳过 SAW 驿站匹配，直接用商家坐标画三点路线
+      // P2P 已响应订单：仅当起点是商家（非驿站）时才走直达通道
       const isP2PResponded = pendingOrder.value.sourceId != null
           && isValidCoord(pendingOrder.value.sourceLon, pendingOrder.value.sourceLat)
+          && (pendingOrder.value.sourceName || '').includes('商铺')
 
       if (currentUserRole.value === 3
           && pendingOrder.value.deliveryMethod === 1
@@ -404,6 +448,7 @@ const handleDispatchAction = async () => {
   const isDonation = pendingOrder.value.orderType === 1
   const isP2PResponded = pendingOrder.value.sourceId != null
       && isValidCoord(pendingOrder.value.sourceLon, pendingOrder.value.sourceLat)
+      && (pendingOrder.value.sourceName || '').includes('商铺')
   const lng = isValidCoord(pendingOrder.value.targetLon, pendingOrder.value.targetLat) ? pendingOrder.value.targetLon : safeLng
   const lat = isValidCoord(pendingOrder.value.targetLon, pendingOrder.value.targetLat) ? pendingOrder.value.targetLat : safeLat
   if (isDonation) handleDonationDispatch([lng, lat])
@@ -498,7 +543,7 @@ const handleSmartDispatch = async (targetPos) => {
 
       if (currentUserRole.value === 4 && pendingOrder.value.deliveryMethod === 1) startFallbackTimer()
     } else {
-      ElMessage.info(`测算完毕：附近 5 公里暂无满足 [${safeCategory}] 及其特殊标签的物资`)
+      ElMessage.info(`测算完毕：附近暂无满足 [${safeCategory}] 的驿站物资（将尝试商家募捐）`)
     }
   } catch (e) {
     ElMessage.error(`调度失败: ${e.response?.data?.message || '引擎异常'}`)

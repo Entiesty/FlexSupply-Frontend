@@ -11,18 +11,18 @@
       </header>
 
       <div class="engine-panel">
-        <!-- ✅ FIX-2: 极简双轨状态机 -->
+        <!-- 极简双轨状态机 -->
         <div class="state-machine-box">
           <div class="sm-header">
-            <h3>🛡️ 极简双轨状态机 (NORMAL ↔ EMERGENCY)</h3>
+            <h3>⚙️ 全局平急状态机控制台</h3>
             <span class="current-state-badge" :class="'state-' + form.sysMode.toLowerCase()">
               当前: {{ stateLabel(form.sysMode) }}
             </span>
           </div>
-          <div class="sm-actions" style="justify-content: center;">
+          <div class="sm-actions">
             <button class="sm-btn normal-btn" :disabled="form.sysMode === 'NORMAL'"
                     @click="handleSwitchMode('NORMAL')">
-              🕊️ 恢复平时模式
+              🟢 恢复平时模式
             </button>
             <button class="sm-btn emergency-btn" :disabled="form.sysMode === 'EMERGENCY'"
                     @click="handleSwitchMode('EMERGENCY')">
@@ -37,23 +37,6 @@
             :closable="false" show-icon style="margin-top: 15px;" />
         </div>
 
-        <div class="mode-switch-box">
-          <div class="mode-label">
-            <h3>系统运行模式 (平急两用切换)</h3>
-            <p>切换将自动应用预设的权重模板</p>
-          </div>
-          <div class="mode-toggles">
-            <button class="mode-btn normal" :class="{ active: form.sysMode === 'NORMAL' }"
-                    @click="applyPreset('NORMAL')">
-              🕊️ 平时模式 (距离优先)
-            </button>
-            <button class="mode-btn emergency" :class="{ active: form.sysMode === 'EMERGENCY' }"
-                    @click="applyPreset('EMERGENCY')">
-              🚨 急时模式 (紧急度/弱势优先)
-            </button>
-          </div>
-        </div>
-
         <div class="weights-box">
           <div class="weight-header">
             <h3>多因子权重分配控制台</h3>
@@ -62,6 +45,8 @@
               <span v-if="totalWeight !== 100" class="err-msg"> (必须等于 100%)</span>
             </div>
           </div>
+
+          <p class="slider-tip">💡 提示：模式切换时将自动应用最佳预设权重。下方滑块仅用于当前模式的特殊情况微调。</p>
 
           <div class="slider-group">
             <div class="slider-item">
@@ -102,9 +87,9 @@
 </template>
 
 <script setup>
-import {ref, reactive, computed, onMounted} from 'vue'
-import {ElMessage, ElMessageBox} from 'element-plus'
-import {getCurrentConfig, updateConfig, switchMode} from '@/api/config'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { getCurrentConfig, updateConfig, switchMode } from '@/api/config'
 
 const loading = ref(false)
 
@@ -119,7 +104,7 @@ const form = reactive({
 })
 
 const stateLabel = (mode) => {
-  const map = { 'NORMAL': '🕊️ 平时常态', 'EMERGENCY': '🔴 战时应急' }
+  const map = { 'NORMAL': '🟢 平时常态', 'EMERGENCY': '🔴 战时应急' }
   return map[mode] || mode
 }
 
@@ -145,37 +130,32 @@ const fetchConfig = async () => {
   }
 }
 
+// 全局模式切换监听 —— 单一数据源：WebSocket 事件驱动，不本地抢先修改状态
+const handleModeChange = (e) => {
+  if (e.detail?.mode && form.sysMode !== e.detail.mode) {
+    form.sysMode = e.detail.mode
+    fetchConfig()
+    ElMessage.success(`系统已同步至: ${stateLabel(e.detail.mode)}，权重已自动拉取最新预设`)
+  }
+}
+
 const handleSwitchMode = async (targetMode) => {
   if (totalWeight.value !== 100) {
     ElMessage.warning(`当前权重总和为 ${totalWeight.value}%，请先将权重调整为 100% 再切换模式`)
     return
   }
-  ElMessageBox.confirm(`确定将系统模式切换至【${stateLabel(targetMode)}】吗？此操作将立即改变全局 SAW 权重、配给制与 LBS 广播策略。`, '双轨状态机操作', {
-    confirmButtonText: '确认切换',
-    cancelButtonText: '取消',
-    type: 'warning'
-  }).then(async () => {
+  ElMessageBox.confirm(
+    `确定将系统模式切换至【${stateLabel(targetMode)}】吗？此操作将立即改变全局 SAW 权重、配给制与 LBS 广播策略。`,
+    '双轨状态机操作',
+    { confirmButtonText: '确认切换', cancelButtonText: '取消', type: 'warning' }
+  ).then(async () => {
     try {
       await switchMode({ targetMode })
-      form.sysMode = targetMode
-      await fetchConfig() // 刷新权重显示
-      ElMessage.success(`系统模式已切换至: ${stateLabel(targetMode)}，SAW 权重已自动同步`)
+      ElMessage.success('模式切换指令已下发，正在等待全网同步...')
     } catch (e) {
       ElMessage.error(e.response?.data?.message || '状态机切换失败')
     }
   }).catch(() => {})
-}
-
-const applyPreset = (mode) => {
-  if (mode === 'NORMAL') {
-    form.sysMode = 'NORMAL'
-    form.wDist = 35; form.wUrgency = 20; form.wCredit = 15; form.wTag = 15
-    form.wExpiration = 10; form.wStock = 5
-  } else {
-    form.sysMode = 'EMERGENCY'
-    form.wDist = 10; form.wUrgency = 45; form.wCredit = 5; form.wTag = 25
-    form.wExpiration = 5; form.wStock = 10
-  }
 }
 
 const handleSave = () => {
@@ -210,7 +190,14 @@ const handleSave = () => {
   }).catch(() => {})
 }
 
-onMounted(() => fetchConfig())
+onMounted(() => {
+  fetchConfig()
+  window.addEventListener('mode-changed', handleModeChange)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('mode-changed', handleModeChange)
+})
 </script>
 
 <style scoped>
@@ -249,15 +236,9 @@ onMounted(() => fetchConfig())
 }
 
 @keyframes pulse-red {
-  0% {
-    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
-  }
-  70% {
-    box-shadow: 0 0 0 6px rgba(239, 68, 68, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
-  }
+  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+  70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
 }
 
 .config-wrapper {
@@ -288,83 +269,93 @@ onMounted(() => fetchConfig())
   overflow: hidden;
 }
 
-/* 应急状态机控制台 */
-.state-machine-box { padding: 30px; background: #fff; border-bottom: 2px dashed #e2e8f0; }
-.sm-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-.sm-header h3 { margin: 0; color: #1e293b; font-size: 1.3rem; font-weight: 900; }
-.current-state-badge { padding: 6px 16px; border-radius: 20px; font-weight: 900; font-size: 0.85rem; }
-.current-state-badge.state-normal { background: #ecfdf5; color: #059669; }
-.current-state-badge.state-warning_freeze { background: #fffbeb; color: #d97706; }
-.current-state-badge.state-emergency { background: #fef2f2; color: #dc2626; }
-.current-state-badge.state-emergency_response { background: #fef2f2; color: #dc2626; }
-.current-state-badge.state-recovery { background: #eff6ff; color: #2563eb; }
-
-.sm-actions { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; justify-content: center; }
-.sm-btn { padding: 10px 18px; border-radius: 12px; border: none; font-weight: 900; font-size: 0.85rem; cursor: pointer; transition: 0.3s; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
-.sm-btn:disabled { background: #e2e8f0; color: #94a3b8; cursor: not-allowed; box-shadow: none; }
-.sm-btn.freeze:not(:disabled) { background: #fffbeb; color: #d97706; border: 1px solid #fcd34d; }
-.sm-btn.freeze:hover:not(:disabled) { background: #fef3c7; transform: translateY(-2px); }
-.sm-btn.emergency-btn:not(:disabled) { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
-.sm-btn.emergency-btn:hover:not(:disabled) { background: #fee2e2; transform: translateY(-2px); }
-.sm-btn.recover:not(:disabled) { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
-.sm-btn.recover:hover:not(:disabled) { background: #dbeafe; transform: translateY(-2px); }
-.sm-btn.normal-btn:not(:disabled) { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
-.sm-btn.normal-btn:hover:not(:disabled) { background: #d1fae5; transform: translateY(-2px); }
-
-.mode-switch-box {
+/* ===== 应急状态机控制台 ===== */
+.state-machine-box {
   padding: 30px;
-  background: #f8fafc;
+  background: #fff;
   border-bottom: 2px dashed #e2e8f0;
+}
+
+.sm-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 20px;
 }
 
-.mode-label h3 {
-  margin: 0 0 5px;
+.sm-header h3 {
+  margin: 0;
   color: #1e293b;
   font-size: 1.3rem;
   font-weight: 900;
 }
 
-.mode-label p {
-  margin: 0;
-  color: #64748b;
-  font-size: 0.9rem;
+.current-state-badge {
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-weight: 900;
+  font-size: 0.85rem;
 }
 
-.mode-toggles {
-  display: flex;
-  gap: 15px;
+.current-state-badge.state-normal {
+  background: #ecfdf5;
+  color: #059669;
 }
 
-.mode-btn {
-  padding: 12px 20px;
-  border-radius: 12px;
-  border: 2px solid transparent;
-  font-weight: bold;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: 0.3s;
-  background: #fff;
-  color: #64748b;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.03);
-}
-
-.mode-btn.normal.active {
-  border-color: #3b82f6;
-  background: #eff6ff;
-  color: #2563eb;
-  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.2);
-}
-
-.mode-btn.emergency.active {
-  border-color: #ef4444;
+.current-state-badge.state-emergency {
   background: #fef2f2;
   color: #dc2626;
-  box-shadow: 0 4px 15px rgba(239, 68, 68, 0.2);
 }
 
+.sm-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.sm-btn {
+  padding: 10px 18px;
+  border-radius: 12px;
+  border: none;
+  font-weight: 900;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: 0.3s;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+}
+
+.sm-btn:disabled {
+  background: #e2e8f0;
+  color: #94a3b8;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.sm-btn.emergency-btn:not(:disabled) {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.sm-btn.emergency-btn:hover:not(:disabled) {
+  background: #fee2e2;
+  transform: translateY(-2px);
+}
+
+.sm-btn.normal-btn:not(:disabled) {
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+}
+
+.sm-btn.normal-btn:hover:not(:disabled) {
+  background: #d1fae5;
+  transform: translateY(-2px);
+}
+
+/* ===== 权重控制台 ===== */
 .weights-box {
   padding: 30px;
 }
@@ -373,7 +364,7 @@ onMounted(() => fetchConfig())
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 30px;
+  margin-bottom: 15px;
 }
 
 .weight-header h3 {
@@ -405,6 +396,17 @@ onMounted(() => fetchConfig())
   font-weight: normal;
 }
 
+.slider-tip {
+  font-size: 0.85rem;
+  color: #f59e0b;
+  margin-bottom: 20px;
+  font-weight: bold;
+  background: #fffbeb;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid #fde68a;
+}
+
 .slider-group {
   display: flex;
   flex-direction: column;
@@ -426,7 +428,6 @@ onMounted(() => fetchConfig())
   font-size: 1.1rem;
 }
 
-/* 深度修改 Element UI 滑块样式匹配多巴胺主题 */
 :deep(.el-slider__bar) {
   background-color: #f97316;
 }
@@ -436,6 +437,7 @@ onMounted(() => fetchConfig())
   box-shadow: 0 2px 8px rgba(249, 115, 22, 0.4);
 }
 
+/* ===== 操作底栏 ===== */
 .action-footer {
   padding: 25px 30px;
   background: #fff;

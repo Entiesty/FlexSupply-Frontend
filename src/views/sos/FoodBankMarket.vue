@@ -156,10 +156,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Location } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { getUserProfile } from '@/api/user'
 import { getStationPage, getStationGoods } from '@/api/resource'
 import { publishDemand, getMyHistoryOrders } from '@/api/trade'
@@ -202,6 +202,19 @@ const calculateDistance = (lon1, lat1, lon2, lat2) => {
 const fetchData = async () => {
   loading.value = true
   try {
+    // 应急模式门卫：优先读取系统模式，若已处于战时状态则直接踢回SOS舱
+    try {
+      const configRes = await getCurrentConfig()
+      if (configRes.data) {
+        sysMode.value = configRes.data.sysMode
+        maxDailyClaims.value = configRes.data.maxDailyClaims || 3
+      }
+    } catch (e) {}
+    if (sysMode.value === 'EMERGENCY') {
+      router.replace('/sos')
+      return
+    }
+
     const userRes = await getUserProfile()
     if (userRes.data?.currentLon) {
       userLoc.value = [userRes.data.currentLon, userRes.data.currentLat]
@@ -214,15 +227,6 @@ const fetchData = async () => {
     if (userRes.data?.dailyClaimCount != null) {
       todayClaimed.value = userRes.data.dailyClaimCount
     }
-
-    // 读取系统模式配置
-    try {
-      const configRes = await getCurrentConfig()
-      if (configRes.data) {
-        sysMode.value = configRes.data.sysMode
-        maxDailyClaims.value = configRes.data.maxDailyClaims || 3
-      }
-    } catch (e) {}
 
     try {
       const historyRes = await getMyHistoryOrders({ pageNum: 1, pageSize: 20 })
@@ -288,25 +292,48 @@ const closeAndRefresh = () => {
 
 const router = useRouter()
 
-// ✅ FIX-3: 应急模式门卫 — 收到切换信号立即踢回SOS舱
+// 应急模式门卫 — 立即踢回SOS舱，不阻塞等待用户确认
 const handleEmergencyLockdown = () => {
-  ElMessageBox.alert(
-    '⚠️ 战时应急模式已启动，为保障人身安全，线下自提通道已关闭！系统将为您转至紧急呼救大舱。',
-    '🚨 自提通道封锁',
-    { confirmButtonText: '我知道了', type: 'error', center: true }
-  ).then(() => router.replace('/sos'))
+  router.replace('/sos')
 }
 
 const handleRefreshMarket = () => fetchData()
+
+// localStorage 轮询兜底：WebSocket 断连时也不会漏掉模式切换
+let modePollTimer = null
+const startModePolling = () => {
+  modePollTimer = setInterval(() => {
+    const storedMode = localStorage.getItem('sysMode')
+    if (storedMode === 'EMERGENCY' && sysMode.value !== 'EMERGENCY') {
+      sysMode.value = 'EMERGENCY'
+      handleEmergencyLockdown()
+    } else if (storedMode === 'NORMAL' && sysMode.value === 'EMERGENCY') {
+      sysMode.value = 'NORMAL'
+      ElMessage.success('平时互助模式已恢复，社区食物银行正常开放')
+      fetchData()
+    }
+  }, 3000)
+}
+
 onMounted(() => {
   fetchData()
   window.addEventListener('mode-changed', (e) => {
     if (e.detail?.mode) {
       sysMode.value = e.detail.mode
-      if (e.detail.mode === 'EMERGENCY') handleEmergencyLockdown()
+      if (e.detail.mode === 'EMERGENCY') {
+        handleEmergencyLockdown()
+      } else if (e.detail.mode === 'NORMAL') {
+        ElMessage.success('平时互助模式已恢复，社区食物银行正常开放')
+        fetchData()
+      }
     }
   })
   window.addEventListener('refresh-orders', handleRefreshMarket)
+  startModePolling()
+})
+
+onUnmounted(() => {
+  if (modePollTimer) clearInterval(modePollTimer)
 })
 </script>
 

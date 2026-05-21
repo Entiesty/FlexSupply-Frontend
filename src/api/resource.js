@@ -22,16 +22,6 @@ export function revokeGoods(goodsId) {
     return request({ url: `/resource/goods/revoke/${goodsId}`, method: 'delete' })
 }
 
-// 商家开始自行配送 (上锁)
-export function startSelfDelivery(goodsId) {
-    return request({ url: `/resource/goods/start-self-delivery/${goodsId}`, method: 'put' })
-}
-
-// 商家确认送达 (核销)
-export function finishSelfDelivery(goodsId) {
-    return request({ url: `/resource/goods/finish-self-delivery/${goodsId}`, method: 'put' })
-}
-
 // ================= 社区据点 (Station) =================
 
 // 管理员新增据点

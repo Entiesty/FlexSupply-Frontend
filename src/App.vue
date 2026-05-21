@@ -6,7 +6,9 @@
     <div class="main-viewport">
       <router-view v-slot="{ Component }">
         <transition name="page" mode="out-in">
-          <component :is="Component"/>
+          <keep-alive include="AdminReview">
+            <component :is="Component"/>
+          </keep-alive>
         </transition>
       </router-view>
     </div>
@@ -20,6 +22,7 @@ import { computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox, ElNotification } from 'element-plus'
 import SideMenu from '@/views/dispatch/components/SideMenu.vue'
+import { getCurrentConfig } from '@/api/config'
 
 const route = useRoute()
 const router = useRouter()
@@ -48,7 +51,31 @@ const initGlobalWebSocket = () => {
 
   ws = new WebSocket(wsUrl)
 
-  ws.onopen = () => console.log('✅ 战时通讯雷达已全局连接')
+  ws.onopen = async () => {
+    console.log('✅ 战时通讯雷达已全局连接')
+
+    // 🚨 状态追赶：防止重连期间漏掉模式切换信号
+    try {
+      const res = await getCurrentConfig()
+      if (res?.data?.sysMode) {
+        const oldMode = localStorage.getItem('sysMode')
+        if (oldMode !== res.data.sysMode) {
+          console.warn('⚠️ 检测到掉线期间模式已变更，正在执行追赶同步...')
+          localStorage.setItem('sysMode', res.data.sysMode)
+          window.dispatchEvent(new CustomEvent('mode-changed', { detail: { mode: res.data.sysMode } }))
+        }
+      }
+    } catch (e) {
+      console.error('重连拉取状态失败', e)
+    }
+
+    // 🚨 心跳保活：每 30 秒发一次 Ping，防止防火墙/NAT 静默断连
+    ws.pingInterval = setInterval(() => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'PING' }))
+      }
+    }, 30000)
+  }
 
   ws.onmessage = (event) => {
     try {
@@ -152,7 +179,7 @@ const initGlobalWebSocket = () => {
           }
           // 通过所有拦截 → 弹出强制接单导航框
           ElMessageBox.confirm(
-            `<div style="text-align:center;line-height:1.8;">
+              `<div style="text-align:center;line-height:1.8;">
               <div style="font-size:3rem;margin-bottom:12px;">🚨</div>
               <div style="font-size:1.2rem;font-weight:900;color:#dc2626;margin-bottom:8px;">爱心商家已备好救命物资</div>
               <div style="color:#475569;">请立即前往商家取件，<br/>点对点直达求助市民手中！</div>
@@ -163,17 +190,17 @@ const initGlobalWebSocket = () => {
               </div>
               ${data.orderId ? `<div style="margin-top:10px;font-family:monospace;color:#94a3b8;">调度单号: ${data.orderId}</div>` : ''}
             </div>`,
-            '最高指令：P2P紧急救援触发！',
-            {
-              confirmButtonText: '⚡ 接受指令 · 立即导航',
-              cancelButtonText: '稍后处理',
-              type: 'warning',
-              dangerouslyUseHTMLString: true,
-              showClose: false,
-              closeOnClickModal: false,
-              closeOnPressEscape: false,
-              customClass: 'dopamine-msg-box'
-            }
+              '最高指令：P2P紧急救援触发！',
+              {
+                confirmButtonText: '⚡ 接受指令 · 立即导航',
+                cancelButtonText: '稍后处理',
+                type: 'warning',
+                dangerouslyUseHTMLString: true,
+                showClose: false,
+                closeOnClickModal: false,
+                closeOnPressEscape: false,
+                customClass: 'dopamine-msg-box'
+              }
           ).then(() => {
             router.push('/map')
           }).catch(() => {})
@@ -194,6 +221,7 @@ const initGlobalWebSocket = () => {
   }
 
   ws.onclose = () => {
+    if (ws.pingInterval) clearInterval(ws.pingInterval)
     console.log('❌ 战时通讯雷达已断开，5秒后重连...')
     setTimeout(initGlobalWebSocket, 5000)
   }

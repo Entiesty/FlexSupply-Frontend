@@ -176,26 +176,26 @@
                   </div>
                 </div>
 
-                <div v-if="!isVerifiedStatus" style="margin-top: 20px;">
-                  <el-form-item required label="资质文件影印件">
+                <div v-if="!isVerifiedStatus || deliveryTypeChanged" style="margin-top: 20px;">
+                  <el-form-item
+                      :label="deliveryTypeChanged ? '资质文件影印件（履约模式已变更，需重新核验）' : '资质文件影印件'"
+                      required
+                  >
                     <div class="proof-upload-area" @click="triggerProofUpload">
                       <img v-if="form.identityProofUrl" :src="form.identityProofUrl" class="proof-img" />
                       <div v-else class="upload-placeholder">
                         <span class="upload-icon">📄</span>
-                        <span>点击调取本机摄像头或选取凭证文件</span>
+                        <span>{{ deliveryTypeChanged ? '履约模式已切换，请上传新凭证后保存' : '点击调取本机摄像头或选取凭证文件' }}</span>
                       </div>
                       <input type="file" ref="proofInput" hidden @change="handleProofChange" accept="image/*" />
                     </div>
                   </el-form-item>
-                  <el-button type="danger" size="large" class="btn-submit-cta" style="width:100%; margin-top:12px;" @click="saveProfileData(true)" :loading="saving" :disabled="!form.identityProofUrl">
-                    🚀 资料确认无误，提交指挥中心审核
-                  </el-button>
                 </div>
               </template>
 
               <div class="form-action-bar">
-                <el-button size="large" type="primary" class="btn-submit-cta" @click="saveProfileData(false)" :loading="saving">
-                  💾 保存基础资料
+                <el-button size="large" type="primary" class="btn-submit-cta" @click="saveProfileData()" :loading="saving">
+                  {{ (!isVerifiedStatus || (form.identityProofUrl && form.identityProofUrl !== serverRawProfile.identityProofUrl)) ? '🚀 保存资料并提交核验' : '💾 保存基础资料' }}
                 </el-button>
               </div>
             </el-form>
@@ -362,6 +362,13 @@ const pwdForm = reactive({ oldPassword: '', newPassword: '', confirmPassword: ''
 const userRole = computed(() => Number(serverRawProfile.value.role || localStorage.getItem('userRole') || 0))
 const isVerifiedStatus = ref(false)
 
+// 履约模式是否已变更（已验证 + role=1 + 与数据库不同）
+const deliveryTypeChanged = computed(() =>
+    userRole.value === 1 &&
+    isVerifiedStatus.value &&
+    Number(form.deliveryType) !== Number(serverRawProfile.value.deliveryType)
+)
+
 const roleNameMap = { 1: '👴 应急受赠关怀对象', 2: '🏪 社区公益爱心合伙人', 3: '🚴 核心生命线护航骑士', 4: '👨‍💻 核心决策指挥中心' }
 const roleThemeClass = computed(() => {
   const map = { 1: 'theme-recipient', 2: 'theme-merchant', 3: 'theme-volunteer', 4: 'theme-admin' }
@@ -524,8 +531,13 @@ const saveVehicleConfig = async () => {
 }
 
 // 基础信息流转命令
-const saveProfileData = async (isManualSubmitAudit = false) => {
+const saveProfileData = async () => {
   if (!form.username.trim()) return ElMessage.warning('系统展示名称不可留空')
+
+  // 履约模式变更时强制要求上传新凭证
+  if (deliveryTypeChanged.value && form.identityProofUrl === serverRawProfile.value.identityProofUrl) {
+    return ElMessage.warning('履约模式已变更，请上传新的资质凭证后再保存')
+  }
 
   const payload = { username: form.username }
   if (form.identityProofUrl && form.identityProofUrl !== serverRawProfile.value.identityProofUrl) {
@@ -547,19 +559,27 @@ const saveProfileData = async (isManualSubmitAudit = false) => {
   try {
     await updateUserProfile(payload)
 
-    // 拦截风控回退断点
-    const isTriggeringAudit = (userRole.value === 1 && Number(form.deliveryType) !== Number(serverRawProfile.value.deliveryType)) ||
-        (payload.identityProofUrl)
+    // 拦截风控回退断点：仅当用户上传全新凭证图片时才触发重新核验
+    const isTriggeringAudit = !!payload.identityProofUrl
 
     if (isTriggeringAudit) {
       localStorage.setItem('isVerified', '0')
       isVerifiedStatus.value = false
+      window.dispatchEvent(new CustomEvent('audit-status-changed', { detail: { isVerified: 0, isSelf: true } }))
       ElNotification({ title: '安全风控动态锁死', message: '核心权属参数发生跃迁，节点暂时冻结，等待重新核验！', type: 'warning', duration: 8000 })
     } else {
-      ElMessage.success('局部基础特征修改成功')
+      ElMessage.success('基础资料已保存')
     }
 
-    ElNotification({ title: 'CVRP 参数同步成功', message: '空间计算阻抗常数重置，算法调度链路无缝无感刷新！', type: 'success' })
+    // 通知侧边栏同步最新资料（deliveryType 等）
+    window.dispatchEvent(new CustomEvent('user-info-updated', {
+      detail: {
+        username: form.username,
+        deliveryType: Number(form.deliveryType),
+        isVerified: isVerifiedStatus.value ? 1 : 0
+      }
+    }))
+
     await fetchSynchronizedData()
   } catch (e) {
     ElMessage.error('核心变更指令被拦截')
@@ -581,7 +601,6 @@ const handleAvatarChange = async (e) => {
   } catch (err) { ElMessage.error('上传链路断开') } finally { loading.value = false; e.target.value = '' }
 }
 const triggerProofUpload = () => {
-  if (isVerifiedStatus.value) return ElMessage.info('节点已核验放行，无须重复叠加凭证')
   proofInput.value?.click()
 }
 const handleProofChange = async (e) => {
@@ -650,6 +669,8 @@ onMounted(() => {
   fetchSynchronizedData()
   window.addEventListener('resize', () => myRadarChart?.resize())
   window.addEventListener('audit-status-changed', (e) => {
+    // isSelf=true 说明是本组件自己发出的，无需响应，避免覆盖本地已更新的状态
+    if (e.detail?.isSelf) return
     if (e.detail?.isVerified !== undefined) {
       isVerifiedStatus.value = e.detail.isVerified === 1
       fetchSynchronizedData()

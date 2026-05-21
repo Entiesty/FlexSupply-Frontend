@@ -44,13 +44,13 @@
                   <el-option label="1-流转中/运送中" :value="1" />
                   <el-option label="2-已送达/已入库" :value="2" />
                   <el-option label="3-履约完结/已发完" :value="3" />
-                  <el-option label="4-强制取消/商家自送" :value="4" />
+                  <el-option label="4-已撤销/已取消" :value="4" />
                 </el-select>
               </el-form-item>
               <el-form-item label="履约模式">
                 <el-select v-model="queryParams.deliveryMethod" placeholder="全部模式" clearable style="width: 140px">
                   <el-option label="志愿者配送" :value="1" />
-                  <el-option label="居民自提/商家自送" :value="2" />
+                  <el-option label="居民自提" :value="2" />
                 </el-select>
               </el-form-item>
               <el-form-item>
@@ -118,7 +118,7 @@
             <el-table-column prop="deliveryMethod" label="履约模式" min-width="120" align="center">
               <template #default="scope">
                 <div class="delivery-type" :class="scope.row.deliveryMethod === 2 ? 'pickup' : 'delivery'">
-                  {{ scope.row.deliveryMethod === 2 ? '🚶 自提/自送' : '🚴 志愿配送' }}
+                  {{ scope.row.deliveryMethod === 2 ? '🚶 居民自提' : '🚴 志愿配送' }}
                 </div>
               </template>
             </el-table-column>
@@ -134,8 +134,8 @@
                   <el-tag v-else-if="scope.row.status === 3" type="success" effect="dark" style="background-color: #10b981; border-color: #10b981;">
                     🟢 物资已发完
                   </el-tag>
-                  <el-tag v-else-if="scope.row.status === 4" type="warning" effect="light">🟣 商家自送中</el-tag>
-                  <el-tag v-else type="info" effect="light">⚫ 捐赠已取消</el-tag>
+                  <el-tag v-else-if="scope.row.status === 4" type="info" effect="dark">⚫ 捐赠已撤销</el-tag>
+                  <el-tag v-else type="info" effect="light">⚫ 未知状态</el-tag>
                 </template>
 
                 <template v-else>
@@ -206,7 +206,7 @@
               </div>
               <div class="summary-item">
                 <span class="label">履约模式：</span>
-                <span class="value">{{ currentTraceOrder?.deliveryMethod === 2 ? '🚶 居民自提/自送' : '🚴 志愿配送' }}</span>
+                <span class="value">{{ currentTraceOrder?.deliveryMethod === 2 ? '🚶 居民自提' : '🚴 志愿配送' }}</span>
               </div>
             </div>
 
@@ -226,11 +226,7 @@
 
               <template v-else>
                 <template v-if="currentTraceOrder?.orderSn?.startsWith('DON')">
-                  <el-timeline-item v-if="currentTraceOrder?.status === 4" color="#f97316" size="large">
-                    <h4 class="tl-title">🚗 商家自送流转中</h4>
-                    <p class="tl-desc">商家正在亲自护送物资前往据点入库</p>
-                  </el-timeline-item>
-                  <el-timeline-item v-else-if="currentTraceOrder?.status >= 1" color="#3b82f6" size="large">
+                  <el-timeline-item v-if="currentTraceOrder?.status >= 1" color="#3b82f6" size="large">
                     <h4 class="tl-title">🚴 干线运输进行中</h4>
                     <p class="tl-desc">骑士已接单并正前往社区分发中心</p>
                   </el-timeline-item>

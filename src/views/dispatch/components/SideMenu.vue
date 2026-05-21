@@ -107,21 +107,24 @@ const sysMode = ref(localStorage.getItem('sysMode') || 'NORMAL')
 const roleMap = { 1: '受赠长者', 2: '爱心商家', 3: '城市护航骑士', 4: '指挥中心' }
 const roleName = computed(() => roleMap[currentUser.value.role] || '未知角色')
 
-// SOS舱入口: EMERGENCY时全员可见, NORMAL时仅deliveryType=1(仅上门)可见
+// 🚨 全新权限规则：上门配送全民开放，自提大厅单向受限
 const allMenus = computed(() => {
   const isEmergency = sysMode.value === 'EMERGENCY'
   const verified = currentUser.value.isVerified === 1
   const dt = currentUser.value.deliveryType
-  // 审核未通过时强制默认入口, 审核通过后才按deliveryType分流
+  // 审核未通过时强制默认为行动方便(0)，审核通过后才按真实档案 deliveryType 分流
   const effectiveDt = verified ? dt : 0
-  const showSos = currentUser.value.role === 1 && (isEmergency || effectiveDt === 1)
+  // 🔥 核心修改 1：上门配送/紧急呼救 (SOS) 是保底服务，对所有长者（role === 1）永远开放
+  const showSos = currentUser.value.role === 1
+  // 🔥 核心修改 2：自提大厅 (Market) 才是受限的。只有在常态下且行动方便才会显示
   const showMarket = currentUser.value.role === 1 && effectiveDt === 0 && !isEmergency
 
   return [
     { name: '实时调度大屏', icon: '🗺️️', path: '/map', roles: [3, 4], requiresAuth: true },
-    ...(showSos ? [{ name: isEmergency ? '紧急呼救大舱' : '预约上门配送', icon: isEmergency ? '🚨' : '📦', path: '/sos', roles: [1], requiresAuth: false }] : []),
+    ...(showSos ? [{ name: isEmergency ? '紧急呼救大舱' : '预约上门配送', icon: isEmergency ? '🚨' : '📦', path: '/sos', roles: [1], requiresAuth: true }] : []),
     { name: '物资捐赠大厅', icon: '💝', path: '/merchant/donate', roles: [2], requiresAuth: true },
-    ...(isEmergency ? [{ name: '紧急求助雷达', icon: '🚨', path: '/merchant/radar', roles: [2], requiresAuth: true, emergency: true }] : []),    ...(showMarket ? [{ name: '日常食物银行', icon: '🏪', path: '/market', roles: [1], requiresAuth: true }] : []),
+    ...(isEmergency ? [{ name: '紧急求助雷达', icon: '🚨', path: '/merchant/radar', roles: [2], requiresAuth: true, emergency: true }] : []),
+    ...(showMarket ? [{ name: '日常食物银行', icon: '🏪', path: '/market', roles: [1], requiresAuth: true }] : []),
     { name: '我的配送任务', icon: '🚴', path: '/my-tasks', roles: [3], requiresAuth: true },
     { name: '我的捐赠记录', icon: '📦', path: '/merchant/history', roles: [2], requiresAuth: true },
     { name: 'CSR社会责任战报', icon: '🏅', path: '/merchant/csr', roles: [2], requiresAuth: true },
@@ -158,6 +161,13 @@ onMounted(async () => {
     }
   } catch (e) {}
 
+  /* 监听全局审核状态变更, 实时解锁/锁定侧栏菜单 */
+  window.addEventListener('audit-status-changed', (e) => {
+    if (e.detail?.isVerified !== undefined) {
+      currentUser.value.isVerified = e.detail.isVerified
+      localStorage.setItem('isVerified', e.detail.isVerified ? '1' : '0')
+    }
+  })
   /* 监听个人设置页的变更事件, 实时同步用户名/配送方式/审核状态 */
   window.addEventListener('user-info-updated', (e) => {
     currentUser.value.username = e.detail.username
@@ -176,9 +186,8 @@ onMounted(async () => {
 const goToHome = () => {
   if (currentUser.value.role === 2) router.push('/merchant/donate')
   else if (currentUser.value.role === 1) {
-    // deliveryType=1(仅上门)或EMERGENCY模式 → SOS舱; deliveryType=0(自取)+NORMAL → 食物银行
-    if (currentUser.value.deliveryType === 1 || sysMode.value === 'EMERGENCY') router.push('/sos')
-    else router.push('/market')
+    // 所有受赠方统一着陆 /sos：上门配送是全民保底服务，自提入口在页面内以横幅引导
+    router.push('/sos')
   }
   else router.push('/map')
 }

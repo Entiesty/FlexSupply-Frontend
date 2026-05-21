@@ -17,6 +17,21 @@
         <span class="mode-text">{{ modeBannerText }}</span>
       </div>
 
+      <!-- ===== 平时模式：自助提取入口 ===== -->
+      <div v-if="sysMode === 'NORMAL' && deliveryType === 0" class="market-redirect-banner">
+        <span class="mr-icon">🛒</span>
+        <span class="mr-text">您也可以前往 <strong>社区食物银行</strong> 自行挑选并提取物资，无需等待配送</span>
+        <el-button size="small" type="primary" plain round @click="router.push('/market')">前往自助提取 →</el-button>
+      </div>
+
+      <!-- ===== 应急→平时：恢复提示 ===== -->
+      <div v-if="showNormalRestoredTip" class="market-redirect-banner restored">
+        <span class="mr-icon">✅</span>
+        <span class="mr-text">平时模式已恢复！社区食物银行自助提取通道已重新开放</span>
+        <el-button size="small" type="success" round @click="router.push('/market'); showNormalRestoredTip = false">前往自助提取 →</el-button>
+        <span class="mr-close" @click="showNormalRestoredTip = false">✕</span>
+      </div>
+
       <!-- ===== Step 2: 状态机互斥隔离 ===== -->
 
       <!-- 状态 A：无进行中订单 → 极简求助表单 -->
@@ -32,32 +47,41 @@
                 {{ userInfo.username || '加载中...' }}，您好！
                 <span v-if="userInfo.isVerified === 0" class="unverified-tag">身份待核验</span>
               </h3>
-              <p>请选择您今天需要送上门的物资类型</p>
+              <p v-if="userInfo.isVerified !== 0">请选择您今天需要送上门的物资类型</p>
+              <p v-else class="unverified-subtitle">⚠️ 您的受赠身份仍在社区审核中，审核通过后可发起求助</p>
+            </div>
+          </div>
+
+          <div v-if="userInfo.isVerified === 0" class="freeze-banner">
+            <span class="freeze-icon">🔒</span>
+            <div class="freeze-text">
+              <strong>资质审核冻结中</strong>
+              <span>为防止恶意占用紧急物资通道，暂无法发起求助。如有极其紧急情况，请直接致电居委会。</span>
             </div>
           </div>
 
           <div class="divider"></div>
 
           <div class="sos-actions">
-            <div class="sos-card food" @click="openDrawer('食品与饮料', ['米面粮油', '方便速食', '饮用水', '热食盒饭', '烘焙糕点', '生鲜果蔬', '冷冻食品', '乳制品'], urgencyMap['食品与饮料'])">
+            <div class="sos-card food" :class="{ 'is-frozen': userInfo.isVerified === 0 }" @click="openDrawer('食品与饮料', ['米面粮油', '方便速食', '饮用水', '热食盒饭', '烘焙糕点', '生鲜果蔬', '冷冻食品', '乳制品'], urgencyMap['食品与饮料'])">
               <div class="card-icon-wrap"><span class="card-icon">🍚</span></div>
               <div class="card-text"><h3>食品与饮料</h3><p>米面粮油 / 速食 / 饮用水 / 热食</p></div>
               <div class="sos-arrow">〉</div>
             </div>
 
-            <div class="sos-card warm" @click="openDrawer('生活日用', ['卫生护理', '防寒保暖', '寝具家纺', '洗漱用品', '纸品耗材'], urgencyMap['生活日用'])">
+            <div class="sos-card warm" :class="{ 'is-frozen': userInfo.isVerified === 0 }" @click="openDrawer('生活日用', ['卫生护理', '防寒保暖', '寝具家纺', '洗漱用品', '纸品耗材'], urgencyMap['生活日用'])">
               <div class="card-icon-wrap"><span class="card-icon">🧹</span></div>
               <div class="card-text"><h3>生活日用</h3><p>卫生护理 / 防寒保暖 / 洗漱用品</p></div>
               <div class="sos-arrow">〉</div>
             </div>
 
-            <div class="sos-card urgent" @click="openDrawer('医疗健康', ['常备药品', '外用急救', '医疗器械', '营养补品'], urgencyMap['医疗健康'])">
+            <div class="sos-card urgent" :class="{ 'is-frozen': userInfo.isVerified === 0 }" @click="openDrawer('医疗健康', ['常备药品', '外用急救', '医疗器械', '营养补品'], urgencyMap['医疗健康'])">
               <div class="card-icon-wrap"><span class="card-icon">💊</span></div>
               <div class="card-text"><h3>医疗健康</h3><p>慢性病药 / 急救用品 / 营养补品</p></div>
               <div class="sos-arrow">〉</div>
             </div>
 
-            <div class="sos-card emergency-card" @click="openDrawer('应急物资', ['应急食品', '应急照明', '防护装备', '保暖物资'], urgencyMap['应急物资'])">
+            <div class="sos-card emergency-card" :class="{ 'is-frozen': userInfo.isVerified === 0 }" @click="openDrawer('应急物资', ['应急食品', '应急照明', '防护装备', '保暖物资'], urgencyMap['应急物资'])">
               <div class="card-icon-wrap"><span class="card-icon">🚨</span></div>
               <div class="card-text"><h3>应急物资</h3><p>应急食品 / 照明 / 防护装备</p></div>
               <div class="sos-arrow">〉</div>
@@ -234,6 +258,7 @@ const currentMainCat = ref('')
 const currentUrgency = ref(1)
 const selectedSub = ref('')
 
+const showNormalRestoredTip = ref(false)
 const ratingDrawerVisible = ref(false)
 const ratingForm = reactive({ rating: 0, comment: '' })
 const ratingTextMap = { 1: '😡 极度不满', 2: '😞 体验不佳', 3: '😐 普普通通', 4: '😊 比较满意', 5: '😍 非常感谢！' }
@@ -294,7 +319,36 @@ onMounted(async () => {
 
   // 监听全局模式切换, 响应式更新urgency/标题/横幅
   window.addEventListener('mode-changed', (e) => {
-    if (e.detail?.mode) sysMode.value = e.detail.mode
+    if (e.detail?.mode) {
+      const prevMode = sysMode.value
+      sysMode.value = e.detail.mode
+
+      if (e.detail.mode === 'EMERGENCY' && prevMode === 'NORMAL') {
+        ElNotification({
+          title: '🚨 战时应急响应已激活',
+          message: '自提通道已关闭，所有物资将通过紧急配送直达您手中',
+          type: 'error',
+          duration: 0
+        })
+      } else if (e.detail.mode === 'NORMAL' && prevMode === 'EMERGENCY') {
+        ElNotification({
+          title: '✅ 平时互助模式已恢复',
+          message: '社区食物银行自助提取已重新开放',
+          type: 'success',
+          duration: 6000
+        })
+        if (deliveryType.value === 0) {
+          showNormalRestoredTip.value = true
+        }
+      }
+    }
+  })
+
+  // 监听审核状态变更 — 审核通过后实时解冻页面
+  window.addEventListener('audit-status-changed', (e) => {
+    if (e.detail?.isVerified !== undefined) {
+      userInfo.value.isVerified = e.detail.isVerified
+    }
   })
 
   if (route.query.reorder && route.query.cat) {
@@ -395,8 +449,22 @@ const handleFinalSubmit = async () => {
     })
     await fetchActiveOrder()
   } catch (e) {
-    // 业务异常已由 axios 拦截器统一弹窗, 此处仅处理网络彻底断连
-    if (!e?.response) playVoiceFeedback('哎呀，网络好像出问题了，请您直接拨打社区电话求助。')
+    const errMsg = e?.response?.data?.message || e?.message || ''
+
+    if (errMsg.includes('上限') || errMsg.includes('次数')) {
+      playVoiceFeedback('抱歉，您今日的援助申请已达上限，请把资源留给更需要的人，明天再试。')
+    } else if (errMsg.includes('手慢') || errMsg.includes('抢空')) {
+      playVoiceFeedback('哎呀手慢了，该物资刚刚被别人领走了，请尝试申请其他物资。')
+    } else if (errMsg.includes('暂无') || errMsg.includes('15km') || errMsg.includes('据点') || errMsg.includes('不足')) {
+      playVoiceFeedback('抱歉，附近暂时没有此类物资，指挥中心已记录您的需求，正在全力协调。')
+    } else if (errMsg.includes('行动不便') || errMsg.includes('权限') || errMsg.includes('审核')) {
+      playVoiceFeedback('您的账号权限暂无法发起此项求助，请联系社区工作人员。')
+    } else if (!errMsg || errMsg === 'Network Error' || e.code === 'ECONNABORTED') {
+      playVoiceFeedback('哎呀，网络好像出问题了，请您直接拨打社区电话求助。')
+    } else {
+      playVoiceFeedback('系统遇到了一点小问题，请稍后再试。')
+      console.error('未识别的业务异常:', errMsg)
+    }
   } finally {
     loading.value = false
   }
@@ -499,6 +567,24 @@ const submitRating = async () => {
   box-shadow: 0 4px 12px rgba(239,68,68,0.08);
 }
 
+/* ===== 平时模式：食物银行自助入口 ===== */
+.market-redirect-banner {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 18px; border-radius: 12px; margin-bottom: 18px;
+  background: #f0fdf4; border: 1px solid #bbf7d0;
+  font-size: 0.9rem; font-weight: 600; color: #166534;
+}
+.market-redirect-banner.restored {
+  background: #eff6ff; border: 1px solid #93c5fd; color: #1e40af;
+}
+.market-redirect-banner .mr-icon { font-size: 1.2rem; flex-shrink: 0; }
+.market-redirect-banner .mr-text { flex: 1; }
+.market-redirect-banner .mr-text strong { font-weight: 900; }
+.market-redirect-banner .mr-close {
+  cursor: pointer; font-size: 1rem; opacity: 0.5; padding: 0 4px;
+}
+.market-redirect-banner .mr-close:hover { opacity: 1; }
+
 /* ===== 状态 A: 求助表单 ===== */
 .sos-form-area { animation: fadeIn 0.35s ease; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
@@ -532,6 +618,18 @@ const submitRating = async () => {
   border: 1px solid #fca5a5; box-shadow: 0 2px 5px rgba(239,68,68,0.1);
 }
 
+.unverified-subtitle { color: #ef4444; font-weight: bold; }
+
+.freeze-banner {
+  display: flex; align-items: center; gap: 14px;
+  background: #fef2f2; border: 1px solid #fecaca; border-radius: 14px;
+  padding: 16px 20px; margin: 8px 0 0 0;
+}
+.freeze-banner .freeze-icon { font-size: 1.6rem; flex-shrink: 0; }
+.freeze-banner .freeze-text { display: flex; flex-direction: column; gap: 4px; }
+.freeze-banner .freeze-text strong { color: #dc2626; font-size: 0.95rem; }
+.freeze-banner .freeze-text span { color: #991b1b; font-size: 0.85rem; }
+
 .divider { height: 1px; background: #f1f5f9; margin: 25px 0; }
 
 .sos-actions { display: flex; flex-direction: column; gap: 20px; }
@@ -539,6 +637,10 @@ const submitRating = async () => {
   display: flex; align-items: center; background: #fff; border-radius: 20px;
   padding: 25px; box-shadow: 0 8px 25px rgba(0,0,0,0.03);
   cursor: pointer; transition: all 0.3s; border: 2px solid transparent;
+}
+.sos-card.is-frozen {
+  cursor: not-allowed; opacity: 0.45; filter: grayscale(0.6);
+  pointer-events: none;
 }
 .sos-card:hover { transform: translateY(-3px); box-shadow: 0 12px 30px rgba(0,0,0,0.06); }
 .sos-card:active { transform: scale(0.98); }
