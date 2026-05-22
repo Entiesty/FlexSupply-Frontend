@@ -3,8 +3,8 @@
     <div class="top-status" :class="{ 'is-normal': sysMode !== 'EMERGENCY' }">
       <span class="pulse-dot" :class="sysMode === 'EMERGENCY' ? 'dot-emergency' : 'dot-normal'"></span>
       {{ sysMode === 'EMERGENCY' ? '紧急求助雷达 · 爱心商铺响应中心' : '爱心商铺 · 物资捐赠响应平台' }}
-      <span v-if="sysMode === 'EMERGENCY'" class="mode-badge">🔴 战时应急</span>
-      <span v-else class="mode-badge normal-badge">🟢 平时常态</span>
+      <span v-if="sysMode === 'EMERGENCY'" class="mode-badge">🔴 应急模式</span>
+      <span v-else class="mode-badge normal-badge">🟢 常态模式</span>
     </div>
 
     <div class="radar-wrapper">
@@ -18,8 +18,8 @@
       <div class="board-content" v-loading="loading">
         <div v-if="sysMode !== 'EMERGENCY'" class="all-clear glass-card">
           <div class="green-radar"></div>
-          <h3 class="text-green">🟢 城市运行于平时常态</h3>
-          <p>紧急求助雷达仅在战时应急模式下激活，当前无需响应募捐请求</p>
+          <h3 class="text-green">🟢 城市运行于常态模式</h3>
+          <p>紧急求助雷达仅在应急模式下激活，当前无需响应募捐请求</p>
         </div>
         <div v-else-if="broadcastList.length === 0" class="all-clear glass-card">
           <div class="green-radar"></div>

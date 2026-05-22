@@ -1,7 +1,7 @@
 <template>
   <main class="main-content">
     <div class="top-status">
-      <span class="pulse-dot"></span> 城市应急调度中心 · 异常监控雷达
+      <span class="pulse-dot"></span> 异常订单监控
     </div>
 
     <div class="admin-wrapper">
@@ -9,7 +9,7 @@
         <div class="header-title-row">
           <div class="alert-icon pulse-red">🚨</div>
           <div>
-            <h2>异常预警监控台</h2>
+            <h2>异常订单监控</h2>
             <p>实时监控调度引擎滞留单，保障城市物资生命通道绝对畅通</p>
           </div>
         </div>
@@ -36,7 +36,7 @@
               <p class="order-sn">追溯单号：{{ order.orderSn }}</p>
 
               <div class="reason-box">
-                <span class="reason-label">⚠️ 引擎拦截死因：</span>
+                <span class="reason-label">⚠️ 拦截原因：</span>
                 <span class="reason-text">{{ order.exceptionReason || '系统暂无库存或无人接单' }}</span>
               </div>
             </div>

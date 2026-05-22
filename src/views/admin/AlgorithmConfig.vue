@@ -1,7 +1,7 @@
 <template>
   <main class="main-content">
     <div class="top-status">
-      <span class="pulse-dot"></span> 调度大脑引擎核心层 · Root 权限
+      <span class="pulse-dot"></span> 算法配置 · 管理员权限
     </div>
 
     <div class="config-wrapper" v-loading="loading">
@@ -22,14 +22,14 @@
           <div class="sm-actions">
             <button class="sm-btn normal-btn" :disabled="form.sysMode === 'NORMAL'"
                     @click="handleSwitchMode('NORMAL')">
-              🟢 恢复平时模式
+              🟢 恢复常态模式
             </button>
             <button class="sm-btn emergency-btn" :disabled="form.sysMode === 'EMERGENCY'"
                     @click="handleSwitchMode('EMERGENCY')">
               🚨 激活应急模式
             </button>
           </div>
-          <el-alert v-if="form.sysMode === 'NORMAL'" title="🟢 平时常态运行中" type="success"
+          <el-alert v-if="form.sysMode === 'NORMAL'" title="🟢 常态模式运行中" type="success"
             description="Hub & Spoke 驿站中转, SAW距离优先(wDist=35%), 无配给限制, 日常物资自由流通。"
             :closable="false" show-icon style="margin-top: 15px;" />
           <el-alert v-if="form.sysMode === 'EMERGENCY'" title="🔴 应急模式已激活" type="error"
@@ -104,7 +104,7 @@ const form = reactive({
 })
 
 const stateLabel = (mode) => {
-  const map = { 'NORMAL': '🟢 平时常态', 'EMERGENCY': '🔴 战时应急' }
+  const map = { 'NORMAL': '🟢 常态模式', 'EMERGENCY': '🔴 应急模式' }
   return map[mode] || mode
 }
 

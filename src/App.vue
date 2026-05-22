@@ -52,7 +52,7 @@ const initGlobalWebSocket = () => {
   ws = new WebSocket(wsUrl)
 
   ws.onopen = async () => {
-    console.log('✅ 战时通讯雷达已全局连接')
+    console.log('✅ WebSocket 已连接')
 
     // 🚨 状态追赶：防止重连期间漏掉模式切换信号
     try {
@@ -85,7 +85,7 @@ const initGlobalWebSocket = () => {
 
       // ═══ ✅ FIX-1: 全局模式切换推送 ═══
       if (data.type === 'MODE_CHANGED') {
-        const modeLabels = { NORMAL: '🟢 平时常态', EMERGENCY: '🔴 战时应急' }
+        const modeLabels = { NORMAL: '🟢 常态模式', EMERGENCY: '🔴 应急模式' }
         localStorage.setItem('sysMode', data.mode)
         ElNotification({ title: '🌐 全城调度模式变更', message: `指挥中心已将系统切换至: ${modeLabels[data.mode] || data.mode}`, type: data.mode === 'EMERGENCY' ? 'error' : 'warning', duration: 0, position: 'top-right' })
         window.dispatchEvent(new CustomEvent('mode-changed', { detail: { mode: data.mode } }))
@@ -190,7 +190,7 @@ const initGlobalWebSocket = () => {
               </div>
               ${data.orderId ? `<div style="margin-top:10px;font-family:monospace;color:#94a3b8;">调度单号: ${data.orderId}</div>` : ''}
             </div>`,
-              '最高指令：P2P紧急救援触发！',
+              'P2P紧急配送通知',
               {
                 confirmButtonText: '⚡ 接受指令 · 立即导航',
                 cancelButtonText: '稍后处理',

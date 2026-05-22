@@ -4,12 +4,12 @@
 
     <main class="main-content">
       <div class="top-status">
-        <span class="pulse-dot gold"></span> CSR企业社会责任战报 · 实时生成
+        <span class="pulse-dot gold"></span> CSR企业社会责任报告 · 实时生成
       </div>
 
       <div class="csr-container" v-loading="loading">
         <header class="page-header">
-          <h2>🏅 {{ report.merchantName || '爱心企业' }} · 社会责任战报</h2>
+          <h2>🏅 {{ report.merchantName || '爱心企业' }} · 社会责任报告</h2>
           <p>基于《企业会计准则第13号》公益捐赠披露规范的审计级数据凭证</p>
         </header>
 

@@ -12,7 +12,7 @@
         <template #default>
           <div class="ration-detail">
             <span class="ration-count">今日剩余配额: <strong>{{ rationRemaining }} 次</strong></span>
-            <span class="ration-tip">（基于Redis原子计数器防资源挤兑）</span>
+            <span class="ration-tip"></span>
           </div>
         </template>
       </el-alert>
@@ -279,7 +279,7 @@ const confirmSubmit = async () => {
     const code = res.data?.pickupCode || res.data;
     pickupResult.value = { pickupCode: code }
   } catch (e) {
-    ElMessage.error(e.response?.data?.message || '手慢了，物资可能已被抢空')
+    ElMessage.error(e.response?.data?.message || '该物资已被他人预约')
   } finally {
     submitting.value = false
   }

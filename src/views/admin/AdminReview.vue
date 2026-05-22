@@ -2,15 +2,15 @@
   <main class="main-content">
     <div class="top-status">
       <span class="pulse-dot" style="background: #f97316; box-shadow: 0 0 8px #f97316;"></span>
-      平台高权限核验引擎运行中 · 数据通道已加密
+      审核中心 · 数据通道已加密
     </div>
 
     <div class="admin-wrapper" style="max-width: 1400px; width: 100%; margin: 0 auto;">
       <div class="flow-container">
 
         <header class="page-header">
-          <h2>🛡️ 资质风控与核验中心</h2>
-          <p>多维画像一站式核验工作台 · 快捷键: Enter=通过 Backspace=驳回</p>
+          <h2>🛡️ 入驻资质审核</h2>
+          <p>审核工作台 · 快捷键: Enter=通过 Backspace=驳回</p>
         </header>
 
         <div class="stats-header">

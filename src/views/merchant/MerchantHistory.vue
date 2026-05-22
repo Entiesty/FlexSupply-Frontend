@@ -99,7 +99,7 @@
               :color="currentTraceItem.status >= 1 ? '#f97316' : '#e2e8f0'"
               :hollow="currentTraceItem.status === 0">
             <h4 class="tl-title" :class="{'pending-text': currentTraceItem.status === 0}">
-              {{ currentTraceItem.status >= 1 ? '🚴 城市护航骑士已接单取货' : '⏳ 调度引擎正在呼叫骑士接单...' }}
+              {{ currentTraceItem.status >= 1 ? '🚴 护航骑士已接单取货' : '⏳ 调度引擎正在呼叫骑士接单...' }}
             </h4>
             <p class="tl-desc" v-if="currentTraceItem.status === 1">正在全力保障您的爱心物资安全抵达目的地。</p>
           </el-timeline-item>
@@ -276,7 +276,7 @@ const openTrace = async (row) => {
 const handleRevoke = (row) => {
   ElMessageBox.confirm(
       `确定要撤销【${cleanGoodsName(row.goodsName)}】的捐赠吗？撤销后该物资将从全城调度大盘中移除。`,
-      '撤销防呆确认',
+      '撤销确认',
       { confirmButtonText: '确认撤销', cancelButtonText: '保留', type: 'warning' }
   ).then(async () => {
     loading.value = true

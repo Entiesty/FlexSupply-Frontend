@@ -221,7 +221,7 @@ const sysMode = ref('NORMAL')
 const deliveryType = ref(0)
 
 const pageTitle = computed(() =>
-  sysMode.value === 'EMERGENCY' ? '🚨 紧急呼救大舱' : '📦 预约上门配送'
+  sysMode.value === 'EMERGENCY' ? '🚨 紧急求助' : '📦 预约上门配送'
 )
 
 const modeBannerClass = computed(() => {
@@ -325,7 +325,7 @@ onMounted(async () => {
 
       if (e.detail.mode === 'EMERGENCY' && prevMode === 'NORMAL') {
         ElNotification({
-          title: '🚨 战时应急响应已激活',
+          title: '🚨 应急模式已激活',
           message: '自提通道已关闭，所有物资将通过紧急配送直达您手中',
           type: 'error',
           duration: 0
@@ -438,7 +438,7 @@ const handleFinalSubmit = async () => {
     playVoiceFeedback('求助已发出，请安心等待骑士送货。')
     const msgText = sysMode.value === 'EMERGENCY'
       ? `您需要的 <b>【${selectedSub.value}】</b> 已进入全城救援队列！<br/>战时配给制已启动，骑士将疾驰送达。`
-      : `您需要的 <b>【${selectedSub.value}】</b> 社区已收到！<br/>骑士将在今日内为您安排上门配送 [HOME_DELIVERY]。`
+      : `您需要的 <b>【${selectedSub.value}】</b> 社区已收到！<br/>骑士将在今日内为您安排上门配送。`
 
     ElNotification({
       title: sysMode.value === 'EMERGENCY' ? '🚨 紧急呼救已发出' : '✅ 预约成功',
@@ -454,7 +454,7 @@ const handleFinalSubmit = async () => {
     if (errMsg.includes('上限') || errMsg.includes('次数')) {
       playVoiceFeedback('抱歉，您今日的援助申请已达上限，请把资源留给更需要的人，明天再试。')
     } else if (errMsg.includes('手慢') || errMsg.includes('抢空')) {
-      playVoiceFeedback('哎呀手慢了，该物资刚刚被别人领走了，请尝试申请其他物资。')
+      playVoiceFeedback('该物资已被他人领取，请尝试申请其他物资。')
     } else if (errMsg.includes('暂无') || errMsg.includes('15km') || errMsg.includes('据点') || errMsg.includes('不足')) {
       playVoiceFeedback('抱歉，附近暂时没有此类物资，指挥中心已记录您的需求，正在全力协调。')
     } else if (errMsg.includes('行动不便') || errMsg.includes('权限') || errMsg.includes('审核')) {

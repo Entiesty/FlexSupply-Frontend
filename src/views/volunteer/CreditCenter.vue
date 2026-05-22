@@ -16,7 +16,7 @@
             <div class="card-left">
               <div class="level-badge">🎖️ {{ dashboardData.levelName }}</div>
               <h2 class="score-number">{{ dashboardData.creditScore }} <span class="unit">分</span></h2>
-              <p class="beat-text">超越全城 <strong>{{ dashboardData.beatPercentage }}%</strong> 的{{ userRole === 2 ? '爱心商铺' : '城市护航骑士' }}</p>
+              <p class="beat-text">超越全城 <strong>{{ dashboardData.beatPercentage }}%</strong> 的{{ userRole === 2 ? '爱心商铺' : '护航骑士' }}</p>
             </div>
 
             <!-- 分隔线 -->

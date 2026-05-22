@@ -1,7 +1,7 @@
 <template>
   <main class="main-content">
     <div class="top-status">
-      <span class="pulse-dot"></span> 全域数字资产盘点监控中 · 指挥中心
+      <span class="pulse-dot"></span> 用户管理中心
     </div>
 
     <div class="admin-wrapper">
@@ -201,7 +201,7 @@ const handleCredit = (userId, scoreChange) => {
 }
 
 const handleRejectMerchant = (userId) => {
-  ElMessageBox.confirm('极其危险！清退商家将瞬间冻结其名下未接单库存，并撤销其相关派发工单！', '☢️ 物理熔断与网络隔离', {
+  ElMessageBox.confirm('极其危险！清退商家将瞬间冻结其名下未接单库存，并撤销其相关派发工单！', '⚠️ 强制清退确认', {
     confirmButtonText: '强制清退', cancelButtonText: '取消', type: 'error', customClass: 'dopamine-msg-box'
   }).then(async () => {
     try {

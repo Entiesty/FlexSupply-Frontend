@@ -2,7 +2,7 @@
   <main class="main-content">
     <div class="top-status">
       <span class="pulse-dot" :class="isVerifiedStatus ? 'dot-active' : 'dot-warn'"></span>
-      {{ isVerifiedStatus ? '全局互助网络节点已激活 · 数据通道安全加密' : '生命通道风控引擎动态感知中' }}
+      {{ isVerifiedStatus ? '全局互助网络节点已激活 · 数据通道安全加密' : '待审核 · 功能受限' }}
     </div>
 
     <div class="profile-layout" v-loading="loading">
@@ -107,7 +107,7 @@
               <template v-if="userRole === 1">
                 <el-divider border-style="dashed" />
                 <div class="block-section-title">🏠 居住与配送档案</div>
-                <el-form-item label="📍 精准地理围栏坐标 (多因子算力基准)" required>
+                <el-form-item label="📍 地理围栏坐标" required>
                   <div class="location-picker-box">
                     <div class="loc-display" :class="{ 'has-val': form.currentLon }">
                       <div class="loc-address">{{ form.addressName || '尚未设置地理坐标，请调起地图定位点' }}</div>
@@ -116,7 +116,7 @@
                     <el-button type="primary" plain class="pick-map-btn" @click="openMapDialog">🗺️ 地图定位</el-button>
                   </div>
                 </el-form-item>
-                <el-form-item label="详细门牌号 (保障末端精确物理核销)">
+                <el-form-item label="详细门牌号">
                   <el-input v-model="form.doorNumber" size="large" placeholder="例如：12号楼4单元601室" />
                 </el-form-item>
                 <el-form-item label="🚪 当前流转履约模式">
@@ -158,14 +158,14 @@
 
               <template v-if="userRole !== 4">
                 <el-divider border-style="dashed" />
-                <div class="block-section-title">🪪 城市多维生命线凭证核验</div>
+                <div class="block-section-title">城市多维生命线凭证核验</div>
 
                 <div class="verification-status-board" :class="{ 'is-verified': isVerifiedStatus }">
                   <div class="board-left">
                     <span class="board-icon">{{ isVerifiedStatus ? '✅' : '⏳' }}</span>
                     <div class="board-text">
-                      <h4>{{ isVerifiedStatus ? '数据可信度认证：核验放行' : '风控排查中 / 凭证未提交' }}</h4>
-                      <p>{{ isVerifiedStatus ? '全时智能调度引擎已为您注入高置信度通行凭证，功能全面释放。' : '请在下方上传权威核验影像资料，以便系统中心迅速备案。' }}</p>
+                      <h4>{{ isVerifiedStatus ? '资质认证：已通过' : '待审核 / 凭证未提交' }}</h4>
+                      <p>{{ isVerifiedStatus ? '您的资质已通过审核，全部功能已解锁。' : '请在下方上传权威核验影像资料，以便系统中心迅速备案。' }}</p>
                     </div>
                   </div>
                   <div class="board-right">
@@ -260,25 +260,25 @@
 
           <el-tab-pane label="🔒 安全与凭证" name="security">
             <el-form :model="pwdForm" label-position="top" class="pane-form-padding">
-              <div class="block-section-title">🔒 身份认证盾牌升级</div>
+              <div class="block-section-title">🔒 修改密码</div>
               <div class="security-card-inner">
-                <el-form-item label="输入当前有效的旧访问密码">
+                <el-form-item label="输入当前密码">
                   <el-input v-model="pwdForm.oldPassword" type="password" size="large" show-password placeholder="请输入旧密码" />
                 </el-form-item>
                 <el-row :gutter="20" style="margin-top: 15px;">
                   <el-col :xs="24" :sm="12">
-                    <el-form-item label="设定全新复杂访问令牌">
+                    <el-form-item label="设置新密码">
                       <el-input v-model="pwdForm.newPassword" type="password" size="large" show-password placeholder="请输入新密码" />
                     </el-form-item>
                   </el-col>
                   <el-col :xs="24" :sm="12">
-                    <el-form-item label="确认全新访问令牌">
+                    <el-form-item label="确认新密码">
                       <el-input v-model="pwdForm.confirmPassword" type="password" size="large" show-password placeholder="请再次键入新密码" />
                     </el-form-item>
                   </el-col>
                 </el-row>
                 <el-button type="danger" plain size="large" style="width: 100%; margin-top: 15px; font-weight: bold;" @click="handleUpdatePassword" :loading="saving">
-                  🛡️ 重置系统通信密码
+                  🛡️ 确认修改密码
                 </el-button>
               </div>
             </el-form>
@@ -316,13 +316,13 @@
             </div>
           </template>
         </el-autocomplete>
-        <button class="map-search-btn" @click="handleSearchAddress">🔍 碰撞比对</button>
+        <button class="map-search-btn" @click="handleSearchAddress">🔍 搜索地址</button>
       </div>
       <div class="selected-address-bar" v-if="tempLoc.address"><strong>当前捕捉坐标：</strong> {{ tempLoc.address }}</div>
       <div id="amap-container" class="amap-box"></div>
       <template #footer>
         <span class="dialog-footer">
-          <el-button @click="mapVisible = false" round>阻断退出</el-button>
+          <el-button @click="mapVisible = false" round>取消</el-button>
           <el-button type="primary" @click="confirmGeoPosition" :disabled="!tempLoc.lng" round>注入该LBS坐标</el-button>
         </span>
       </template>
@@ -566,7 +566,7 @@ const saveProfileData = async () => {
       localStorage.setItem('isVerified', '0')
       isVerifiedStatus.value = false
       window.dispatchEvent(new CustomEvent('audit-status-changed', { detail: { isVerified: 0, isSelf: true } }))
-      ElNotification({ title: '安全风控动态锁死', message: '核心权属参数发生跃迁，节点暂时冻结，等待重新核验！', type: 'warning', duration: 8000 })
+      ElNotification({ title: '审核状态变更', message: '核心权属参数发生变更，节点暂时冻结，等待重新核验！', type: 'warning', duration: 8000 })
     } else {
       ElMessage.success('基础资料已保存')
     }
@@ -614,12 +614,12 @@ const handleProofChange = async (e) => {
 }
 
 const handleUpdatePassword = async () => {
-  if (!pwdForm.oldPassword || !pwdForm.newPassword) return ElMessage.warning('密钥矩阵残缺')
-  if (pwdForm.newPassword !== pwdForm.confirmPassword) return ElMessage.warning('双向散列令牌碰撞不一致')
+  if (!pwdForm.oldPassword || !pwdForm.newPassword) return ElMessage.warning('请填写旧密码和新密码')
+  if (pwdForm.newPassword !== pwdForm.confirmPassword) return ElMessage.warning('两次输入的新密码不一致')
   saving.value = true
   try {
     await updatePassword({ oldPassword: pwdForm.oldPassword, newPassword: pwdForm.newPassword })
-    ElMessage.success('底层密钥变更成功')
+    ElMessage.success('密码修改成功')
     pwdForm.oldPassword = ''; pwdForm.newPassword = ''; pwdForm.confirmPassword = ''
   } catch (e) { ElMessage.error('密码校验未通过') } finally { saving.value = false }
 }

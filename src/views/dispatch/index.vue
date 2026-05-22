@@ -18,17 +18,17 @@
     <template v-else>
       <div class="top-status" :class="{ 'emergency-mode': sysMode === 'EMERGENCY' }">
         <span class="pulse-dot" :style="{ background: sysMode === 'NORMAL' ? '#10b981' : '#ef4444' }"></span>
-        当前运行模式: <strong>{{ MODE_LABELS[sysMode] || '🟢 平时常态调度' }}</strong>
+        当前运行模式: <strong>{{ MODE_LABELS[sysMode] || '🟢 常态模式调度' }}</strong>
         <button v-if="currentUserRole === 4" class="mode-switch-btn" @click="toggleSysMode">
-          切换至{{ sysMode === 'NORMAL' ? '🔴 战时应急' : '🟢 平时常态' }}
+          切换至{{ sysMode === 'NORMAL' ? '🔴 应急模式' : '🟢 常态模式' }}
         </button>
       </div>
 
       <div class="map-wrapper">
         <div v-if="!isLbsReady" class="map-loading-overlay">
           <div class="radar-spinner"></div>
-          <h3>📍 正在初始化城市调度沙盘...</h3>
-          <p>锁定厦门集美区指挥中心坐标，加载 GIS 引擎</p>
+          <h3>📍 正在加载调度地图...</h3>
+          <p>加载厦门集美区地图数据...</p>
         </div>
 
         <div id="amap-container"></div>
@@ -199,9 +199,9 @@ onMounted(async () => {
 
             // 答辩沙盘防漂移保护 (只在厦门集美区有效)
             if (!isValidCoord(realLon, realLat) || Math.abs(realLon - 118.1) > 5 || Math.abs(realLat - 24.6) > 5) {
-              console.warn('大屏检测到异地登录或GPS异常，开启沙盘保护，降级使用档案坐标');
+              console.warn('大屏检测到异地登录或GPS异常，开启地图保护，降级使用档案坐标');
               userLocation.value = isValidCoord(dbLon, dbLat) ? [dbLon, dbLat] : [...GEO_FALLBACK];
-              ElMessage.warning('GPS异常，大屏已锁定至测试沙盘区域');
+              ElMessage.warning('GPS异常，大屏已锁定至测试区域');
             } else {
               userLocation.value = [realLon, realLat];
               ElMessage.success('📍 大屏已接入实时 GPS 信号');
@@ -291,7 +291,7 @@ const handleModeChange = (e) => {
     if (map.value) map.value.clearMap()
     // 2. 立即拉取新模式下的全城态势
     fetchMapOrders()
-    ElMessage.warning(`系统已切换为 ${e.detail.mode === 'EMERGENCY' ? '战时应急' : '平时常态'}，沙盘已重置。`)
+    ElMessage.warning(`系统已切换为 ${e.detail.mode === 'EMERGENCY' ? '应急模式' : '常态模式'}，地图已重置。`)
   }
 }
 
@@ -303,8 +303,8 @@ onUnmounted(() => {
 })
 
 const MODE_LABELS = {
-  NORMAL: '🟢 平时常态调度',
-  EMERGENCY: '🔴 战时应急调度'
+  NORMAL: '🟢 常态模式调度',
+  EMERGENCY: '🔴 应急模式调度'
 }
 
 const MODE_NEXT = {
@@ -333,7 +333,7 @@ const toggleSysMode = async () => {
     // 4. 重新拉取新模式下的全城态势
     await fetchMapOrders()
 
-    ElMessage.success({ message: `系统已强制切换至: ${MODE_LABELS[target]}，沙盘已重置`, duration: 3000 })
+    ElMessage.success({ message: `系统已强制切换至: ${MODE_LABELS[target]}，地图已重置`, duration: 3000 })
   } catch (e) {
     ElMessage.error(e?.message || '模式切换失败，请检查权限或状态机规则')
   }

@@ -5,7 +5,7 @@
     <main class="main-content">
       <div class="top-status">
         <span class="pulse-dot" :style="{ background: sysMode === 'NORMAL' ? '#10b981' : '#ef4444', boxShadow: sysMode === 'NORMAL' ? '0 0 8px #10b981' : '0 0 8px #ef4444' }"></span>
-        {{ sysMode === 'NORMAL' ? '🟢 常规食物银行' : '🔴 战时应急响应' }}
+        {{ sysMode === 'NORMAL' ? '🟢 常规食物银行' : '🔴 应急模式响应' }}
       </div>
 
       <div class="donate-wrapper" v-loading="loading">

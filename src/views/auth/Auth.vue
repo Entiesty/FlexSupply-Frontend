@@ -277,7 +277,7 @@ const handleSendCode = async () => {
 
     ElNotification({
       title: '💬 新信息',
-      message: `【暖心食光】验证码为 <b>${res.data}</b>，5分钟内有效。打死不要告诉别人！`,
+      message: `【暖心食光】验证码为 <b>${res.data}</b>，5分钟内有效。请勿将验证码泄露给他人。`,
       dangerouslyUseHTMLString: true, type: 'info', duration: 15000, position: 'top-right',
     })
   } catch (e) {

@@ -68,7 +68,7 @@ import { verifyPickup } from '@/api/trade'
 // 🚨 触发线下核销的全局弹窗逻辑 (重构文案与样式注入)
 const triggerVerifyPickup = () => {
   ElMessageBox.prompt(
-      '请输入居民出示的 6 位专属取件码，完成物理世界的最后一米交接：',
+      '请输入居民出示的 6 位专属取件码，完成线下物资交接：',
       '🎫 线下物资核销',
       {
         confirmButtonText: '确认无误，立即核销',
@@ -104,7 +104,7 @@ const currentUser = ref({
 
 const sysMode = ref(localStorage.getItem('sysMode') || 'NORMAL')
 
-const roleMap = { 1: '受赠长者', 2: '爱心商家', 3: '城市护航骑士', 4: '指挥中心' }
+const roleMap = { 1: '受赠长者', 2: '爱心商家', 3: '护航骑士', 4: '指挥中心' }
 const roleName = computed(() => roleMap[currentUser.value.role] || '未知角色')
 
 // 🚨 全新权限规则：上门配送全民开放，自提大厅单向受限
@@ -120,19 +120,19 @@ const allMenus = computed(() => {
   const showMarket = currentUser.value.role === 1 && effectiveDt === 0 && !isEmergency
 
   return [
-    { name: '实时调度大屏', icon: '🗺️️', path: '/map', roles: [3, 4], requiresAuth: true },
-    ...(showSos ? [{ name: isEmergency ? '紧急呼救大舱' : '预约上门配送', icon: isEmergency ? '🚨' : '📦', path: '/sos', roles: [1], requiresAuth: true }] : []),
+    { name: '调度工作台', icon: '🗺️️', path: '/map', roles: [3, 4], requiresAuth: true },
+    ...(showSos ? [{ name: isEmergency ? '紧急求助' : '预约上门配送', icon: isEmergency ? '🚨' : '📦', path: '/sos', roles: [1], requiresAuth: true }] : []),
     { name: '物资捐赠大厅', icon: '💝', path: '/merchant/donate', roles: [2], requiresAuth: true },
     ...(isEmergency ? [{ name: '紧急求助雷达', icon: '🚨', path: '/merchant/radar', roles: [2], requiresAuth: true, emergency: true }] : []),
     ...(showMarket ? [{ name: '日常食物银行', icon: '🏪', path: '/market', roles: [1], requiresAuth: true }] : []),
     { name: '我的配送任务', icon: '🚴', path: '/my-tasks', roles: [3], requiresAuth: true },
     { name: '我的捐赠记录', icon: '📦', path: '/merchant/history', roles: [2], requiresAuth: true },
-    { name: 'CSR社会责任战报', icon: '🏅', path: '/merchant/csr', roles: [2], requiresAuth: true },
+    { name: 'CSR社会责任报告', icon: '🏅', path: '/merchant/csr', roles: [2], requiresAuth: true },
     { name: '我的受赠档案', icon: '📜', path: '/recipient/history', roles: [1], requiresAuth: true },
     { name: '城市信誉资产', icon: '🏆', path: '/volunteer/credit', roles: [3], requiresAuth: true },
     { name: '全局订单流转', icon: '📊', path: '/flow', roles: [4], requiresAuth: true },
-    { name: '异常预警监控', icon: '🚨', path: '/admin/exception-monitor', roles: [4], requiresAuth: true },
-    { name: '物理据点管理', icon: '🏥', path: '/admin/stations', roles: [4], requiresAuth: true },
+    { name: '异常订单监控', icon: '🚨', path: '/admin/exception-monitor', roles: [4], requiresAuth: true },
+    { name: '社区驿站管理', icon: '🏥', path: '/admin/stations', roles: [4], requiresAuth: true },
     { name: '全域用户台账', icon: '👥', path: '/admin/users', roles: [4], requiresAuth: true },
     { name: '入驻材料审核', icon: '🛡️', path: '/admin/review', roles: [4], requiresAuth: true },
     { name: '调度引擎调参', icon: '⚙️', path: '/config', roles: [4], requiresAuth: true },

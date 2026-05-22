@@ -4,7 +4,7 @@
       <div class="header-left">
         <div class="icon-wrapper"><el-icon><OfficeBuilding /></el-icon></div>
         <div>
-          <h1 class="page-title">城市物理据点管理</h1>
+          <h1 class="page-title">社区驿站管理</h1>
           <p class="page-subtitle">调度网络地基 - 维护全城“食物银行”与应急核心枢纽</p>
         </div>
       </div>
