@@ -54,6 +54,9 @@
 
               <div v-if="expandedOrderId === bc.orderId" class="response-form">
                 <el-divider>填写响应物资</el-divider>
+                <el-alert type="warning" :closable="false" show-icon style="margin-bottom: 12px;">
+                  应急直达：本次填写的全部数量将由骑士一次性配送至求助节点，请按需合理填写。
+                </el-alert>
                 <el-input v-model="responseForm.goodsName" size="large" placeholder="物资名称，如：金龙鱼大米 5kg" class="rf-input" />
                 <div class="rf-row">
                   <el-input-number v-model="responseForm.stock" :min="1" :max="999" size="large" placeholder="数量" style="flex:1;" />
