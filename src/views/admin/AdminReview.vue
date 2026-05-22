@@ -56,7 +56,7 @@
               </template>
             </el-table-column>
 
-            <el-table-column prop="userId" label="入驻ID" width="100" align="center">
+            <el-table-column prop="userId" label="入驻ID" width="140" align="center">
               <template #default="{ row }"><span class="order-sn">#{{ row.userId }}</span></template>
             </el-table-column>
 

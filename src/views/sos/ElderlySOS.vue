@@ -123,11 +123,6 @@
               <div class="tl-content">
                 <h4>2. 志愿者正在路上</h4>
                 <p>爱心使者已出发，正飞奔向您</p>
-                <div v-if="activeOrder.status >= 1" class="rider-callout">
-                  <span class="rc-avatar">🚴</span>
-                  <span class="rc-name">爱心志愿者为您服务</span>
-                  <a :href="'tel:' + (activeOrder.volunteerPhone || '13800138000')" class="rc-call-btn">📞 一键拨号</a>
-                </div>
               </div>
             </div>
             <div class="tl-item" :class="{ active: activeOrder.status >= 2 }">
@@ -729,20 +724,6 @@ const submitRating = async () => {
 .tl-content p {
   margin: 0; font-size: 0.95rem; color: #64748b; font-weight: 500; line-height: 1.5;
 }
-
-.rider-callout {
-  margin-top: 12px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px;
-  padding: 14px 16px; display: flex; align-items: center; gap: 12px;
-}
-.rc-avatar { font-size: 1.6rem; flex-shrink: 0; }
-.rc-name { font-size: 1rem; color: #065f46; font-weight: 900; flex: 1; }
-.rc-call-btn {
-  background: #10b981; color: white; text-decoration: none; padding: 10px 18px;
-  border-radius: 10px; font-size: 1rem; font-weight: 900; white-space: nowrap;
-  box-shadow: 0 4px 12px rgba(16,185,129,0.3); transition: 0.2s;
-}
-.rc-call-btn:active { transform: scale(0.95); }
-
 /* 操作按钮区 */
 .tracking-actions {
   display: flex; gap: 16px; margin-top: 24px;

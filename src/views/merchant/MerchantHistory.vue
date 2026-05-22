@@ -46,7 +46,7 @@
               </div>
               <div class="meta-row">
                 <span class="meta-label">捐赠数量</span>
-                <span class="meta-value">{{ row.stock }} {{ row.unit || '件' }}</span>
+                <span class="meta-value">{{ row.initialStock ?? row.stock }} {{ row.unit || '件' }}</span>
               </div>
               <div class="meta-row">
                 <span class="meta-label">流转去向</span>
