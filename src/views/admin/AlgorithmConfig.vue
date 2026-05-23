@@ -30,10 +30,10 @@
             </button>
           </div>
           <el-alert v-if="form.sysMode === 'NORMAL'" title="🟢 常态模式运行中" type="success"
-            description="Hub & Spoke 驿站中转, SAW距离优先(wDist=35%), 无配给限制, 日常物资自由流通。"
+            description="Hub & Spoke 驿站中转, SAW距离优先(wDist=50%), 无配给限制, 日常物资自由流通。"
             :closable="false" show-icon style="margin-top: 15px;" />
           <el-alert v-if="form.sysMode === 'EMERGENCY'" title="🔴 应急模式已激活" type="error"
-            description="P2P直达优先, SAW紧急度优先(wUrgency=45%), 配给制+防挤兑+LBS雷达自动广播已全部启动。"
+            description="P2P直达优先, SAW紧急度优先(wUrgency=70%), 配给制+防挤兑+LBS雷达自动广播已全部启动。"
             :closable="false" show-icon style="margin-top: 15px;" />
         </div>
 
@@ -60,10 +60,6 @@
             <div class="slider-item">
               <label>🏆 志愿者信誉加权 <span>(w_credit: {{ form.wCredit }}%)</span></label>
               <el-slider v-model="form.wCredit" :step="5" show-stops/>
-            </div>
-            <div class="slider-item">
-              <label>👴 弱势群体标签保护权重 <span>(w_tag: {{ form.wTag }}%)</span></label>
-              <el-slider v-model="form.wTag" :step="5" show-stops/>
             </div>
             <div class="slider-item">
               <label>📅 物资临期偏好 (FEFO) <span>(w_expiration: {{ form.wExpiration }}%)</span></label>
@@ -95,10 +91,9 @@ const loading = ref(false)
 
 const form = reactive({
   sysMode: 'NORMAL',
-  wDist: 35,
+  wDist: 50,
   wUrgency: 20,
   wCredit: 15,
-  wTag: 15,
   wExpiration: 10,
   wStock: 5
 })
@@ -108,7 +103,7 @@ const stateLabel = (mode) => {
   return map[mode] || mode
 }
 
-const totalWeight = computed(() => form.wDist + form.wUrgency + form.wCredit + form.wTag + form.wExpiration + form.wStock)
+const totalWeight = computed(() => form.wDist + form.wUrgency + form.wCredit + form.wExpiration + form.wStock)
 
 const fetchConfig = async () => {
   loading.value = true
@@ -119,7 +114,6 @@ const fetchConfig = async () => {
       form.wDist = res.data.wDist * 100
       form.wUrgency = res.data.wUrgency * 100
       form.wCredit = res.data.wCredit * 100
-      form.wTag = res.data.wTag * 100
       form.wExpiration = (res.data.wExpiration || 0) * 100
       form.wStock = (res.data.wStock || 0) * 100
     }
@@ -176,7 +170,6 @@ const handleSave = () => {
         wDist: (form.wDist / 100).toFixed(2),
         wUrgency: (form.wUrgency / 100).toFixed(2),
         wCredit: (form.wCredit / 100).toFixed(2),
-        wTag: (form.wTag / 100).toFixed(2),
         wExpiration: (form.wExpiration / 100).toFixed(2),
         wStock: (form.wStock / 100).toFixed(2)
       }
