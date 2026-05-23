@@ -363,10 +363,9 @@ const fetchMapOrders = async () => {
 
       drawMarker(isDonation, [mainTgtLon, mainTgtLat])
 
-      // P2P 已响应订单：仅当起点是商家（非驿站）时才走直达通道
-      const isP2PResponded = pendingOrder.value.sourceId != null
+      // 已绑定取货源：只要有有效坐标就走直达通道，不再依赖 sourceName 关键词
+      const hasValidSource = pendingOrder.value.sourceId != null
           && isValidCoord(pendingOrder.value.sourceLon, pendingOrder.value.sourceLat)
-          && (pendingOrder.value.sourceName || '').includes('商铺')
 
       if (currentUserRole.value === 3
           && pendingOrder.value.deliveryMethod === 1
@@ -376,7 +375,7 @@ const fetchMapOrders = async () => {
 
         if (isDonation) {
           handleDonationDispatch([mainTgtLon, mainTgtLat])
-        } else if (isP2PResponded) {
+        } else if (hasValidSource) {
           handleP2PDispatch([mainTgtLon, mainTgtLat])
         } else {
           await handleSmartDispatch([mainTgtLon, mainTgtLat])
@@ -446,13 +445,12 @@ const drawMarker = (isDonation, position) => {
 const handleDispatchAction = async () => {
   const [safeLng, safeLat] = calcSafeCenter()
   const isDonation = pendingOrder.value.orderType === 1
-  const isP2PResponded = pendingOrder.value.sourceId != null
+  const hasValidSource = pendingOrder.value.sourceId != null
       && isValidCoord(pendingOrder.value.sourceLon, pendingOrder.value.sourceLat)
-      && (pendingOrder.value.sourceName || '').includes('商铺')
   const lng = isValidCoord(pendingOrder.value.targetLon, pendingOrder.value.targetLat) ? pendingOrder.value.targetLon : safeLng
   const lat = isValidCoord(pendingOrder.value.targetLon, pendingOrder.value.targetLat) ? pendingOrder.value.targetLat : safeLat
   if (isDonation) handleDonationDispatch([lng, lat])
-  else if (isP2PResponded) handleP2PDispatch([lng, lat])
+  else if (hasValidSource) handleP2PDispatch([lng, lat])
   else await handleSmartDispatch([lng, lat])
 }
 
@@ -503,7 +501,7 @@ const handleP2PDispatch = (targetPos) => {
 
     drawRoute(result.value, targetPos, false)
     loading.value = false
-    ElMessage.success('✅ 商家已备好物资，跳过驿站匹配，请立即前往商铺取货！')
+    ElMessage.success('✅ 取货源已确认，跳过驿站匹配，请立即前往取货！')
   }, 800)
 }
 

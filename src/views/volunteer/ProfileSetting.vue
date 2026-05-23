@@ -470,13 +470,10 @@ const fetchSynchronizedData = async () => {
     const [profileRes, statsRes] = await Promise.all([getUserProfile(), getDashboardStats()])
     serverRawProfile.value = profileRes.data || {}
 
-    // 收拢审核状态优先级：本地常驻锁缓存优先于延迟数据库反应
-    const cachedAudit = localStorage.getItem('isVerified')
-    if (cachedAudit !== null) {
-      isVerifiedStatus.value = cachedAudit === '1'
-    } else {
-      isVerifiedStatus.value = Number(serverRawProfile.value.isVerified) === 1
-    }
+    // 以服务器响应为准，同步更新 localStorage 避免缓存滞后
+    const serverVerified = Number(serverRawProfile.value.isVerified) === 1
+    isVerifiedStatus.value = serverVerified
+    localStorage.setItem('isVerified', serverVerified ? '1' : '0')
 
     // 单向解构分配表单，断开脏脏的引用关联
     Object.keys(form).forEach(key => {
